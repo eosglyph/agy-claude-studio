@@ -18,3 +18,10 @@ dist/
 node_modules/
 .DS_Store
 Thumbs.db
+
+# Release archives & local scratch assets
+releases/
+.local-assets/
+installer.exe
+.watch.lock.json
+.mcp-hosts/
