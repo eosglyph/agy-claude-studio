@@ -1,4 +1,4 @@
-// Shared build helpers for AGY Claude Style (agy-claude-style) Windows and macOS installers.
+// Shared build helpers for Claude Studio (agy-claude-studio) Windows and macOS installers.
 // Zero external npm dependencies: uses built-in Node zlib only.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,9 +24,9 @@ function getArtifactNames(version = cdp.PLUGIN_VERSION) {
   const cleanVersion = normalizeVersion(version);
   return {
     version: cleanVersion,
-    windowsInstaller: `AGY-Claude-Style-v${cleanVersion}-Windows-x64.exe`,
-    macosDmg: `AGY-Claude-Style-v${cleanVersion}-macOS-universal.dmg`,
-    macosApp: 'AGY Claude Style.app',
+    windowsInstaller: `Claude-Studio-v${cleanVersion}-Windows-x64.exe`,
+    macosDmg: `Claude-Studio-v${cleanVersion}-macOS-universal.dmg`,
+    macosApp: 'Claude Studio.app',
   };
 }
 

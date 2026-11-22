@@ -410,16 +410,16 @@
         '请帮我更新 Antigravity 的 Gemini 4 元素周期表模型选择器：',
         '1. 使用内置浏览器打开 Google AI Studio（https://aistudio.google.com/），点开模型选择面板中的「The Periodic Table of Gemini 4」元素周期表；',
         `2. 分别在浅色与深色主题下检查所有已点亮元素（当前已收录：${knownSymbols}），抓取所有新增元素以及已有元素的变动信息：元素符号、原子序数、模型名称与 slug、是否 New / 3D 翻转主推（isHero）、是否付费/订阅限制（paid）、简介、上下文窗口、计费价格、发布日期，以及每个新元素在明暗主题下的专属色（--tile-bg、--tile-edge-lip、--tile-symbol-ink、--tile-num-ink、--tile-pip）；`,
-        '3. 如果本机已克隆 `agy-claude-style` 源码仓库（例如当前工作区），优先更新仓库中的 periodic-core.js（GEMINI4_SPECS）与 style.css（.ag-cs-ps-theme-<name> 明暗两套配色），运行 node --test test/*.test.mjs 与 node scripts/build-installer.mjs 重新打包，再将更新后的文件同步到 %LOCALAPPDATA%\\agy-claude-style\\（保留现有 config.json）；',
-        '4. 如果本机仅有已安装目录（无源码仓库），则直接更新 %LOCALAPPDATA%\\agy-claude-style\\periodic-core.js 与 style.css，随后刷新该目录下 manifest.json 的修改时间即可触发热更新生效。',
+        '3. 如果本机已克隆 `agy-claude-studio` 源码仓库（例如当前工作区），优先更新仓库中的 periodic-core.js（GEMINI4_SPECS）与 style.css（.ag-cs-ps-theme-<name> 明暗两套配色），运行 node --test test/*.test.mjs，再将更新后的文件同步到原生插件目录 `~/.gemini/config/plugins/agy-claude-studio/`；',
+        '4. 如果本机仅安装了原生插件或独立安装包，则直接更新插件目录中的 periodic-core.js 与 style.css 即可自动触发热更新生效。',
       ].join('\n');
     }
     return [
       'Please update my Antigravity Gemini 4 Periodic Table model selector:',
       '1. Use the built-in browser to open Google AI Studio (https://aistudio.google.com/) and open "The Periodic Table of Gemini 4" model picker.',
       `2. Inspect every lit element tile under both light and dark themes (currently recorded: ${knownSymbols}) and extract all newly released elements and any updates to existing ones: element symbol, atomic number, model title and slug, New / 3D hero flip flag (isHero), paid/subscription lock flag (paid), description, context window, pricing, release date, and light/dark theme tile colors (--tile-bg, --tile-edge-lip, --tile-symbol-ink, --tile-num-ink, --tile-pip).`,
-      '3. If a local `agy-claude-style` source repository is available (such as the active workspace), update GEMINI4_SPECS in its periodic-core.js and add/update the corresponding light and dark .ag-cs-ps-theme-<name> rules in style.css, run `node --test test/*.test.mjs` and `node scripts/build-installer.mjs`, then deploy the updated files to %LOCALAPPDATA%\\agy-claude-style\\ (preserving config.json).',
-      '4. Otherwise (installed directory only), directly update periodic-core.js and style.css inside %LOCALAPPDATA%\\agy-claude-style\\ and touch manifest.json in that directory to trigger hot-reload.',
+      '3. If a local `agy-claude-studio` source repository is available (such as the active workspace), update GEMINI4_SPECS in its periodic-core.js and add/update the corresponding light and dark .ag-cs-ps-theme-<name> rules in style.css, run `node --test test/*.test.mjs`, then deploy the updated files to `~/.gemini/config/plugins/agy-claude-studio/`.',
+      '4. Otherwise, directly update periodic-core.js and style.css inside the installed `agy-claude-studio` plugin directory to trigger hot-reload.',
     ].join('\n');
   }
 

@@ -46,13 +46,13 @@ final class OperationResult {
 }
 
 enum InstallerCore {
-    static let launchAgentLabel = "io.github.0dnancy.agy-claude-style"
-    static let launchAgentFileName = "io.github.0dnancy.agy-claude-style.plist"
-    static let launcherAppName = "Antigravity (AGY Claude Style).app"
-    static let launcherBundleId = "io.github.0dnancy.agy-claude-style.launcher"
+    static let launchAgentLabel = "io.github.eosglyph.agy-claude-studio"
+    static let launchAgentFileName = "io.github.eosglyph.agy-claude-studio.plist"
+    static let launcherAppName = "Antigravity (Claude Studio).app"
+    static let launcherBundleId = "io.github.eosglyph.agy-claude-studio.launcher"
     static let installModeFileName = ".install-mode"
-    static let watcherExeName = "agy-claude-style-watcher"
-    static let selfInstalledExeName = "agy-claude-style-installer"
+    static let watcherExeName = "agy-claude-studio-watcher"
+    static let selfInstalledExeName = "agy-claude-studio-installer"
 
     static func getTestSystemRoot() -> String? {
         guard let raw = ProcessInfo.processInfo.environment["AGY_CS_TEST_SYSTEM_ROOT"]?
@@ -65,7 +65,7 @@ enum InstallerCore {
 
     static func getDefaultInstallDir() -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return (home as NSString).appendingPathComponent("Library/Application Support/agy-claude-style")
+        return (home as NSString).appendingPathComponent("Library/Application Support/agy-claude-studio")
     }
 
     static func getLaunchAgentPlistPath() -> String {
@@ -312,7 +312,7 @@ enum InstallerCore {
             guard parts.count == 2, let pid = Int32(parts[0]), pid > 0, pid != selfPid else { continue }
             let rawCmd = String(parts[1])
             let lowerRaw = rawCmd.lowercased()
-            if !lowerRaw.contains("agy-claude-style") || !lowerRaw.contains("inject.js") || (!lowerRaw.contains("--watch") && !lowerRaw.contains("--managed")) {
+            if !lowerRaw.contains("agy-claude-studio") || !lowerRaw.contains("inject.js") || (!lowerRaw.contains("--watch") && !lowerRaw.contains("--managed")) {
                 continue
             }
 
@@ -352,7 +352,7 @@ enum InstallerCore {
             }
             let parentDir = (scriptPath as NSString).deletingLastPathComponent
             guard !parentDir.isEmpty,
-                  parentDir.lowercased().contains("agy-claude-style") else {
+                  parentDir.lowercased().contains("agy-claude-studio") else {
                 continue
             }
 
@@ -460,7 +460,7 @@ enum InstallerCore {
           <key>CFBundleDevelopmentRegion</key>
           <string>zh_CN</string>
           <key>CFBundleDisplayName</key>
-          <string>Antigravity (AGY Claude Style)</string>
+          <string>Antigravity (Claude Studio)</string>
           <key>CFBundleExecutable</key>
           <string>launch-antigravity</string>
           <key>CFBundleIconFile</key>
@@ -470,7 +470,7 @@ enum InstallerCore {
           <key>CFBundleInfoDictionaryVersion</key>
           <string>6.0</string>
           <key>CFBundleName</key>
-          <string>Antigravity (AGY Claude Style)</string>
+          <string>Antigravity (Claude Studio)</string>
           <key>CFBundlePackageType</key>
           <string>APPL</string>
           <key>CFBundleShortVersionString</key>
@@ -632,7 +632,7 @@ enum InstallerCore {
         let quotedInstallDir = shellSingleQuote(installDir)
         let launcherScript = [
             "#!/usr/bin/env bash",
-            "# Launch or restart Antigravity Desktop with CDP & managed watcher for AGY Claude Style",
+            "# Launch or restart Antigravity Desktop with CDP & managed watcher for Claude Studio",
             "nohup \(quotedWatcher) --launch --relaunch --exit-on-host-close --dir \(quotedInstallDir) >/dev/null 2>&1 </dev/null &",
             "disown 2>/dev/null || true",
             "if [ \"${TERM_PROGRAM:-}\" = \"Apple_Terminal\" ]; then",
@@ -738,7 +738,7 @@ enum InstallerCore {
                             do {
                                 let session = try CdpSession.connect(wsUrl: page.webSocketDebuggerUrl, timeoutMs: 2000)
                                 defer { session.close() }
-                                let okVal = try session.evaluate("Boolean(window.__agClaudeStyle)", awaitPromise: false)
+                                let okVal = try session.evaluate("Boolean(window.__agClaudeStudio)", awaitPromise: false)
                                 if okVal.boolValue != true {
                                     allReady = false
                                 }
@@ -766,7 +766,7 @@ enum InstallerCore {
             result.headline = "修补成功！已实时注入 \(result.injectedPages.count) 个 Antigravity 窗口"
             result.detail = (runMode == "daemon")
                 ? "常驻后台守护已运行并已配置登录自启。后续打开新窗口或更新 Antigravity 后也会自动注入。"
-                : "已启用托管启动模式（当前临时监听将在 Antigravity 关闭后自动退出，平时 0 后台常驻）。之后直接打开「Antigravity (AGY Claude Style).app」启动即可。"
+                : "已启用托管启动模式（当前临时监听将在 Antigravity 关闭后自动退出，平时 0 后台常驻）。之后直接打开「Antigravity (Claude Studio).app」启动即可。"
             for title in result.injectedPages {
                 report(98, "已注入窗口: \(title)")
             }
@@ -786,7 +786,7 @@ enum InstallerCore {
                     : "Antigravity 2.33.0+ 默认关闭远程调试端口。请点击下方「以 CDP 模式重启」，或退出后使用 --remote-debugging-port=0 启动即可生效。"
             } else {
                 result.headline = "安装成功（托管模式）！当前 Antigravity 未开启 CDP 端口"
-                result.detail = "托管模式下未常驻后台进程（0 后台占用）。请点击下方「以 CDP 模式重启」，或使用「Antigravity (AGY Claude Style).app」重启即可立即生效。"
+                result.detail = "托管模式下未常驻后台进程（0 后台占用）。请点击下方「以 CDP 模式重启」，或使用「Antigravity (Claude Studio).app」重启即可立即生效。"
             }
             report(95, "[!] 检测到 Antigravity 正在运行但未开启 CDP（2.33.0+ 需带参 --remote-debugging-port=0 启动）")
         } else {
@@ -795,7 +795,7 @@ enum InstallerCore {
                 result.detail = "已配置 LaunchAgent 登录自启且守护进程在后台待命。如使用 Antigravity 2.33.0+，可通过启动器或 --remote-debugging-port=0 启动。"
             } else {
                 result.headline = "安装成功！已启用托管启动模式（0 后台常驻）"
-                result.detail = "未注册开机自启，平时无任何后台进程常驻。之后请通过「Antigravity (AGY Claude Style).app」或 launch-antigravity.command 启动 Antigravity。"
+                result.detail = "未注册开机自启，平时无任何后台进程常驻。之后请通过「Antigravity (Claude Studio).app」或 launch-antigravity.command 启动 Antigravity。"
             }
         }
         report(100, result.headline)
@@ -913,7 +913,7 @@ final class InstallerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
         let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "退出 AGY Claude Style", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: "退出 Claude Studio", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appMenuItem.submenu = appMenu
 
         let editMenuItem = NSMenuItem()
@@ -946,7 +946,7 @@ final class InstallerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             backing: .buffered,
             defer: false
         )
-        win.title = "AGY Claude Style 安装与修补工具"
+        win.title = "Claude Studio 安装与修补工具"
         win.appearance = NSAppearance(named: .aqua)
         win.backgroundColor = Self.srgb(248, 246, 243)
         win.isReleasedWhenClosed = false
@@ -966,7 +966,7 @@ final class InstallerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         iconView.imageScaling = .scaleProportionallyUpOrDown
         header.addSubview(iconView)
 
-        let titleLabel = NSTextField(labelWithString: "AGY Claude Style · 自动修补安装器")
+        let titleLabel = NSTextField(labelWithString: "Claude Studio · 自动修补安装器")
         titleLabel.frame = NSRect(x: 76, y: 15, width: 524, height: 24)
         titleLabel.textColor = Self.srgb(250, 248, 245)
         titleLabel.font = NSFont.systemFont(ofSize: 17, weight: .bold)
@@ -1052,7 +1052,7 @@ final class InstallerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         modeCard.addSubview(daemonRadio)
 
         appLauncherCheck = NSButton(
-            checkboxWithTitle: "在 ~/Applications 创建「Antigravity (AGY Claude Style).app」启动器",
+            checkboxWithTitle: "在 ~/Applications 创建「Antigravity (Claude Studio).app」启动器",
             target: self,
             action: #selector(handleOptionChanged)
         )
@@ -1223,7 +1223,7 @@ final class InstallerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         if opts.uninstall {
             let alert = NSAlert()
             alert.messageText = "卸载确认"
-            alert.informativeText = "确认要卸载 AGY Claude Style 并恢复 Antigravity Desktop 原生界面吗？"
+            alert.informativeText = "确认要卸载 Claude Studio 并恢复 Antigravity Desktop 原生界面吗？"
             alert.alertStyle = .informational
             alert.addButton(withTitle: "确认卸载")
             alert.addButton(withTitle: "取消")
@@ -1287,7 +1287,7 @@ final class InstallerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     @objc private func handleUninstallClick() {
         let alert = NSAlert()
         alert.messageText = "卸载并恢复原版"
-        alert.informativeText = "确认卸载 AGY Claude Style、停止后台守护并立即恢复 Antigravity 原生界面？"
+        alert.informativeText = "确认卸载 Claude Studio、停止后台守护并立即恢复 Antigravity 原生界面？"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "确认卸载")
         alert.addButton(withTitle: "取消")
@@ -1534,7 +1534,7 @@ func runInstallerMain() -> Int32 {
                 app.setActivationPolicy(.accessory)
                 let alert = NSAlert()
                 alert.alertStyle = .critical
-                alert.messageText = "AGY Claude Style 操作失败"
+                alert.messageText = "Claude Studio 操作失败"
                 alert.informativeText = error.localizedDescription
                 alert.runModal()
             }

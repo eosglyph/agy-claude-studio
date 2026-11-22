@@ -142,9 +142,9 @@ jobs:
 
           无需安装 Node.js 或任何运行时依赖，下载后直接运行即可完成配置与无损注入（默认采用 **托管启动模式**——随 Antigravity 启动并自动退出、平时 0 后台常驻；亦可按需切换为 **常驻守护模式** 开启开机自启）：
 
-          - **Windows (x64 / Windows 10 & 11)**：下载 \`${WIN_FILE}\`，双击运行可自由选择「免后台常驻 · 托管启动（推荐）」或「开机自启 · 常驻守护」并安装，使用开始菜单 / 桌面快捷方式 \`Antigravity (AGY Claude Style)\` 一站式带 CDP 启动并注入。
-          - **macOS (Apple Silicon + Intel Universal)**：下载 \`${MAC_FILE}\`，打开后拖入「应用程序」并运行 \`AGY Claude Style.app\`，可自由选择「托管启动（推荐）」或「常驻守护（LaunchAgent）」；使用生成的 \`Antigravity (AGY Claude Style).app\` 或 \`launch-antigravity.command\` 启动即可。
-            > **macOS 首次打开提示说明**：本构建采用 Ad-hoc 签名；若 macOS 提示“无法验证开发者”，请**右键点击 App → 打开**，或在终端执行 \`xattr -cr "/Applications/AGY Claude Style.app"\` 后再次打开。
+          - **Windows (x64 / Windows 10 & 11)**：下载 \`${WIN_FILE}\`，双击运行可自由选择「免后台常驻 · 托管启动（推荐）」或「开机自启 · 常驻守护」并安装，使用开始菜单 / 桌面快捷方式 \`Antigravity (Claude Studio)\` 一站式带 CDP 启动并注入。
+          - **macOS (Apple Silicon + Intel Universal)**：下载 \`${MAC_FILE}\`，打开后拖入「应用程序」并运行 \`Claude Studio.app\`，可自由选择「托管启动（推荐）」或「常驻守护（LaunchAgent）」；使用生成的 \`Antigravity (Claude Studio).app\` 或 \`launch-antigravity.command\` 启动即可。
+            > **macOS 首次打开提示说明**：本构建采用 Ad-hoc 签名；若 macOS 提示“无法验证开发者”，请**右键点击 App → 打开**，或在终端执行 \`xattr -cr "/Applications/Claude Studio.app"\` 后再次打开。
 
           ### 🔐 SHA256 Checksums
           \`\`\`text

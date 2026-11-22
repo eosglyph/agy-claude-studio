@@ -94,15 +94,21 @@
     const i18nLocales = globalThis.__agCsLocales;
 
     if (
-      win.__agClaudeStyle &&
-      win.__agClaudeStyle.sidecar === true &&
-      win.__agClaudeStyle.version === VERSION &&
-      (!CODE_HASH || win.__agClaudeStyle.codeHash === CODE_HASH)
+      win.__agClaudeStudio &&
+      win.__agClaudeStudio.sidecar === true &&
+      win.__agClaudeStudio.version === VERSION &&
+      (!CODE_HASH || win.__agClaudeStudio.codeHash === CODE_HASH)
     ) {
-      win.__agClaudeStyle.refreshConfig(initialConfig);
-      return win.__agClaudeStyle;
+      win.__agClaudeStudio.refreshConfig(initialConfig);
+      return win.__agClaudeStudio;
     }
 
+    if (win.__agClaudeStudio && typeof win.__agClaudeStudio.destroy === 'function') {
+      try {
+        win.__agClaudeStudio.destroy();
+      } catch {}
+      delete win.__agClaudeStudio;
+    }
     if (win.__agClaudeStyle && typeof win.__agClaudeStyle.destroy === 'function') {
       try {
         win.__agClaudeStyle.destroy();
@@ -178,13 +184,13 @@
         if (win.__agCsI18n === domTranslator) {
           delete win.__agCsI18n;
         }
-        if (win.__agClaudeStyle === api) {
-          delete win.__agClaudeStyle;
+        if (win.__agClaudeStudio === api) {
+          delete win.__agClaudeStudio;
         }
       },
     };
 
-    win.__agClaudeStyle = api;
+    win.__agClaudeStudio = api;
     return api;
   }
 

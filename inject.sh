@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Inject AGY Claude Style (agy-claude-style) into Antigravity windows once.
+# Inject Claude Studio (agy-claude-studio) into Antigravity windows once.
 cd "$(dirname "$0")"
-echo "Injecting AGY Claude Style (agy-claude-style)..."
+echo "Injecting Claude Studio (agy-claude-studio)..."
 node inject.js

@@ -1,7 +1,7 @@
 {
-  "name": "agy-claude-style",
+  "name": "agy-claude-studio",
   "version": "2.1.0",
-  "description": "AGY Claude Style — Claude Code / dsh-claude-style studio UI theme, interactive ASCII ripple field, usage dashboard, compact composer, and pixel crab mascot for Google Antigravity.",
+  "description": "Claude Studio (agy-claude-studio) — Native Google Antigravity UI aesthetics plugin featuring Claude & Obsidian palettes, standalone glassmorphism, Gemini 4 Periodic Table model selector, Swarm 5-language localization, pixel crab mascot, and seamless antigravity-usage-monitor integration.",
   "private": true,
   "scripts": {
     "test": "node --test test/*.test.mjs",

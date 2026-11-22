@@ -1,4 +1,4 @@
-// Zero-tool MCP Stdio lifecycle host for the native AGY Claude Style plugin.
+// Zero-tool MCP Stdio lifecycle host for the native Claude Studio (agy-claude-studio) plugin.
 // - Exposes 0 tools (`tools/list -> []`) so it consumes 0 context tokens.
 // - Launches and supervises the CDP watcher inside the Antigravity plugin lifecycle.
 // - Detects both plugin disable (stdin close while LS is still alive -> live restore UI)
@@ -56,15 +56,15 @@ function readPluginName() {
   if (typeof parsed?.name === 'string' && parsed.name.trim()) {
     return parsed.name.trim();
   }
-  return 'agy-claude-style';
+  return 'agy-claude-studio';
 }
 
 function resolveHostPluginConfigPath({ env = process.env, homeDir = os.homedir() } = {}) {
-  const explicit = String(env?.AGY_CLAUDE_STYLE_ANTIGRAVITY_CONFIG || '').trim();
+  const explicit = String(env?.AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG || env?.AGY_CLAUDE_STYLE_ANTIGRAVITY_CONFIG || '').trim();
   if (explicit) {
     return path.resolve(explicit);
   }
-  const customStateDir = String(env?.AGY_CLAUDE_STYLE_STATE_DIR || '').trim();
+  const customStateDir = String(env?.AGY_CLAUDE_STUDIO_STATE_DIR || env?.AGY_CLAUDE_STYLE_STATE_DIR || '').trim();
   if (customStateDir) {
     return null;
   }
@@ -93,7 +93,7 @@ function handleMcpJsonRpcMessage(msg, serverVersion = '1.0.0') {
           tools: {},
         },
         serverInfo: {
-          name: 'agy-claude-style-host',
+          name: 'agy-claude-studio-host',
           version: serverVersion,
         },
       },
@@ -203,18 +203,23 @@ function startMcpPluginHost() {
   const serverVersion = readPluginVersion();
   const pluginName = readPluginName();
   const healthzUrl = normalizeLsHealthzUrl(process.env.ANTIGRAVITY_LS_ADDRESS);
-  const stateDir = process.env.AGY_CLAUDE_STYLE_STATE_DIR
-    ? path.resolve(process.env.AGY_CLAUDE_STYLE_STATE_DIR)
+  const customStateDir = process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR;
+  const stateDir = customStateDir
+    ? path.resolve(customStateDir)
     : CDP_STATE_DIR || PLUGIN_ROOT;
   const pidFile = path.join(stateDir, '.watch.pid');
   const lockFile = path.join(stateDir, '.watch.lock.json');
   const logFile = path.join(stateDir, 'watch.log');
   const antigravityConfigPath = resolveHostPluginConfigPath();
-  const standbyPollMs = Math.max(100, Number(process.env.AGY_CLAUDE_STYLE_STANDBY_POLL_MS) || 1500);
-  const settleDelayMs =
-    process.env.AGY_CLAUDE_STYLE_SHUTDOWN_SETTLE_MS !== undefined
-      ? Math.max(0, Number(process.env.AGY_CLAUDE_STYLE_SHUTDOWN_SETTLE_MS) || 0)
-      : 120;
+  const standbyPollMs = Math.max(
+    100,
+    Number(process.env.AGY_CLAUDE_STUDIO_STANDBY_POLL_MS || process.env.AGY_CLAUDE_STYLE_STANDBY_POLL_MS) || 1500
+  );
+  const rawSettleMs =
+    process.env.AGY_CLAUDE_STUDIO_SHUTDOWN_SETTLE_MS !== undefined
+      ? process.env.AGY_CLAUDE_STUDIO_SHUTDOWN_SETTLE_MS
+      : process.env.AGY_CLAUDE_STYLE_SHUTDOWN_SETTLE_MS;
+  const settleDelayMs = rawSettleMs !== undefined ? Math.max(0, Number(rawSettleMs) || 0) : 120;
 
   let shuttingDown = false;
   let shutdownTookControl = false;

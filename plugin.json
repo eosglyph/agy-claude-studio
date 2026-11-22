@@ -1,13 +1,13 @@
 {
-  "name": "agy-claude-style",
-  "displayName": "Antigravity UI 增强",
+  "name": "agy-claude-studio",
+  "displayName": "Claude Studio",
   "version": "2.1.0",
-  "description": "面向 Google Antigravity 的界面美学增强插件：Claude 暖灰与黑曜石纯色配色、可独立开关的毛玻璃质感、Gemini 4 元素周期表模型选择器、像素螃蟹 Clawd、可选内置用量统计与 usage-monitor 右侧栏协同联动。",
+  "description": "面向 Google Antigravity 的原生界面美学插件：Claude 暖灰与黑曜石纯色配色、独立毛玻璃质感、Gemini 4 元素周期表模型选择器、像素螃蟹 Clawd、Swarm 5 语言本地化，以及与 antigravity-usage-monitor 的右侧栏协同联动。",
   "logo": "assets/logo.svg",
-  "author": "eosglyph (based on 0DNANCY/agy-claude-style)",
-  "homepage": "https://github.com/0DNANCY/agy-claude-style",
-  "repository": "https://github.com/0DNANCY/agy-claude-style",
+  "author": "eosglyph (forked from 0DNANCY/agy-claude-style)",
+  "homepage": "https://github.com/eosglyph/agy-claude-studio",
+  "repository": "https://github.com/eosglyph/agy-claude-studio",
   "suggestedPrompts": [
-    "打开 Antigravity UI 增强控制面板并查看当前主题状态"
+    "打开 Claude Studio 控制面板并查看当前主题状态"
   ]
 }

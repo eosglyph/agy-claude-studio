@@ -1,4 +1,4 @@
-// Aux Pane Sidecar UI server for AGY Claude Style.
+// Aux Pane Sidecar UI server for Claude Studio (agy-claude-studio).
 // Uses sidecar_sdk and cleans up cleanly via host /healthz watchdog when Antigravity exits.
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -224,7 +224,7 @@ async function openUsageMonitorPaneInHost() {
       try {
         sess = await cdp.CdpSession.connect(p.webSocketDebuggerUrl);
         const res = await sess.evaluate(
-          '(() => (window.__agClaudeStyle && typeof window.__agClaudeStyle.openUsageMonitorPane === "function") ? window.__agClaudeStyle.openUsageMonitorPane({ forceSwitch: true }) : { ok: false, status: "not_injected" })()',
+          '(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.openUsageMonitorPane === "function") ? api.openUsageMonitorPane({ forceSwitch: true }) : { ok: false, status: "not_injected" }; })()',
           false
         );
         if (res && res.ok) return res;
@@ -367,7 +367,7 @@ const invokedPath = process.argv[1] ? safeRealpath(process.argv[1]) : '';
 const currentPath = safeRealpath(fileURLToPath(import.meta.url));
 if (isSameEntryPath(invokedPath, currentPath)) {
   startStudioSidecar().catch((err) => {
-    console.error('[agy-claude-style studio sidecar] failed:', err?.message || err);
+    console.error('[agy-claude-studio sidecar] failed:', err?.message || err);
     process.exit(1);
   });
 }

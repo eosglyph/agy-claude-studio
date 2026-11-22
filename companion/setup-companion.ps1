@@ -13,7 +13,7 @@ if (-not (Test-Path -LiteralPath $installerExe)) { throw "未找到 installer.ex
 if (-not (Test-Path -LiteralPath $icoSrc)) { throw "未找到图标文件: $icoSrc" }
 
 function Find-AntigravityExe([string]$instExe) {
-  $existingDir = Join-Path $env:LOCALAPPDATA 'agy-claude-style'
+  $existingDir = Join-Path $env:LOCALAPPDATA 'agy-claude-studio'
   $existingPs1 = Join-Path $existingDir 'launch-antigravity.ps1'
   if (Test-Path -LiteralPath $existingPs1) {
     $ps1Raw = Get-Content -LiteralPath $existingPs1 -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
@@ -77,7 +77,7 @@ if (-not $WithAutostart) {
   $installArgs += '--no-autostart'
 }
 
-Write-Host "[1/4] 正在运行 installer.exe 安装 / 升级到 %LOCALAPPDATA%\agy-claude-style ..."
+Write-Host "[1/4] 正在运行 installer.exe 安装 / 升级到 %LOCALAPPDATA%\agy-claude-studio ..."
 Start-Process -FilePath $installerExe -ArgumentList $installArgs -Wait
 
 if (-not (Test-Path -LiteralPath $installOut)) {
@@ -90,7 +90,7 @@ if (-not $res.ok) {
 }
 
 $installDir = $res.installDir
-if (-not $installDir) { $installDir = Join-Path $env:LOCALAPPDATA 'agy-claude-style' }
+if (-not $installDir) { $installDir = Join-Path $env:LOCALAPPDATA 'agy-claude-studio' }
 if (-not (Test-Path -LiteralPath $installDir)) { throw "未找到安装目录: $installDir" }
 
 if ($res.preservedExistingConfig) {
@@ -114,7 +114,7 @@ param(
 $ErrorActionPreference = 'SilentlyContinue'
 $installDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $antigravityExe = '__ANTIGRAVITY_EXE__'
-$watcherExe = Join-Path $installDir 'agy-claude-style-watcher.exe'
+$watcherExe = Join-Path $installDir 'agy-claude-studio-watcher.exe'
 
 $agArgs = @('--remote-debugging-port=0')
 if ($ForwardArgs) {
@@ -129,7 +129,7 @@ Start-Process -FilePath $antigravityExe -ArgumentList $agArgs -WorkingDirectory 
 
 # If the native Antigravity plugin is installed and not explicitly disabled,
 # let its MCP lifecycle host manage injection instead of running the legacy standalone watcher.
-$nativePluginHost = Join-Path $env:USERPROFILE '.gemini\config\plugins\agy-claude-style\plugin\mcp-host.js'
+$nativePluginHost = Join-Path $env:USERPROFILE '.gemini\config\plugins\agy-claude-studio\plugin\mcp-host.js'
 $nativePluginActive = $false
 if (Test-Path -LiteralPath $nativePluginHost) {
   $nativePluginActive = $true
@@ -137,7 +137,7 @@ if (Test-Path -LiteralPath $nativePluginHost) {
   if (Test-Path -LiteralPath $agyCfgPath) {
     try {
       $agyCfg = Get-Content -LiteralPath $agyCfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
-      if ($agyCfg.plugins -and $agyCfg.plugins.'agy-claude-style' -and $agyCfg.plugins.'agy-claude-style'.enabled -eq $false) {
+      if ($agyCfg.plugins -and $agyCfg.plugins.'agy-claude-studio' -and $agyCfg.plugins.'agy-claude-studio'.enabled -eq $false) {
         $nativePluginActive = $false
       }
     } catch {}
@@ -152,7 +152,7 @@ Start-Process -FilePath $watcherExe -ArgumentList '--watch', '--dir', "`"$instal
 
 # Keep only one exit-monitor instance active across repeated shortcut clicks
 $createdNew = $false
-$mutex = [System.Threading.Mutex]::new($true, 'Local\AGYClaudeStyleExitMonitor', [ref]$createdNew)
+$mutex = [System.Threading.Mutex]::new($true, 'Local\AGYClaudeStudioExitMonitor', [ref]$createdNew)
 if (-not $createdNew) {
   return
 }
@@ -202,12 +202,12 @@ shell.Run "powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass
 [System.IO.File]::WriteAllText($vbsPath, $vbsContent, [System.Text.Encoding]::Default)
 
 Write-Host "[3/4] 正在注册 / 更新 Windows 应用卸载入口..."
-$regPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeStyle'
-$selfExe = Join-Path $installDir 'agy-claude-style-installer.exe'
+$regPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeStudio'
+$selfExe = Join-Path $installDir 'agy-claude-studio-installer.exe'
 New-Item -Path $regPath -Force | Out-Null
-Set-ItemProperty -Path $regPath -Name 'DisplayName' -Value 'AGY Claude Style (Antigravity 界面增强补丁)'
-Set-ItemProperty -Path $regPath -Name 'DisplayVersion' -Value '1.3.0'
-Set-ItemProperty -Path $regPath -Name 'Publisher' -Value 'AGY Claude Style'
+Set-ItemProperty -Path $regPath -Name 'DisplayName' -Value 'Claude Studio (Antigravity 界面增强补丁)'
+Set-ItemProperty -Path $regPath -Name 'DisplayVersion' -Value '2.1.0'
+Set-ItemProperty -Path $regPath -Name 'Publisher' -Value 'Claude Studio'
 Set-ItemProperty -Path $regPath -Name 'InstallLocation' -Value $installDir
 Set-ItemProperty -Path $regPath -Name 'DisplayIcon' -Value "$icoDest,0"
 Set-ItemProperty -Path $regPath -Name 'UninstallString' -Value "`"$selfExe`" --uninstall"
@@ -238,7 +238,7 @@ if ($matchedShortcuts.Count -eq 0) {
   $lnk.Arguments = "`"$vbsPath`""
   $lnk.WorkingDirectory = Split-Path $AntigravityExe -Parent
   $lnk.IconLocation = "$icoDest,0"
-  $lnk.Description = 'Launch Antigravity Desktop with AGY Claude Style companion watcher'
+  $lnk.Description = 'Launch Antigravity Desktop with Claude Studio companion watcher'
   $lnk.Save()
   $matchedShortcuts += $lnkPath
 }
@@ -255,7 +255,7 @@ if ($UpdateStartMenuIcon) {
 }
 
 Write-Host ""
-Write-Host "安装 / 更新完成 (v1.3.0)！"
+Write-Host "安装 / 更新完成 (v2.1.0)！"
 Write-Host "  Antigravity:   $AntigravityExe"
 Write-Host "  安装目录:      $installDir"
 Write-Host "  启动脚本:      $vbsPath"

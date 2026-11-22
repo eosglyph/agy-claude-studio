@@ -148,10 +148,10 @@ jobs:
           node scripts/build-macos.mjs \
             --version "$BUILD_VERSION" \
             --out "$OUT_DMG" \
-            --app-out "dist/AGY Claude Style.app"
-          lipo -archs "dist/AGY Claude Style.app/Contents/MacOS/AGY Claude Style"
-          lipo -archs "dist/AGY Claude Style.app/Contents/MacOS/agy-claude-style-watcher"
-          codesign --verify --deep --strict "dist/AGY Claude Style.app"
+            --app-out "dist/Claude Studio.app"
+          lipo -archs "dist/Claude Studio.app/Contents/MacOS/Claude Studio"
+          lipo -archs "dist/Claude Studio.app/Contents/MacOS/agy-claude-studio-watcher"
+          codesign --verify --deep --strict "dist/Claude Studio.app"
           hdiutil verify "$OUT_DMG"
           SHA=$(shasum -a 256 "$OUT_DMG" | awk '{print $1}')
           SIZE=$(ls -lh "$OUT_DMG" | awk '{print $5}')

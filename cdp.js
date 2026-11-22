@@ -1,13 +1,14 @@
-// Chrome DevTools Protocol (CDP) helpers for AGY Claude Style (agy-claude-style).
+// Chrome DevTools Protocol (CDP) helpers for Claude Studio (agy-claude-studio).
 // Node >= 22: uses built-in fetch and WebSocket (zero external dependencies).
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, spawn } = require('child_process');
 
-const STYLE_ID = 'ag-claude-style-css';
+const STYLE_ID = 'ag-claude-studio-css';
+const LEGACY_STYLE_ID = 'ag-claude-style-css';
 const PLUGIN_VERSION = '2.1.0';
-const SETTING_BINDING = '__agClaudeStyleSetting';
+const SETTING_BINDING = '__agClaudeStudioSetting';
 const STARTUP_GRACE_SECONDS = 90;
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
@@ -18,15 +19,15 @@ const APP_DATA = IS_MAC
   ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
   : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
 
-const STATE_DIR_ENV = process.env.AGY_CLAUDE_STYLE_STATE_DIR
-  ? path.resolve(process.env.AGY_CLAUDE_STYLE_STATE_DIR)
+const STATE_DIR_ENV = (process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR)
+  ? path.resolve(process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR)
   : '';
-const CONFIG_FILE_ENV = process.env.AGY_CLAUDE_STYLE_CONFIG
-  ? path.resolve(process.env.AGY_CLAUDE_STYLE_CONFIG)
+const CONFIG_FILE_ENV = (process.env.AGY_CLAUDE_STUDIO_CONFIG || process.env.AGY_CLAUDE_STYLE_CONFIG)
+  ? path.resolve(process.env.AGY_CLAUDE_STUDIO_CONFIG || process.env.AGY_CLAUDE_STYLE_CONFIG)
   : '';
 
 function resolvePluginDataDir(env = process.env) {
-  const pluginData = String(env?.AGY_CLAUDE_STYLE_PLUGIN_DATA || '').trim();
+  const pluginData = String(env?.AGY_CLAUDE_STUDIO_PLUGIN_DATA || env?.AGY_CLAUDE_STYLE_PLUGIN_DATA || '').trim();
   if (pluginData && !pluginData.includes('${')) {
     return path.resolve(pluginData);
   }
@@ -191,16 +192,22 @@ function ensureMigratedPluginConfig({
   explicitConfig = Boolean(CONFIG_FILE_ENV),
 } = {}) {
   if (!pluginDataDir || explicitConfig) return false;
-  if (path.resolve(configFile) === path.resolve(legacyConfigFile)) return false;
-  try {
-    if (fs.existsSync(configFile) || !fs.existsSync(legacyConfigFile)) return false;
-    const raw = fs.readFileSync(legacyConfigFile, 'utf8');
-    const sanitized = sanitizeConfig(JSON.parse(raw));
-    atomicWriteFileSync(configFile, JSON.stringify(sanitized, null, 2) + '\n');
-    return true;
-  } catch {
-    return false;
+  if (fs.existsSync(configFile)) return false;
+  const siblingLegacyConfig = path.join(path.dirname(path.resolve(pluginDataDir)), 'agy-claude-style', 'config.json');
+  const candidates = [siblingLegacyConfig, legacyConfigFile];
+  for (const cand of candidates) {
+    if (!cand || path.resolve(cand) === path.resolve(configFile)) continue;
+    try {
+      if (!fs.existsSync(cand)) continue;
+      const raw = fs.readFileSync(cand, 'utf8');
+      const sanitized = sanitizeConfig(JSON.parse(raw));
+      atomicWriteFileSync(configFile, JSON.stringify(sanitized, null, 2) + '\n');
+      return true;
+    } catch {
+      // try next candidate
+    }
   }
+  return false;
 }
 
 function readConfig(configPath = CONFIG_FILE) {
@@ -274,7 +281,7 @@ function readPort() {
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
-const SIDECAR_TITLE_RE = /^(?:AGY Claude Style(?:\s+Studio)?|Antigravity\s+UI\s+(?:增强|增強|Enhanced|強化)|(?:Antigravity\s+)?Usage\s+Monitor|Swarm\s+Board)\s*$/i;
+const SIDECAR_TITLE_RE = /^(?:(?:AGY\s+)?Claude\s+Studio|AGY\s+Claude\s+Style(?:\s+Studio)?|Antigravity\s+UI\s+(?:增强|增強|Enhanced|強化)|(?:Antigravity\s+)?Usage\s+Monitor|Swarm\s+Board)\s*$/i;
 
 function isLoopbackHttpUrl(rawUrl) {
   try {
@@ -471,6 +478,8 @@ function buildInjectExpression(customConfig) {
     const applyStyle = () => {
       const targetParent = document.head || document.documentElement;
       if (!targetParent) return;
+      const legacyStyle = document.getElementById(${JSON.stringify(LEGACY_STYLE_ID)});
+      if (legacyStyle) legacyStyle.remove();
       let style = document.getElementById(${JSON.stringify(STYLE_ID)});
       if (!style) {
         style = document.createElement('style');
@@ -546,7 +555,7 @@ function buildInjectExpression(customConfig) {
       } catch (e) {
         status = 'error: ' + (e && e.message ? e.message : String(e));
         if (typeof console !== 'undefined' && console.error) {
-          console.error('[agy-claude-style] init error:', e);
+          console.error('[agy-claude-studio] init error:', e);
         }
       }
     };
@@ -565,7 +574,7 @@ function buildInjectExpression(customConfig) {
       document.addEventListener('readystatechange', onReady);
       document.addEventListener('DOMContentLoaded', onReady);
     }
-    const st = window.__agClaudeStyle && window.__agClaudeStyle.getState ? window.__agClaudeStyle.getState() : null;
+    const st = window.__agClaudeStudio && window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null;
     return {
       version: ${JSON.stringify(PLUGIN_VERSION)},
       status,
@@ -582,15 +591,15 @@ function buildConfigScriptExpression(customConfig, expectedCodeHash) {
     const nextCfg = ${JSON.stringify(payload)};
     globalThis.__agCsOverrideConfig = nextCfg;
     if (
-      window.__agClaudeStyle &&
-      typeof window.__agClaudeStyle.refreshConfig === 'function' &&
-      (!${JSON.stringify(expectedHash)} || window.__agClaudeStyle.codeHash === ${JSON.stringify(expectedHash)})
+      window.__agClaudeStudio &&
+      typeof window.__agClaudeStudio.refreshConfig === 'function' &&
+      (!${JSON.stringify(expectedHash)} || window.__agClaudeStudio.codeHash === ${JSON.stringify(expectedHash)})
     ) {
-      window.__agClaudeStyle.refreshConfig(nextCfg);
+      window.__agClaudeStudio.refreshConfig(nextCfg);
       return {
         version: ${JSON.stringify(PLUGIN_VERSION)},
         status: 'refreshed',
-        state: window.__agClaudeStyle.getState ? window.__agClaudeStyle.getState() : null,
+        state: window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null,
       };
     }
     return null;
@@ -613,6 +622,11 @@ const REMOVE_EXPRESSION = `(() => {
   delete globalThis.__agCsCleanups;
   delete globalThis.__agCsOverrideConfig;
   try {
+    if (window.__agClaudeStudio && typeof window.__agClaudeStudio.destroy === 'function') {
+      window.__agClaudeStudio.destroy();
+    }
+  } catch (e) {}
+  try {
     if (window.__agClaudeStyle && typeof window.__agClaudeStyle.destroy === 'function') {
       window.__agClaudeStyle.destroy();
     }
@@ -620,6 +634,7 @@ const REMOVE_EXPRESSION = `(() => {
   if (window.__agCsI18n && typeof window.__agCsI18n.destroy === 'function') {
     window.__agCsI18n.destroy();
   }
+  delete window.__agClaudeStudio;
   delete window.__agClaudeStyle;
   delete window.__agCsI18n;
   delete globalThis.__agCsUiMain;
@@ -653,7 +668,7 @@ const REMOVE_EXPRESSION = `(() => {
     if (root.getAttribute('data-ag-cjk') === '1') root.removeAttribute('data-ag-cjk');
   }
   const nodes = document.querySelectorAll(
-    'style#${STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
+    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
   );
   nodes.forEach((n) => n.remove());
   try {
@@ -1083,7 +1098,7 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
   }
 
   // 1. Native watcher binary check (must match executable itself, never mid-command arguments like `tail /path/watcher`).
-  const nativeExeName = targetPlatform === 'win32' ? 'agy-claude-style-watcher.exe' : 'agy-claude-style-watcher';
+  const nativeExeName = targetPlatform === 'win32' ? 'agy-claude-studio-watcher.exe' : 'agy-claude-studio-watcher';
   const expectedNativeExe = normalizePathForCompare(pathMod.join(normTargetDir, nativeExeName), targetPlatform);
   const exePrefix = cmd.split(/\s+--/)[0].trim().replace(/^["']|["']$/g, '');
   const leadingToken = exePrefix.split(/\s+/)[0] || '';

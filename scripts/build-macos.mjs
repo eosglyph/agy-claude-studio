@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build standalone Universal macOS AGY Claude Style.app & .dmg for AGY Claude Style (agy-claude-style).
+// Build standalone Universal macOS Claude Studio.app & .dmg for Claude Studio (agy-claude-studio).
 // Zero external npm dependencies: uses built-in Node zlib + macOS swiftc / lipo / codesign / hdiutil.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -39,17 +39,17 @@ function generateInfoPlist(version = cdp.PLUGIN_VERSION) {
   <key>CFBundleDevelopmentRegion</key>
   <string>zh_CN</string>
   <key>CFBundleDisplayName</key>
-  <string>AGY Claude Style</string>
+  <string>Claude Studio</string>
   <key>CFBundleExecutable</key>
-  <string>AGY Claude Style</string>
+  <string>Claude Studio</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
-  <string>io.github.0dnancy.agy-claude-style</string>
+  <string>io.github.eosglyph.agy-claude-studio</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>AGY Claude Style</string>
+  <string>Claude Studio</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -154,7 +154,7 @@ function createDmgWithRetry(srcFolder, dmgPath) {
       if (fs.existsSync(dmgPath)) fs.rmSync(dmgPath, { force: true });
       execFileSync(
         'hdiutil',
-        ['create', '-volname', 'AGY Claude Style', '-srcfolder', srcFolder, '-ov', '-format', 'UDZO', dmgPath],
+        ['create', '-volname', 'Claude Studio', '-srcfolder', srcFolder, '-ov', '-format', 'UDZO', dmgPath],
         { stdio: 'inherit' }
       );
       return;
@@ -199,7 +199,7 @@ function buildMacosApp({
     const watcherMain = path.join(ROOT_DIR, 'installer', 'macos', 'Watcher', 'main.swift');
     const setupMain = path.join(ROOT_DIR, 'installer', 'macos', 'Setup', 'main.swift');
 
-    const watcherOut = path.join(stageDir, 'agy-claude-style-watcher');
+    const watcherOut = path.join(stageDir, 'agy-claude-studio-watcher');
     compileUniversalSwift({
       swiftc,
       lipo,
@@ -210,7 +210,7 @@ function buildMacosApp({
       name: 'watcher',
     });
 
-    const setupOut = path.join(stageDir, 'AGY Claude Style');
+    const setupOut = path.join(stageDir, 'Claude Studio');
     compileUniversalSwift({
       swiftc,
       lipo,
@@ -222,7 +222,7 @@ function buildMacosApp({
       name: 'setup',
     });
 
-    const stagedApp = path.join(stageDir, 'AGY Claude Style.app');
+    const stagedApp = path.join(stageDir, 'Claude Studio.app');
     const contentsDir = path.join(stagedApp, 'Contents');
     const macosDir = path.join(contentsDir, 'MacOS');
     const resourcesDir = path.join(contentsDir, 'Resources');
@@ -234,10 +234,10 @@ function buildMacosApp({
     fs.writeFileSync(path.join(contentsDir, 'Info.plist'), generateInfoPlist(cleanVersion), 'utf8');
     fs.writeFileSync(path.join(contentsDir, 'PkgInfo'), 'APPL????', 'ascii');
 
-    fs.copyFileSync(setupOut, path.join(macosDir, 'AGY Claude Style'));
-    fs.chmodSync(path.join(macosDir, 'AGY Claude Style'), 0o755);
-    fs.copyFileSync(watcherOut, path.join(macosDir, 'agy-claude-style-watcher'));
-    fs.chmodSync(path.join(macosDir, 'agy-claude-style-watcher'), 0o755);
+    fs.copyFileSync(setupOut, path.join(macosDir, 'Claude Studio'));
+    fs.chmodSync(path.join(macosDir, 'Claude Studio'), 0o755);
+    fs.copyFileSync(watcherOut, path.join(macosDir, 'agy-claude-studio-watcher'));
+    fs.chmodSync(path.join(macosDir, 'agy-claude-studio-watcher'), 0o755);
 
     generateIcnsFile(path.join(resourcesDir, 'AppIcon.icns'), stageDir);
 
@@ -272,7 +272,7 @@ function buildMacosApp({
     if (createDmg) {
       const dmgStage = path.join(stageDir, 'dmg-stage');
       fs.mkdirSync(dmgStage, { recursive: true });
-      execFileSync('ditto', [stagedApp, path.join(dmgStage, 'AGY Claude Style.app')], { stdio: 'inherit' });
+      execFileSync('ditto', [stagedApp, path.join(dmgStage, 'Claude Studio.app')], { stdio: 'inherit' });
       fs.symlinkSync('/Applications', path.join(dmgStage, 'Applications'));
 
       const tempDmg = path.join(stageDir, 'out.dmg');

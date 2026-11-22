@@ -242,7 +242,7 @@ test('inject.js --watch --exit-on-host-close exits cleanly and removes .watch.pi
     // The first evaluation only applies config. Wait until the watcher has
     // acknowledged the full injection before simulating an attached host closing.
     const logFile = path.join(dir, 'watch.log');
-    await waitFor(() => fs.readFileSync(logFile, 'utf8').includes('[✓] 已注入 agy-claude-style:'), 6000);
+    await waitFor(() => fs.readFileSync(logFile, 'utf8').includes('[✓] 已注入 agy-claude-studio:'), 6000);
     assert.ok(fs.existsSync(path.join(dir, '.watch.pid')), '.watch.pid created while watching');
 
     // Simulate Antigravity closing while port file/env still points to the old dead port
@@ -605,7 +605,7 @@ test('inject.js --managed attaches to mock CDP, injects, and exits 0 when mock C
     const logFile = path.join(dir, 'watch.log');
     await waitFor(() => {
       try {
-        return fs.readFileSync(logFile, 'utf8').includes('[✓] 已注入 agy-claude-style:');
+        return fs.readFileSync(logFile, 'utf8').includes('[✓] 已注入 agy-claude-studio:');
       } catch {
         return false;
       }
@@ -773,7 +773,7 @@ test('writeFileAtomic and updateConfigSetting persist valid updates and preserve
 });
 
 test('fail-closed PID ownership blocks kill/overwrite on unknown or foreign PIDs across Node and native cmdlines', () => {
-  const targetDir = '/Users/dev/Library/Application Support/AGY Claude Style';
+  const targetDir = '/Users/dev/Library/Application Support/Claude Studio';
   const aliveKill = () => {};
 
   // 1. Blocked inspection (e.g. macOS sandbox /bin/ps EPERM) => 'unknown', fail closed
@@ -803,14 +803,14 @@ test('fail-closed PID ownership blocks kill/overwrite on unknown or foreign PIDs
 
   // 3. Other project's inject.js --watch, one-shot inject.js, shell wrapper, -e eval trick, and other dir native watcher => 'foreign'
   const foreignCmds = [
-    'node /Users/dev/other-project/agy-claude-style/inject.js --watch',
+    'node /Users/dev/other-project/agy-claude-studio/inject.js --watch',
     `node "${targetDir}/inject.js"`, // missing --watch
     `node -e "${targetDir}/inject.js" --watch`,
     `node other.js "${targetDir}/inject.js" --watch`,
     `grep "${targetDir}/inject.js" --watch`,
-    `tail ${targetDir}/agy-claude-style-watcher`,
-    `/tmp/other-install/agy-claude-style-watcher --watch --dir /tmp/other-install`,
-    `${targetDir}/agy-claude-style-watcher --once --dir ${targetDir}`,
+    `tail ${targetDir}/agy-claude-studio-watcher`,
+    `/tmp/other-install/agy-claude-studio-watcher --watch --dir /tmp/other-install`,
+    `${targetDir}/agy-claude-studio-watcher --once --dir ${targetDir}`,
   ];
   for (const cmd of foreignCmds) {
     const cls = cdp.classifyWatcherPid(51515, targetDir, {
@@ -821,11 +821,11 @@ test('fail-closed PID ownership blocks kill/overwrite on unknown or foreign PIDs
     assert.equal(cls.status, 'foreign', `Expected foreign for cmdline: ${cmd}`);
   }
   assert.equal(
-    cdp.evaluateWatcherOwnership({ cmd: `tail ${targetDir}/agy-claude-style-watcher`, exePath: '/usr/bin/tail', cwd: null }, targetDir, 'darwin'),
+    cdp.evaluateWatcherOwnership({ cmd: `tail ${targetDir}/agy-claude-studio-watcher`, exePath: '/usr/bin/tail', cwd: null }, targetDir, 'darwin'),
     'foreign'
   );
   assert.equal(
-    cdp.evaluateWatcherOwnership({ cmd: `tail ${targetDir}/agy-claude-style-watcher` }, targetDir, 'darwin'),
+    cdp.evaluateWatcherOwnership({ cmd: `tail ${targetDir}/agy-claude-studio-watcher` }, targetDir, 'darwin'),
     'foreign'
   );
 
@@ -889,8 +889,8 @@ test('fail-closed PID ownership blocks kill/overwrite on unknown or foreign PIDs
   // 4. Owned processes: Node inject.js --watch in targetDir AND native macOS/Windows watchers in targetDir
   const ownedMacCmds = [
     `/usr/local/bin/node ${targetDir}/inject.js --watch`,
-    `${targetDir}/agy-claude-style-watcher --watch --dir ${targetDir}`,
-    `/tmp/alt-bin/agy-claude-style-watcher --dir ${targetDir} --cdp-port 9222`,
+    `${targetDir}/agy-claude-studio-watcher --watch --dir ${targetDir}`,
+    `/tmp/alt-bin/agy-claude-studio-watcher --dir ${targetDir} --cdp-port 9222`,
   ];
   for (const cmd of ownedMacCmds) {
     const cls = cdp.classifyWatcherPid(61616, targetDir, {
@@ -901,15 +901,15 @@ test('fail-closed PID ownership blocks kill/overwrite on unknown or foreign PIDs
     assert.equal(cls.status, 'owned', `Expected owned on darwin for cmdline: ${cmd}`);
   }
 
-  const winTarget = 'C:\\Users\\Alice\\AppData\\Local\\AGY Claude Style';
+  const winTarget = 'C:\\Users\\Alice\\AppData\\Local\\Claude Studio';
   assert.equal(
     cdp.classifyWatcherPid(71717, winTarget, {
       killFn: aliveKill,
       platform: 'win32',
       inspectFn: () => ({
-        exePath: `${winTarget}\\agy-claude-style-watcher.exe`,
-        cmd: `"${winTarget}\\agy-claude-style-watcher.exe" --dir "${winTarget}"`,
-        args: [`${winTarget}\\agy-claude-style-watcher.exe`, '--dir', winTarget],
+        exePath: `${winTarget}\\agy-claude-studio-watcher.exe`,
+        cmd: `"${winTarget}\\agy-claude-studio-watcher.exe" --dir "${winTarget}"`,
+        args: [`${winTarget}\\agy-claude-studio-watcher.exe`, '--dir', winTarget],
         cwd: null,
       }),
     }).status,
@@ -920,9 +920,9 @@ test('fail-closed PID ownership blocks kill/overwrite on unknown or foreign PIDs
       killFn: aliveKill,
       platform: 'win32',
       inspectFn: () => ({
-        exePath: `${winTarget}\\agy-claude-style-watcher.exe`,
-        cmd: `"${winTarget}\\agy-claude-style-watcher.exe" --dir "C:\\Other\\Dir"`,
-        args: [`${winTarget}\\agy-claude-style-watcher.exe`, '--dir', 'C:\\Other\\Dir'],
+        exePath: `${winTarget}\\agy-claude-studio-watcher.exe`,
+        cmd: `"${winTarget}\\agy-claude-studio-watcher.exe" --dir "C:\\Other\\Dir"`,
+        args: [`${winTarget}\\agy-claude-studio-watcher.exe`, '--dir', 'C:\\Other\\Dir'],
         cwd: null,
       }),
     }).status,
@@ -998,7 +998,7 @@ test('fail-closed PID ownership blocks kill/overwrite on unknown or foreign PIDs
         signalsOwned.push([p, sig || 'SIGTERM']);
       },
       inspectFn: () => ({
-        cmd: `${process.execPath} ${path.join(lockDir, 'inject.js')} --watch`,
+        cmd: `"${process.execPath}" "${path.join(lockDir, 'inject.js')}" --watch`,
         args: null,
         exePath: null,
         cwd: null,
@@ -1147,7 +1147,7 @@ test('applyPageScripts separates immutable bootstrap from short config script an
   fakeDoc.readyState = 'interactive';
   for (const fn of [...(docListeners.get('DOMContentLoaded') || [])]) fn();
 
-  const mountedState = sandbox.window.__agClaudeStyle.getState();
+  const mountedState = sandbox.window.__agClaudeStudio.getState();
   assert.equal(mountedState.cfg.palette, 'obsidian', 'Reloaded document must initialize with latest config override');
   vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
 
@@ -1216,7 +1216,7 @@ test('applyPageScripts separates immutable bootstrap from short config script an
     },
   };
   await injectMod.applyPageScripts(entryNewWin, { expr: fullExpr, configExpr: cfg2, refreshOnly: false });
-  assert.equal(sbNewWin.window.__agClaudeStyle.getState().cfg.palette, 'obsidian', 'New window attached after config-only update must start with obsidian');
+  assert.equal(sbNewWin.window.__agClaudeStudio.getState().cfg.palette, 'obsidian', 'New window attached after config-only update must start with obsidian');
   vm.runInNewContext(cdp.REMOVE_EXPRESSION, sbNewWin);
 
   // Case (b): fast refresh failure triggers full fallback AND still evaluates cfg2 before stale expr so window gets obsidian
@@ -1239,12 +1239,12 @@ test('applyPageScripts separates immutable bootstrap from short config script an
   };
   const fbRes = await injectMod.applyPageScripts(entryFallback, { expr: fullExpr, configExpr: cfg2, refreshOnly: true });
   assert.equal(fbRes.status, 'ok');
-  assert.equal(sbFallback.window.__agClaudeStyle.getState().cfg.palette, 'obsidian', 'Full fallback after fast-refresh miss must end up with obsidian');
+  assert.equal(sbFallback.window.__agClaudeStudio.getState().cfg.palette, 'obsidian', 'Full fallback after fast-refresh miss must end up with obsidian');
   vm.runInNewContext(cdp.REMOVE_EXPRESSION, sbFallback);
 });
 
 test('evaluateWatcherOwnership classifies --managed node watcher and native --launch watcher as owned while one-shot --launch stays foreign', () => {
-  const macDir = '/Users/dev/Library/Application Support/AGY Claude Style';
+  const macDir = '/Users/dev/Library/Application Support/Claude Studio';
   assert.equal(
     cdp.evaluateWatcherOwnership(`node "${macDir}/inject.js" --managed`, macDir, 'darwin'),
     'owned'
@@ -1271,20 +1271,20 @@ test('evaluateWatcherOwnership classifies --managed node watcher and native --la
   );
   assert.equal(
     cdp.evaluateWatcherOwnership(
-      `"${macDir}/agy-claude-style-watcher" --launch --relaunch --exit-on-host-close --dir "${macDir}"`,
+      `"${macDir}/agy-claude-studio-watcher" --launch --relaunch --exit-on-host-close --dir "${macDir}"`,
       macDir,
       'darwin'
     ),
     'owned'
   );
 
-  const winDir = 'C:\\Users\\Alice\\AppData\\Local\\AGY Claude Style';
+  const winDir = 'C:\\Users\\Alice\\AppData\\Local\\Claude Studio';
   assert.equal(
     cdp.evaluateWatcherOwnership(
       {
-        exePath: `${winDir}\\agy-claude-style-watcher.exe`,
-        cmd: `"${winDir}\\agy-claude-style-watcher.exe" --launch --relaunch --exit-on-host-close --dir "${winDir}"`,
-        args: [`${winDir}\\agy-claude-style-watcher.exe`, '--launch', '--relaunch', '--exit-on-host-close', '--dir', winDir],
+        exePath: `${winDir}\\agy-claude-studio-watcher.exe`,
+        cmd: `"${winDir}\\agy-claude-studio-watcher.exe" --launch --relaunch --exit-on-host-close --dir "${winDir}"`,
+        args: [`${winDir}\\agy-claude-studio-watcher.exe`, '--launch', '--relaunch', '--exit-on-host-close', '--dir', winDir],
         cwd: null,
       },
       winDir,
@@ -1323,9 +1323,9 @@ test('evaluateWatcherOwnership classifies --managed node watcher and native --la
   assert.equal(
     cdp.evaluateWatcherOwnership(
       {
-        cmd: `/private/var/folders/ab/My Space Dir/agy-cs/agy-claude-style-watcher --launch --dir "/private/var/folders/ab/My Space Dir/agy-cs"`,
+        cmd: `/private/var/folders/ab/My Space Dir/agy-cs/agy-claude-studio-watcher --launch --dir "/private/var/folders/ab/My Space Dir/agy-cs"`,
         args: null,
-        exePath: '/var/folders/ab/My Space Dir/agy-cs/agy-claude-style-watcher',
+        exePath: '/var/folders/ab/My Space Dir/agy-cs/agy-claude-studio-watcher',
         cwd: null,
       },
       varSpaceDir,
@@ -1407,7 +1407,7 @@ test('acquireLock with allowGracefulDuplicateExit keeps fail-closed unknown/fore
         if (sig) signalsOwned.push([p, sig]);
       },
       inspectFn: () => ({
-        cmd: `${process.execPath} ${path.join(lockDir, 'inject.js')} --managed`,
+        cmd: `"${process.execPath}" "${path.join(lockDir, 'inject.js')}" --managed`,
         args: null,
         exePath: null,
         cwd: null,
@@ -1441,7 +1441,7 @@ test('acquireLock with allowGracefulDuplicateExit keeps fail-closed unknown/fore
         }
       },
       inspectFn: () => ({
-        cmd: `${process.execPath} ${path.join(lockDir, 'inject.js')} --managed`,
+        cmd: `"${process.execPath}" "${path.join(lockDir, 'inject.js')}" --managed`,
         args: null,
         exePath: null,
         cwd: null,

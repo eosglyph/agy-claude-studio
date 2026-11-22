@@ -11,9 +11,9 @@ test('buildInjectExpression and REMOVE_EXPRESSION compile cleanly as valid JS', 
   const removeExpr = cdp.REMOVE_EXPRESSION;
   assert.doesNotThrow(() => new vm.Script(injectExpr));
   assert.doesNotThrow(() => new vm.Script(removeExpr));
-  assert.ok(injectExpr.includes('ag-claude-style-css'));
+  assert.ok(injectExpr.includes('ag-claude-studio-css'));
   assert.ok(injectExpr.includes('ag-cs-home-panel'));
-  assert.ok(removeExpr.includes('window.__agClaudeStyle.destroy'));
+  assert.ok(removeExpr.includes('window.__agClaudeStudio.destroy'));
 });
 
 test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simulated Antigravity DOM', async () => {
@@ -315,7 +315,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.equal(placeholder.getAttribute('data-ag-cs-placeholder'), '描述任务或提出问题');
     assert.equal(effortSpan.getAttribute('data-ag-cs-effort'), 'low');
     assert.equal(effortSpan.classList.contains('ag-cs-effort-badge'), true);
-    assert.ok(head.querySelector('#ag-claude-style-css'));
+    assert.ok(head.querySelector('#ag-claude-studio-css'));
     assert.ok(home.querySelector('.ag-cs-home-panel'));
     assert.ok(home.querySelector('.ag-cs-ripple-host'));
     assert.ok(home.querySelector('.ag-cs-ripple-canvas'));
@@ -325,7 +325,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.equal(queuedWrap.getAttribute('data-ag-cs-queued'), '1');
     assert.equal(queuedWrap.style.getPropertyValue('margin-bottom'), '46px');
 
-    const injectedCss = head.querySelector('#ag-claude-style-css')?.textContent || '';
+    const injectedCss = head.querySelector('#ag-claude-studio-css')?.textContent || '';
     assert.ok(injectedCss.includes('width: 264px'));
     assert.ok(injectedCss.includes('margin-bottom: 46px !important'));
     assert.ok(injectedCss.includes('z-index: 12 !important'));
@@ -340,11 +340,11 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
 
     // Switch to Claude Code effort style explicitly to test Claude slider popover
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
 
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn);
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
     const effortPop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(effortPop);
     assert.equal(effortPop.getAttribute('data-effort-style'), 'claude');
@@ -357,7 +357,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     // Light theme (even under obsidian/claude palettes) must update popover theme attributes to "light"
     body.className = 'theme-light';
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude', palette: 'obsidian' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude', palette: 'obsidian' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(effortPop.getAttribute('data-effort-theme'), 'light');
@@ -365,15 +365,15 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
 
     // Switch Effort Slider to ChatGPT (Codex) style via settings refresh
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({
+    sandbox.window.__agClaudeStudio.refreshConfig({
       ...cdp.DEFAULT_CONFIG,
       usageStatsEnabled: true,
       effortSliderStyle: 'chatgpt',
     });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn); // closes first
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn); // reopens in chatgpt (Codex) style
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn); // closes first
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn); // reopens in chatgpt (Codex) style
     const codexPop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(codexPop);
     assert.equal(codexPop.getAttribute('data-effort-style'), 'chatgpt');
@@ -389,7 +389,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     sandbox.window.innerHeight = 650;
     const origAnchorRect = modelBtn.getBoundingClientRect;
     modelBtn.getBoundingClientRect = () => ({ left: 260, top: 560, right: 390, bottom: 584, width: 130, height: 24 });
-    sandbox.window.__agClaudeStyle.openContextPopover(modelBtn, 'quotas');
+    sandbox.window.__agClaudeStudio.openContextPopover(modelBtn, 'quotas');
     const ctxPop = body.querySelector('.ag-cs-ctx-popover');
     assert.ok(ctxPop);
     assert.equal(ctxPop.style.maxHeight, '544px');
@@ -409,7 +409,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     // Verify all 5 languages refresh live across home dashboard, composer placeholder, context popover, and effort popover
     const checkLangSwitch = async (targetLang, expectedOverviewTab, expectedPlaceholder, expectedQuotaTab) => {
       doc.hidden = true;
-      sandbox.window.__agClaudeStyle.refreshConfig({
+      sandbox.window.__agClaudeStudio.refreshConfig({
         ...cdp.DEFAULT_CONFIG,
         usageStatsEnabled: true,
         language: targetLang,
@@ -431,20 +431,20 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     await checkLangSwitch('zh-CN', '概览', '描述任务或提出问题', '模型配额');
 
     // Also verify live open Effort Popover refreshes across languages
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn);
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
     const activeEffortPop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(activeEffortPop);
     assert.ok(activeEffortPop.innerHTML.includes('推理等级'));
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'ja' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'ja' });
     assert.ok(activeEffortPop.innerHTML.includes('推論レベル'));
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'en' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'en' });
     assert.ok(activeEffortPop.innerHTML.includes('Reasoning effort'));
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'zh-CN' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'zh-CN' });
     assert.ok(activeEffortPop.innerHTML.includes('推理等级'));
 
     // Refreshing palette externally updates palette attribute immediately
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'claude' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'claude' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(html.getAttribute('data-ag-cs-palette'), 'claude');
@@ -453,7 +453,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     // Effort word-boundary guard: "Flow" inside a model label must not be tagged "low"
     effortSpan.textContent = 'Flow';
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'obsidian' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'obsidian' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(html.getAttribute('data-ag-cs-palette'), 'obsidian');
@@ -462,9 +462,9 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     // Standalone Glass Effect toggle & no top-bar theme capsule
     assert.equal(paneToolbar.querySelector('#ag-cs-theme-selector'), null, 'Top-bar theme capsule must not mount');
     assert.equal(html.getAttribute('data-ag-cs-glass'), 'on', 'glassEffect defaults to on');
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, glassEffect: false });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, glassEffect: false });
     assert.equal(html.getAttribute('data-ag-cs-glass'), 'off');
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, glassEffect: true });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, glassEffect: true });
     assert.equal(html.getAttribute('data-ag-cs-glass'), 'on');
 
     // Legacy aurora palette in config sanitizes cleanly to obsidian
@@ -584,7 +584,7 @@ test('buildInjectExpression defers cleanly when documentElement is null at docum
   try {
     const res = vm.runInNewContext(cdp.buildInjectExpression(), sandbox);
     assert.equal(res.status, 'deferred');
-    assert.equal(sandbox.window.__agClaudeStyle, undefined);
+    assert.equal(sandbox.window.__agClaudeStudio, undefined);
 
     // Simulate document parsing completing
     htmlEl = makeStub('html');
@@ -595,13 +595,13 @@ test('buildInjectExpression defers cleanly when documentElement is null at docum
     doc.readyState = 'interactive';
     for (const fn of [...(docListeners.get('DOMContentLoaded') || [])]) fn();
 
-    assert.ok(sandbox.window.__agClaudeStyle, 'Expected __agClaudeStyle to mount after DOMContentLoaded');
+    assert.ok(sandbox.window.__agClaudeStudio, 'Expected __agClaudeStudio to mount after DOMContentLoaded');
     assert.equal(observedNode, htmlEl);
     assert.ok(headEl.children.some((c) => c.id === cdp.STYLE_ID));
     assert.equal(attrs.get('data-ag-cs-style'), '1');
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
-    assert.equal(sandbox.window.__agClaudeStyle, undefined);
+    assert.equal(sandbox.window.__agClaudeStudio, undefined);
   } finally {
     for (const id of timers) clearTimeout(id);
   }
@@ -831,7 +831,7 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
     assert.equal(winListeners.get('resize')?.size || 0, 1);
 
     // 1. Open Claude slider on Light theme + Extra badge + scaled getBoundingClientRect()
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn);
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
     const pop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(pop);
     assert.equal(pop.getAttribute('data-effort-theme'), 'light');
@@ -855,7 +855,7 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
 
     // 2. Switch to ChatGPT (Codex) mode: preserves "Extra" in value label, mounts 22 stars + nebula, responds to ArrowLeft/End
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'chatgpt', hudTopBar: true });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'chatgpt', hudTopBar: true });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
 
@@ -871,7 +871,7 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
 
     // 3. Clicking XHigh from High when host dynamically sets badge to " Extra" updates open popover to "Extra"
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     modelBtn.__reactFiber$test.memoizedProps.selectedModel = { label: 'Gemini 4 Hydrogen (High)' };
@@ -881,9 +881,9 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
     };
     effortSpan.textContent = ' High';
     effortSpan.setAttribute('data-ag-cs-effort', 'xhigh'); // intentionally stale attr must not shadow live ' High' text
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn); // closes previous
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn); // closes previous
     assert.equal(pop.parentElement, null);
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn); // opens on High
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn); // opens on High
     const activePop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(activePop);
     assert.equal(activePop.querySelector('.ag-cs-effort-value')?.textContent.trim(), 'High');
@@ -1145,7 +1145,7 @@ test('bottom-right context ring navigates directly to quotas or breakdown tab ba
     pop?.querySelector('.ag-cs-ctx-close')?.dispatch('click');
 
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
 
@@ -1447,7 +1447,7 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
     };
     convView.appendChild(inputBox);
     body.appendChild(convView);
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
     await new Promise((r) => setTimeout(r, 60));
 
     assert.ok(footer.querySelector('.ag-cs-inline-stats'), 'Expected inline stats during Turn 1 before generatorMetadata');
@@ -1478,7 +1478,7 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
       },
     };
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
     await new Promise((r) => setTimeout(r, 60));
     doc.hidden = false;
 
@@ -1701,7 +1701,7 @@ test('Q&A takeover card, side-question panel, and running tasks clear Clawd masc
     // 2. When queued message is also present, queuedWrap takes the 46px clearance and takeoverWrap avoids double spacing
     const queuedItem = makeEl('div', { text: '排队中的消息' });
     queuedWrap.appendChild(queuedItem);
-    sandbox.window.__agClaudeStyle.refreshConfig(cdp.DEFAULT_CONFIG);
+    sandbox.window.__agClaudeStudio.refreshConfig(cdp.DEFAULT_CONFIG);
     assert.equal(queuedWrap.getAttribute('data-ag-cs-queued'), '1');
     assert.equal(queuedWrap.style.getPropertyValue('margin-bottom'), '46px');
     assert.equal(takeoverWrap.hasAttribute('data-ag-cs-takeover'), false);
@@ -1711,14 +1711,14 @@ test('Q&A takeover card, side-question panel, and running tasks clear Clawd masc
     queuedItem.remove();
     const sideQ = makeEl('div', { attrs: { 'data-testid': 'side-question-panel' } });
     rtcWrap.insertBefore(sideQ, contentsWrap);
-    sandbox.window.__agClaudeStyle.refreshConfig(cdp.DEFAULT_CONFIG);
+    sandbox.window.__agClaudeStudio.refreshConfig(cdp.DEFAULT_CONFIG);
     assert.equal(sideQ.getAttribute('data-ag-cs-takeover'), '1');
     assert.equal(sideQ.style.getPropertyValue('margin-bottom'), '46px');
     assert.equal(takeoverWrap.hasAttribute('data-ag-cs-takeover'), false);
 
     // 4. When running-items-panel expands (grid-rows-[1fr]), its wrapper takes the 46px clearance
     runningPanel.className = 'grid grid-rows-[1fr]';
-    sandbox.window.__agClaudeStyle.refreshConfig(cdp.DEFAULT_CONFIG);
+    sandbox.window.__agClaudeStudio.refreshConfig(cdp.DEFAULT_CONFIG);
     assert.equal(runningWrap.getAttribute('data-ag-cs-queued'), '1');
     assert.equal(runningWrap.style.getPropertyValue('margin-bottom'), '46px');
     assert.equal(sideQ.hasAttribute('data-ag-cs-takeover'), false);
@@ -1727,13 +1727,13 @@ test('Q&A takeover card, side-question panel, and running tasks clear Clawd masc
     // 5. Turning mascot off clears all takeover/queued clearances cleanly
     runningPanel.className = 'grid grid-rows-[0fr]';
     sideQ.remove();
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, mascot: 'off' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, mascot: 'off' });
     assert.equal(takeoverWrap.hasAttribute('data-ag-cs-takeover'), false);
     assert.equal(takeoverWrap.style.getPropertyValue('margin-bottom'), '');
     assert.equal(runningWrap.hasAttribute('data-ag-cs-queued'), false);
 
     // 6. Re-enable crab, verify takeover clearance returns, then verify REMOVE_EXPRESSION tears down cleanly
-    sandbox.window.__agClaudeStyle.refreshConfig(cdp.DEFAULT_CONFIG);
+    sandbox.window.__agClaudeStudio.refreshConfig(cdp.DEFAULT_CONFIG);
     assert.equal(takeoverWrap.getAttribute('data-ag-cs-takeover'), '1');
     assert.equal(takeoverWrap.style.getPropertyValue('margin-bottom'), '46px');
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
@@ -3982,14 +3982,14 @@ test('hudBottomBar triggers quota fetch in context mode, low-context triggers /c
     const savedMap = JSON.parse(storage.getItem('agClaudeStyle.settings.v1') || '{}');
     savedMap.hudCompact = true;
     storage.setItem('agClaudeStyle.settings.v1', JSON.stringify(savedMap));
-    sandbox.window.__agClaudeStyle.refreshConfig({
+    sandbox.window.__agClaudeStudio.refreshConfig({
       ...cdp.DEFAULT_CONFIG,
       ringMode: 'context',
       hudBottomBar: true,
       hudTopBar: true,
       palette: 'claude',
     });
-    const stAfter = sandbox.window.__agClaudeStyle.getState();
+    const stAfter = sandbox.window.__agClaudeStudio.getState();
     assert.equal(stAfter.cfg.palette, 'claude');
     assert.equal(stAfter.cfg.hudCompact, true);
 
@@ -4204,12 +4204,12 @@ test('unmountRipple tolerates zero-size .agy-home (field=null) and copy honestly
     // 1. Zero-size ripple mounted with field=null -> turning off homeRipple MUST NOT throw TypeError in unmountRipple()
     assert.ok(home.querySelector('.ag-cs-ripple-host'), 'Expected zero-size ripple host attached');
     assert.doesNotThrow(() => {
-      sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, homeLayout: 'studio', homeRipple: false, ringMode: 'context' });
+      sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, homeLayout: 'studio', homeRipple: false, ringMode: 'context' });
     });
     assert.equal(home.querySelector('.ag-cs-ripple-host'), null);
 
     // Re-enable zero-size ripple, then REMOVE_EXPRESSION (destroy -> unmountRipple) must also not throw
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, homeLayout: 'studio', homeRipple: true, ringMode: 'context' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, homeLayout: 'studio', homeRipple: true, ringMode: 'context' });
     assert.ok(home.querySelector('.ag-cs-ripple-host'));
 
     // 2. Statistics remain available without pricing UI.
@@ -4495,8 +4495,8 @@ test('inject expression enters sidecar-lite mode on plugin://swarm-- iframe with
 
   assert.equal(injectRes.status, 'ok');
   assert.equal(doc.getElementById(cdp.STYLE_ID), null, 'sidecar must not inject main style.css');
-  assert.equal(sandbox.window.__agClaudeStyle.sidecar, true);
-  assert.equal(sandbox.window.__agClaudeStyle.getState().language, 'zh-CN');
+  assert.equal(sandbox.window.__agClaudeStudio.sidecar, true);
+  assert.equal(sandbox.window.__agClaudeStudio.getState().language, 'zh-CN');
   assert.equal(tabBoard.textContent, '看板');
   assert.equal(optAll.textContent, '来自所有人');
   assert.equal(optCoord.textContent, '来自 coordinator');
@@ -4518,7 +4518,7 @@ test('inject expression enters sidecar-lite mode on plugin://swarm-- iframe with
   assert.equal(optAll.textContent, 'From anyone');
   assert.equal(optCoord.textContent, 'From coordinator');
   assert.equal(html.getAttribute('lang'), 'en');
-  assert.equal(sandbox.window.__agClaudeStyle, undefined);
+  assert.equal(sandbox.window.__agClaudeStudio, undefined);
   assert.equal(sandbox.globalThis.__agCsSidecarCore, undefined);
 });
 
@@ -4753,7 +4753,7 @@ test('periodic selector sparkle trigger mounts left of model selector, switches 
     assert.equal(trigger.getAttribute('data-ag-no-i18n'), '');
 
     trigger.dispatch('click');
-    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, true);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true);
     const drawer = body.querySelector('.ag-cs-ps-drawer');
     assert.ok(drawer, 'Periodic Table drawer opened');
 
@@ -4767,18 +4767,18 @@ test('periodic selector sparkle trigger mounts left of model selector, switches 
     const syncBtn = drawer.querySelector('.ag-cs-ps-sync-btn');
     assert.ok(syncBtn, 'AI Studio sync button present in header');
     syncBtn.dispatch('click');
-    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, false);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
     assert.ok(editor.textContent.includes('aistudio.google.com'), 'composer populated with AI Studio sync prompt');
 
     trigger.dispatch('click');
-    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, true);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true);
     const drawer2 = body.querySelector('.ag-cs-ps-drawer');
     const neonTile = drawer2.querySelector('[data-ps-symbol="Ne"]');
     assert.ok(neonTile, '10 Ne tile present');
     // First click on multi-effort element pins it and keeps drawer open for effort selection
     neonTile.dispatch('click');
     assert.equal(selectedCalls.length, 0, 'First click on multi-effort tile must not prematurely close drawer');
-    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, true, 'Drawer stays open to pick effort tier');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'Drawer stays open to pick effort tier');
     assert.equal(neonTile.classList.contains('is-pinned'), true, 'Clicked element tile is visually pinned');
     const effortBtns = drawer2.querySelectorAll('.ag-cs-ps-effort-btn');
     assert.ok(effortBtns.length >= 2, 'Effort buttons rendered in preview bar for pinned element');
@@ -4790,18 +4790,18 @@ test('periodic selector sparkle trigger mounts left of model selector, switches 
     highBtn.dispatch('click');
     assert.equal(selectedCalls.length, 1);
     assert.equal(selectedCalls[0].modelId, 'gemini-4-neon-high');
-    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, false);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
 
     // Clicking an already-pinned element a second time commits preferred variant directly
     trigger.dispatch('click');
     const drawer3 = body.querySelector('.ag-cs-ps-drawer');
     const neonTile2 = drawer3.querySelector('[data-ps-symbol="Ne"]');
     neonTile2.dispatch('click');
-    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, true);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true);
     neonTile2.dispatch('click');
     assert.equal(selectedCalls.length, 2);
     assert.equal(selectedCalls[1].modelId, 'gemini-4-neon-high');
-    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, false);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
     assert.equal(body.querySelector('.ag-cs-periodic-trigger'), null);

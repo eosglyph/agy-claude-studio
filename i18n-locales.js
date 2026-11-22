@@ -15,7 +15,7 @@
     return arr[idx] !== undefined ? arr[idx] : arr[0];
   }
 
-  // Unified 5-language table for AGY Claude Style's own UI [zh-CN, zh-TW, yue, en, ja]
+  // Unified 5-language table for Claude Studio's own UI [zh-CN, zh-TW, yue, en, ja]
   const UI_TABLE = {
     // ── Studio Placeholder & Home Dashboard ──────────────────────────────────
     studioPlaceholder: [

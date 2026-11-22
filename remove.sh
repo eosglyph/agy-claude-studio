@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop the AGY Claude Style (agy-claude-style) watcher and restore Antigravity UI.
+# Stop the Claude Studio (agy-claude-studio) watcher and restore Antigravity UI.
 cd "$(dirname "$0")"
-echo "Removing AGY Claude Style (agy-claude-style)..."
+echo "Removing Claude Studio (agy-claude-studio)..."
 node remove.js

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Launch Antigravity with CDP remote debugging enabled (--remote-debugging-port=0)
-# and start the AGY Claude Style watcher (managed exit-on-close by default, or --daemon).
+# and start the Claude Studio watcher (managed exit-on-close by default, or --daemon).
 # Usage: ./launch.sh [--relaunch] [--daemon]
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,10 +24,10 @@ fi
 
 if [ "$DAEMON" = "1" ]; then
   nohup node "$INJECT_JS" --watch --replace >/dev/null 2>>watch.log </dev/null &
-  echo "[✓] AGY Claude Style daemon watcher started (PID $!)"
+  echo "[✓] Claude Studio daemon watcher started (PID $!)"
   exit 0
 fi
 
 # Managed mode (default): fail-closed PID ownership and graceful dedup are handled by inject.js
 nohup node "$INJECT_JS" --watch --exit-on-host-close --skip-if-running >/dev/null 2>>watch.log </dev/null &
-echo "[✓] AGY Claude Style managed watcher started (PID $!)"
+echo "[✓] Claude Studio managed watcher started (PID $!)"

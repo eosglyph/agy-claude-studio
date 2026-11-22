@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 function buildReleasePack() {
   const version = cdp.PLUGIN_VERSION;
-  const packName = `agy-claude-style-gemini-pack-v${version}`;
+  const packName = `agy-claude-studio-pack-v${version}`;
   const releasesDir = path.join(ROOT_DIR, 'releases');
   const packDir = path.join(releasesDir, packName);
   const zipPath = path.join(releasesDir, `${packName}.zip`);

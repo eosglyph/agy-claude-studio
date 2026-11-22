@@ -22,11 +22,11 @@
     .forEach((n) => n.remove());
 
   if (
-    window.__agClaudeStyle &&
-    window.__agClaudeStyle.version === VERSION &&
-    (!CODE_HASH || window.__agClaudeStyle.codeHash === CODE_HASH)
+    window.__agClaudeStudio &&
+    window.__agClaudeStudio.version === VERSION &&
+    (!CODE_HASH || window.__agClaudeStudio.codeHash === CODE_HASH)
   ) {
-    window.__agClaudeStyle.refreshConfig(initialConfig);
+    window.__agClaudeStudio.refreshConfig(initialConfig);
     return;
   }
   if (Array.isArray(globalThis.__agCsCleanups)) {
@@ -36,6 +36,12 @@
         if (typeof fn === 'function') fn();
       } catch {}
     }
+  }
+  if (window.__agClaudeStudio) {
+    try {
+      window.__agClaudeStudio.destroy();
+    } catch {}
+    delete window.__agClaudeStudio;
   }
   if (window.__agClaudeStyle) {
     try {
@@ -6012,7 +6018,7 @@
       el.closest(
         '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, #' +
           SETTINGS_SEC_ID +
-          ', #ag-claude-style-css'
+          ', #ag-claude-studio-css, #ag-claude-style-css'
       )
     );
   }
@@ -6432,7 +6438,7 @@
     }
   }
 
-  window.__agClaudeStyle = {
+  window.__agClaudeStudio = {
     version: VERSION,
     codeHash: CODE_HASH,
     refreshConfig(next) {

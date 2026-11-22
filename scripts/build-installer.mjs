@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build standalone Windows installer.exe for AGY Claude Style (agy-claude-style).
+// Build standalone Windows installer.exe for Claude Studio (agy-claude-studio).
 // Zero external npm dependencies: uses built-in Node zlib + Windows .NET Framework csc.exe.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -46,7 +46,7 @@ function buildInstaller({ outputPath, configPath, version = cdp.PLUGIN_VERSION }
     const manifestJson = JSON.stringify(manifest, null, 2) + '\n';
     fs.writeFileSync(path.join(stageDir, 'manifest.json'), manifestJson, 'utf8');
 
-    const watcherOut = path.join(stageDir, 'agy-claude-style-watcher.exe');
+    const watcherOut = path.join(stageDir, 'agy-claude-studio-watcher.exe');
     const commonMiniJson = path.join(ROOT_DIR, 'installer', 'common', 'MiniJson.cs');
     const commonCdpClient = path.join(ROOT_DIR, 'installer', 'common', 'CdpClient.cs');
     const watcherMain = path.join(ROOT_DIR, 'installer', 'watcher', 'Program.cs');
@@ -71,7 +71,7 @@ function buildInstaller({ outputPath, configPath, version = cdp.PLUGIN_VERSION }
     const activeConfigFile = resolveActiveConfigFile(configPath);
 
     const payloadFiles = [
-      { name: 'agy-claude-style-watcher.exe', data: fs.readFileSync(watcherOut) },
+      { name: 'agy-claude-studio-watcher.exe', data: fs.readFileSync(watcherOut) },
       { name: 'manifest.json', data: Buffer.from(manifestJson, 'utf8') },
       { name: 'style.css', data: fs.readFileSync(path.join(ROOT_DIR, 'style.css')) },
       { name: 'config.json', data: fs.readFileSync(activeConfigFile) },

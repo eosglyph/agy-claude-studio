@@ -1,4 +1,4 @@
-// Shared lifecycle, safe logging, and orphan-prevention helpers for AGY Claude Style.
+// Shared lifecycle, safe logging, and orphan-prevention helpers for Claude Studio (agy-claude-studio).
 // Zero external dependencies (Node >= 22).
 const fs = require('fs');
 const os = require('os');
@@ -42,6 +42,8 @@ const DEFAULT_WATCHER_EXE_NAMES = new Set([
   'electron.exe',
   'antigravity',
   'antigravity.exe',
+  'agy-claude-studio-watcher',
+  'agy-claude-studio-watcher.exe',
   'agy-claude-style-watcher',
   'agy-claude-style-watcher.exe',
 ]);
@@ -760,7 +762,7 @@ function listAliveMcpHosts({
 }
 
 function readAntigravityPluginEnabledState({
-  pluginName = 'agy-claude-style',
+  pluginName = 'agy-claude-studio',
   pluginRoot = '',
   homeDir = os.homedir(),
   configPath = '',
@@ -842,7 +844,7 @@ function ensureIdeRemoteDebuggingArgv(env = process.env, homeDir = os.homedir())
   const argvPath = path.join(ideDir, 'argv.json');
   if (!fs.existsSync(argvPath)) {
     const fresh =
-      '{\n\t// Automatically configured by agy-claude-style for Antigravity IDE CDP support.\n\t"remote-debugging-port": "0"\n}\n';
+      '{\n\t// Automatically configured by agy-claude-studio for Antigravity IDE CDP support.\n\t"remote-debugging-port": "0"\n}\n';
     try {
       fs.writeFileSync(argvPath, fresh, 'utf8');
       return { changed: true, created: true, path: argvPath };
@@ -859,7 +861,7 @@ function ensureIdeRemoteDebuggingArgv(env = process.env, homeDir = os.homedir())
   }
   if (!raw.trim()) {
     const fresh =
-      '{\n\t// Automatically configured by agy-claude-style for Antigravity IDE CDP support.\n\t"remote-debugging-port": "0"\n}\n';
+      '{\n\t// Automatically configured by agy-claude-studio for Antigravity IDE CDP support.\n\t"remote-debugging-port": "0"\n}\n';
     fs.writeFileSync(argvPath, fresh, 'utf8');
     return { changed: true, created: true, path: argvPath };
   }
@@ -1193,7 +1195,7 @@ async function ensureDesktopRemoteDebuggingLaunchers({
 } = {}) {
   if (
     !allowInTest &&
-    (String(env?.AGY_CLAUDE_STYLE_SKIP_LAUNCHER_PROVISION || '') === '1' ||
+    (String(env?.AGY_CLAUDE_STUDIO_SKIP_LAUNCHER_PROVISION || env?.AGY_CLAUDE_STYLE_SKIP_LAUNCHER_PROVISION || '') === '1' ||
       String(env?.ANTIGRAVITY_LS_ADDRESS || '').trim() === 'test.invalid')
   ) {
     return {
@@ -1377,7 +1379,7 @@ function buildSanitizedDesktopRelaunchEnv(baseEnv = process.env) {
   const clean = {};
   for (const [key, val] of Object.entries(baseEnv || {})) {
     if (val === undefined || val === null) continue;
-    if (/^(?:ANTIGRAVITY_|CHROME_DEVTOOLS_MCP_|AGY_CLAUDE_STYLE_|ELECTRON_RUN_AS_NODE$|NODE_OPTIONS$)/i.test(key)) {
+    if (/^(?:ANTIGRAVITY_|CHROME_DEVTOOLS_MCP_|AGY_CLAUDE_STUDIO_|AGY_CLAUDE_STYLE_|ELECTRON_RUN_AS_NODE$|NODE_OPTIONS$)/i.test(key)) {
       continue;
     }
     clean[key] = String(val);
@@ -1400,7 +1402,7 @@ function resolveDesktopHostExecutable({
   };
 
   const hintPaths = [
-    String(env?.AGY_CLAUDE_STYLE_HOST_EXE || '').trim(),
+    String(env?.AGY_CLAUDE_STUDIO_HOST_EXE || env?.AGY_CLAUDE_STYLE_HOST_EXE || '').trim(),
     String(env?.ANTIGRAVITY_AGENTAPI_EXE || '').trim(),
     String(env?.CHROME_DEVTOOLS_MCP_JS || '').trim(),
   ].filter(Boolean);
@@ -1685,7 +1687,7 @@ async function triggerDesktopHostRelaunch({
 } = {}) {
   if (
     !allowInTest &&
-    (String(env?.AGY_CLAUDE_STYLE_SKIP_LAUNCHER_PROVISION || '') === '1' ||
+    (String(env?.AGY_CLAUDE_STUDIO_SKIP_LAUNCHER_PROVISION || env?.AGY_CLAUDE_STYLE_SKIP_LAUNCHER_PROVISION || '') === '1' ||
       String(env?.ANTIGRAVITY_LS_ADDRESS || '').trim() === 'test.invalid')
   ) {
     return { ok: false, status: 403, error: 'Disabled in test sandbox' };

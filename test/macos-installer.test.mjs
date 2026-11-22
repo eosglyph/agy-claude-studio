@@ -203,7 +203,7 @@ function createMockCdpServer() {
       result = { identifier: 'script-' + receivedCalls.length };
     } else if (msg.method === 'Runtime.evaluate') {
       const expr = msg.params && msg.params.expression ? msg.params.expression : '';
-      if (expr === 'Boolean(window.__agClaudeStyle)') {
+      if (expr === 'Boolean(window.__agClaudeStudio)') {
         result = { result: { type: 'boolean', value: claudeStyleMounted } };
       } else if (expr.includes('delete globalThis.__agCsUiMain')) {
         lastRemovedExpr = expr;
@@ -395,8 +395,8 @@ test('buildIcns generates a valid Apple ICNS container with PNG icon chunks', ()
 test('generateInfoPlist generates valid bundle metadata and escapes special XML characters', () => {
   const plist = generateInfoPlist('1.2.3-beta&1<test>');
   assert.ok(plist.includes('<key>CFBundleExecutable</key>'));
-  assert.ok(plist.includes('<string>AGY Claude Style</string>'));
-  assert.ok(plist.includes('<string>io.github.0dnancy.agy-claude-style</string>'));
+  assert.ok(plist.includes('<string>Claude Studio</string>'));
+  assert.ok(plist.includes('<string>io.github.eosglyph.agy-claude-studio</string>'));
   assert.ok(plist.includes('<key>NSAllowsLocalNetworking</key>'));
   assert.ok(plist.includes('<string>1.2.3-beta&amp;1&lt;test&gt;</string>'));
 });
@@ -479,7 +479,7 @@ test('Setup/main.swift supports managed/daemon modes, launcher .app, updated .co
     assert.ok(setupSwift.includes(flag), `Setup/main.swift supports ${flag}`);
   }
   assert.ok(setupSwift.includes('AGY_CS_TEST_SYSTEM_ROOT'));
-  assert.ok(setupSwift.includes('Antigravity (AGY Claude Style).app'));
+  assert.ok(setupSwift.includes('Antigravity (Claude Studio).app'));
   assert.ok(setupSwift.includes('createLauncherAppBundle('));
   assert.ok(setupSwift.includes('--launch --relaunch --exit-on-host-close --dir'));
   assert.ok(setupSwift.includes('launch-antigravity.command'));
@@ -517,7 +517,7 @@ test(
   async () => {
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-macos-e2e-'));
     const testRoot = path.join(workDir, 'test-sys-root');
-    const appPath = path.join(workDir, 'AGY Claude Style.app');
+    const appPath = path.join(workDir, 'Claude Studio.app');
     const installDir = path.join(workDir, 'installed');
     const outManagedNoCdp = path.join(workDir, 'managed-nocdp.json');
     const outInstall = path.join(workDir, 'install.json');
@@ -526,8 +526,8 @@ test(
     const outBackToManaged = path.join(workDir, 'back-managed.json');
     const outUninstall = path.join(workDir, 'uninstall.json');
     const outStatus = path.join(workDir, 'status.json');
-    const plistPath = path.join(testRoot, 'LaunchAgents', 'io.github.0dnancy.agy-claude-style.plist');
-    const appLauncherPath = path.join(testRoot, 'Applications', 'Antigravity (AGY Claude Style).app');
+    const plistPath = path.join(testRoot, 'LaunchAgents', 'io.github.eosglyph.agy-claude-studio.plist');
+    const appLauncherPath = path.join(testRoot, 'Applications', 'Antigravity (Claude Studio).app');
     const testEnv = {
       AGY_CS_TEST_SYSTEM_ROOT: testRoot,
       AGY_CS_NO_UI: '1',
@@ -542,8 +542,8 @@ test(
       assert.ok(fs.existsSync(appPath));
       assert.ok(buildRes.appSizeBytes > 100 * 1024);
 
-      const installerBin = path.join(appPath, 'Contents', 'MacOS', 'AGY Claude Style');
-      const watcherBundleBin = path.join(appPath, 'Contents', 'MacOS', 'agy-claude-style-watcher');
+      const installerBin = path.join(appPath, 'Contents', 'MacOS', 'Claude Studio');
+      const watcherBundleBin = path.join(appPath, 'Contents', 'MacOS', 'agy-claude-studio-watcher');
       assert.ok(fs.existsSync(installerBin));
       assert.ok(fs.existsSync(watcherBundleBin));
 
@@ -600,10 +600,10 @@ test(
       assert.ok(fs.existsSync(launcherExe));
       assert.ok((fs.statSync(launcherExe).mode & 0o111) !== 0);
       assert.ok(fs.readFileSync(launcherExe, 'utf8').includes('--launch --relaunch --exit-on-host-close --dir'));
-      assert.ok(fs.existsSync(path.join(installDir, 'Antigravity (AGY Claude Style).app')));
+      assert.ok(fs.existsSync(path.join(installDir, 'Antigravity (Claude Studio).app')));
       const cmdFile = path.join(installDir, 'launch-antigravity.command');
       assert.ok(fs.existsSync(cmdFile));
-      assert.ok(fs.readFileSync(cmdFile, 'utf8').includes('agy-claude-style-watcher'));
+      assert.ok(fs.readFileSync(cmdFile, 'utf8').includes('agy-claude-studio-watcher'));
       assert.ok(fs.readFileSync(cmdFile, 'utf8').includes('--launch --relaunch --exit-on-host-close --dir'));
 
       await runBin(
@@ -645,8 +645,8 @@ test(
       assert.equal(installResult.launchAgent, false);
       assert.equal(installResult.preservedExistingConfig, true);
       assert.deepEqual(installResult.injectedPages, ['Antigravity']);
-      assert.ok(fs.existsSync(path.join(installDir, 'agy-claude-style-watcher')));
-      assert.ok(fs.existsSync(path.join(installDir, 'agy-claude-style-installer')));
+      assert.ok(fs.existsSync(path.join(installDir, 'agy-claude-studio-watcher')));
+      assert.ok(fs.existsSync(path.join(installDir, 'agy-claude-studio-installer')));
       assert.ok(fs.existsSync(path.join(installDir, 'manifest.json')));
       assert.ok(fs.existsSync(path.join(installDir, '.watch.pid')));
 
@@ -683,7 +683,7 @@ test(
       assert.ok(injectedExpr.includes(`"ringMode":"${expectedCfgObj.ringMode}"`));
 
       // Verify watcher --once CLI mode works standalone against CDP
-      const watcherBin = path.join(installDir, 'agy-claude-style-watcher');
+      const watcherBin = path.join(installDir, 'agy-claude-studio-watcher');
       const onceOut = path.join(workDir, 'once.json');
       await runBin(
         watcherBin,
@@ -829,7 +829,7 @@ test(
 
       // 9. Test --uninstall from installed copy inside installDir (removes appLauncher, plist, CDP injection, installDir)
       const port3 = await mockCdp3.start();
-      const installedSelf = path.join(installDir, 'agy-claude-style-installer');
+      const installedSelf = path.join(installDir, 'agy-claude-studio-installer');
       await runBin(
         installedSelf,
         [

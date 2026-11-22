@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 rem Launch Antigravity with CDP remote debugging enabled (--remote-debugging-port=0)
-rem and start the AGY Claude Style watcher (managed exit-on-close by default, or --daemon).
+rem and start the Claude Studio watcher (managed exit-on-close by default, or --daemon).
 rem Usage: launch.bat [--relaunch] [--daemon]
 cd /d "%~dp0"
 
@@ -29,9 +29,9 @@ if errorlevel 1 (
 
 if "!DAEMON!"=="1" (
   start "" /b wscript.exe "%~dp0watch-hidden.vbs" --watch --replace
-  echo AGY Claude Style launched with CDP enabled ^(daemon watcher mode^). Log: %~dp0watch.log
+  echo Claude Studio launched with CDP enabled ^(daemon watcher mode^). Log: %~dp0watch.log
 ) else (
   start "" /b wscript.exe "%~dp0watch-hidden.vbs" --watch --exit-on-host-close --skip-if-running
-  echo AGY Claude Style launched with CDP enabled ^(managed mode: watcher exits when Antigravity closes^). Log: %~dp0watch.log
+  echo Claude Studio launched with CDP enabled ^(managed mode: watcher exits when Antigravity closes^). Log: %~dp0watch.log
 )
 timeout /t 2 >nul 2>&1

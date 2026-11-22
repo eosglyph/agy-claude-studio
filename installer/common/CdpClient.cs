@@ -11,7 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AgyClaudeStyle
+namespace AgyClaudeStudio
 {
     public class CdpPageInfo
     {
@@ -45,8 +45,8 @@ namespace AgyClaudeStyle
             Dictionary<string, object> raw = MiniJson.ParseObject(File.ReadAllText(manifestPath, Encoding.UTF8));
             PluginManifest m = new PluginManifest();
             m.Version = GetString(raw, "version", "2.1.0");
-            m.StyleId = GetString(raw, "styleId", "ag-claude-style-css");
-            m.SettingBinding = GetString(raw, "settingBinding", "__agClaudeStyleSetting");
+            m.StyleId = GetString(raw, "styleId", "ag-claude-studio-css");
+            m.SettingBinding = GetString(raw, "settingBinding", "__agClaudeStudioSetting");
             m.RemoveExpression = GetString(raw, "removeExpression", "");
             m.Parts = new List<string>();
             List<object> partsObj = raw.ContainsKey("parts") ? raw["parts"] as List<object> : null;
@@ -611,15 +611,15 @@ namespace AgyClaudeStyle
                 "    const nextCfg = " + payloadJson + ";\n" +
                 "    globalThis.__agCsOverrideConfig = nextCfg;\n" +
                 "    if (\n" +
-                "      window.__agClaudeStyle &&\n" +
-                "      typeof window.__agClaudeStyle.refreshConfig === 'function' &&\n" +
-                "      (!" + hashJson + " || window.__agClaudeStyle.codeHash === " + hashJson + ")\n" +
+                "      window.__agClaudeStudio &&\n" +
+                "      typeof window.__agClaudeStudio.refreshConfig === 'function' &&\n" +
+                "      (!" + hashJson + " || window.__agClaudeStudio.codeHash === " + hashJson + ")\n" +
                 "    ) {\n" +
-                "      window.__agClaudeStyle.refreshConfig(nextCfg);\n" +
+                "      window.__agClaudeStudio.refreshConfig(nextCfg);\n" +
                 "      return {\n" +
                 "        version: " + verJson + ",\n" +
                 "        status: 'refreshed',\n" +
-                "        state: window.__agClaudeStyle.getState ? window.__agClaudeStyle.getState() : null,\n" +
+                "        state: window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null,\n" +
                 "      };\n" +
                 "    }\n" +
                 "    return null;\n" +
@@ -681,7 +681,7 @@ namespace AgyClaudeStyle
             sb.Append("      } catch (e) {\n");
             sb.Append("        status = 'error: ' + (e && e.message ? e.message : String(e));\n");
             sb.Append("        if (typeof console !== 'undefined' && console.error) {\n");
-            sb.Append("          console.error('[agy-claude-style] init error:', e);\n");
+            sb.Append("          console.error('[agy-claude-studio] init error:', e);\n");
             sb.Append("        }\n");
             sb.Append("      }\n");
             sb.Append("    };\n\n");
@@ -699,7 +699,7 @@ namespace AgyClaudeStyle
             sb.Append("      document.addEventListener('readystatechange', onReady);\n");
             sb.Append("      document.addEventListener('DOMContentLoaded', onReady);\n");
             sb.Append("    }\n");
-            sb.Append("    const st = window.__agClaudeStyle && window.__agClaudeStyle.getState ? window.__agClaudeStyle.getState() : null;\n");
+            sb.Append("    const st = window.__agClaudeStudio && window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null;\n");
             sb.Append("    return {\n");
             sb.Append("      version: ").Append(MiniJson.StringifyString(manifest.Version)).Append(",\n");
             sb.Append("      status,\n");
@@ -817,7 +817,7 @@ namespace AgyClaudeStyle
                 string normDir = NormalizeWindowsPath(baseDir);
                 string exeName = !string.IsNullOrEmpty(exePath) ? Path.GetFileName(exePath) : Path.GetFileName(args[0]);
 
-                if (string.Equals(exeName, "agy-claude-style-watcher.exe", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(exeName, "agy-claude-studio-watcher.exe", StringComparison.OrdinalIgnoreCase))
                 {
                     for (int i = 1; i < args.Count; i++)
                     {

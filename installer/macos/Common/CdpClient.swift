@@ -55,8 +55,8 @@ final class PluginManifest {
         let text = try String(contentsOfFile: manifestPath, encoding: .utf8)
         let raw = try MiniJson.parseObject(text)
         let version = raw["version"]?.stringValue ?? "2.1.0"
-        let styleId = raw["styleId"]?.stringValue ?? "ag-claude-style-css"
-        let settingBinding = raw["settingBinding"]?.stringValue ?? "__agClaudeStyleSetting"
+        let styleId = raw["styleId"]?.stringValue ?? "ag-claude-studio-css"
+        let settingBinding = raw["settingBinding"]?.stringValue ?? "__agClaudeStudioSetting"
         let removeExpression = raw["removeExpression"]?.stringValue ?? ""
         var parts: [String] = []
         if let arr = raw["parts"]?.arrayValue {
@@ -84,7 +84,7 @@ final class CdpSession: NSObject, URLSessionWebSocketDelegate {
     private var urlSession: URLSession!
     private var wsTask: URLSessionWebSocketTask!
     private let lock = NSLock()
-    private let sendQueue = DispatchQueue(label: "io.github.0dnancy.agy-claude-style.cdp.send")
+    private let sendQueue = DispatchQueue(label: "io.github.eosglyph.agy-claude-studio.cdp.send")
     private var nextId: Int = 0
     private var pending: [Int: (Result<[String: JsonValue], Error>) -> Void] = [:]
     private var listeners: [String: [([String: JsonValue]) -> Void]] = [:]
@@ -108,7 +108,7 @@ final class CdpSession: NSObject, URLSessionWebSocketDelegate {
         cfg.timeoutIntervalForRequest = max(1.0, Double(timeoutMs) / 1000.0)
         let delegateQueue = OperationQueue()
         delegateQueue.maxConcurrentOperationCount = 1
-        delegateQueue.name = "io.github.0dnancy.agy-claude-style.cdp.ws"
+        delegateQueue.name = "io.github.eosglyph.agy-claude-studio.cdp.ws"
 
         let sem = DispatchSemaphore(value: 0)
         var connectErr: Error?
@@ -513,15 +513,15 @@ enum CdpHelper {
           const nextCfg = \(payloadJson);
           globalThis.__agCsOverrideConfig = nextCfg;
           if (
-            window.__agClaudeStyle &&
-            typeof window.__agClaudeStyle.refreshConfig === 'function' &&
-            (!\(hashJson) || window.__agClaudeStyle.codeHash === \(hashJson))
+            window.__agClaudeStudio &&
+            typeof window.__agClaudeStudio.refreshConfig === 'function' &&
+            (!\(hashJson) || window.__agClaudeStudio.codeHash === \(hashJson))
           ) {
-            window.__agClaudeStyle.refreshConfig(nextCfg);
+            window.__agClaudeStudio.refreshConfig(nextCfg);
             return {
               version: \(verJson),
               status: 'refreshed',
-              state: window.__agClaudeStyle.getState ? window.__agClaudeStyle.getState() : null,
+              state: window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null,
             };
           }
           return null;
@@ -589,7 +589,7 @@ enum CdpHelper {
         sb.append("      } catch (e) {\n")
         sb.append("        status = 'error: ' + (e && e.message ? e.message : String(e));\n")
         sb.append("        if (typeof console !== 'undefined' && console.error) {\n")
-        sb.append("          console.error('[agy-claude-style] init error:', e);\n")
+        sb.append("          console.error('[agy-claude-studio] init error:', e);\n")
         sb.append("        }\n")
         sb.append("      }\n")
         sb.append("    };\n\n")
@@ -607,7 +607,7 @@ enum CdpHelper {
         sb.append("      document.addEventListener('readystatechange', onReady);\n")
         sb.append("      document.addEventListener('DOMContentLoaded', onReady);\n")
         sb.append("    }\n")
-        sb.append("    const st = window.__agClaudeStyle && window.__agClaudeStyle.getState ? window.__agClaudeStyle.getState() : null;\n")
+        sb.append("    const st = window.__agClaudeStudio && window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null;\n")
         sb.append("    return {\n")
         sb.append("      version: ")
         sb.append(MiniJson.stringifyString(manifest.version))
@@ -742,7 +742,7 @@ enum CdpHelper {
             return .foreign
         }
         let normDir = normalizePath(baseDir)
-        let nativeExeName = "agy-claude-style-watcher"
+        let nativeExeName = "agy-claude-studio-watcher"
         let expectedNativeExe = normalizePath((normDir as NSString).appendingPathComponent(nativeExeName))
 
         let exePrefix = (cmd.components(separatedBy: " --").first ?? cmd)

@@ -283,7 +283,7 @@ final class WatcherApp {
         }
 
         let modeLabel = exitOnHostCloseFlag ? "托管监听模式" : "守护模式"
-        log("[*] AGY Claude Style (agy-claude-style) \(modeLabel)启动 (PID \(selfPid))，轮询间隔 \(pollMs)ms")
+        log("[*] Claude Studio (agy-claude-studio) \(modeLabel)启动 (PID \(selfPid))，轮询间隔 \(pollMs)ms")
         if let initialLog = initialLog, !initialLog.isEmpty {
             log(initialLog)
         }
@@ -315,7 +315,7 @@ final class WatcherApp {
 
         signal(SIGTERM, SIG_IGN)
         signal(SIGINT, SIG_IGN)
-        let sigQueue = DispatchQueue(label: "io.github.0dnancy.agy-claude-style.signals")
+        let sigQueue = DispatchQueue(label: "io.github.eosglyph.agy-claude-studio.signals")
         let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: sigQueue)
         termSource.setEventHandler(handler: requestExit)
         termSource.resume()
@@ -446,7 +446,7 @@ final class WatcherApp {
                 stateLock.lock()
                 hadAttachedWindow = true
                 stateLock.unlock()
-                self.log("[✓] 已注入 agy-claude-style: \(title) (\(status))")
+                self.log("[✓] 已注入 agy-claude-studio: \(title) (\(status))")
             } catch {
                 stateLock.lock()
                 attaching.remove(page.id)
@@ -458,7 +458,7 @@ final class WatcherApp {
             }
         }
 
-        let reloadQueue = DispatchQueue(label: "io.github.0dnancy.agy-claude-style.reload")
+        let reloadQueue = DispatchQueue(label: "io.github.eosglyph.agy-claude-studio.reload")
         var pendingReloadWork: DispatchWorkItem?
         var pendingChangedHint: String?
 
@@ -743,7 +743,7 @@ final class WatcherApp {
                 alertProc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
                 alertProc.arguments = [
                     "-e",
-                    "on run argv\ndisplay alert \"AGY Claude Style\" message (item 1 of argv) as warning\nend run",
+                    "on run argv\ndisplay alert \"Claude Studio\" message (item 1 of argv) as warning\nend run",
                     "--",
                     res.message
                 ]

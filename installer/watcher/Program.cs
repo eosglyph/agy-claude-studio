@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AgyClaudeStyle.Watcher
+namespace AgyClaudeStudio.Watcher
 {
     internal class AttachedEntry
     {
@@ -151,7 +151,7 @@ namespace AgyClaudeStyle.Watcher
             if (string.Equals(Environment.GetEnvironmentVariable("AGY_CS_NO_UI"), "1", StringComparison.Ordinal)) return;
             try
             {
-                MessageBoxW(IntPtr.Zero, message ?? "启动失败", "AGY Claude Style", 0x00000010u);
+                MessageBoxW(IntPtr.Zero, message ?? "启动失败", "Claude Studio", 0x00000010u);
             }
             catch { }
         }
@@ -339,7 +339,7 @@ namespace AgyClaudeStyle.Watcher
                 string hash = GetDirHash(dir);
                 try
                 {
-                    using (EventWaitHandle stopEvt = EventWaitHandle.OpenExisting("Local\\AGYClaudeStyleStop_" + hash))
+                    using (EventWaitHandle stopEvt = EventWaitHandle.OpenExisting("Local\\AGYClaudeStudioStop_" + hash))
                     {
                         stopEvt.Set();
                     }
@@ -413,7 +413,7 @@ namespace AgyClaudeStyle.Watcher
                 StopRunningWatcherInDir(_baseDir);
             }
 
-            string mutexName = "Local\\AGYClaudeStyleWatcher_" + dirHash;
+            string mutexName = "Local\\AGYClaudeStudioWatcher_" + dirHash;
             Mutex mutex = new Mutex(false, mutexName);
             bool hasMutex = false;
             try
@@ -460,7 +460,7 @@ namespace AgyClaudeStyle.Watcher
                 Dictionary<string, object> initCfg = CdpHelper.ReadConfig(_baseDir, manifest);
                 bool cfgAutoRelaunch = GetConfigBool(initCfg, "autoRelaunchWithCdp", true);
                 bool cfgExitOnHostClose = GetConfigBool(initCfg, "exitOnHostClose", false);
-                Log(string.Format("[*] AGY Claude Style (agy-claude-style) {0}启动 (PID {1})，每 {2}ms 检查一次窗口",
+                Log(string.Format("[*] Claude Studio (agy-claude-studio) {0}启动 (PID {1})，每 {2}ms 检查一次窗口",
                     exitOnHostCloseFlag ? "托管监听模式" : "守护模式", selfPid, _pollMs));
 
                 string currentCodeHash;
@@ -472,7 +472,7 @@ namespace AgyClaudeStyle.Watcher
                 bool hadAttachedWindow = false;
                 ConcurrentDictionary<string, AttachedEntry> attached = new ConcurrentDictionary<string, AttachedEntry>(StringComparer.Ordinal);
                 ManualResetEventSlim exitEvent = new ManualResetEventSlim(false);
-                EventWaitHandle stopSignal = new EventWaitHandle(false, EventResetMode.ManualReset, "Local\\AGYClaudeStyleStop_" + dirHash);
+                EventWaitHandle stopSignal = new EventWaitHandle(false, EventResetMode.ManualReset, "Local\\AGYClaudeStudioStop_" + dirHash);
 
                 RegisteredWaitHandle stopWaitReg = ThreadPool.RegisterWaitForSingleObject(stopSignal, (state, timedOut) =>
                 {
@@ -625,7 +625,7 @@ namespace AgyClaudeStyle.Watcher
                         Dictionary<string, object> res = await applyAsync(entry, exprSnapshot, cfgExprSnapshot, false).ConfigureAwait(false);
                         string status = (res != null && res.ContainsKey("status")) ? Convert.ToString(res["status"]) : "ok";
                         lock (exprLock) { hadAttachedWindow = true; }
-                        Log(string.Format("[✓] 已注入 agy-claude-style: {0} ({1})", entry.Title, status));
+                        Log(string.Format("[✓] 已注入 agy-claude-studio: {0} ({1})", entry.Title, status));
                     }
                     catch (Exception ex)
                     {

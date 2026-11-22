@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace AgyClaudeStyle.Installer
+namespace AgyClaudeStudio.Installer
 {
     internal class InstallerOptions
     {
@@ -63,11 +63,11 @@ namespace AgyClaudeStyle.Installer
 
     internal static class InstallerCore
     {
-        private const string UninstallRegSubKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeStyle";
-        private const string StartupLnkName = "AGY-Claude-Style.lnk";
-        private const string LauncherLnkName = "Antigravity (AGY Claude Style).lnk";
-        private const string WatcherExeName = "agy-claude-style-watcher.exe";
-        private const string SelfInstalledExeName = "agy-claude-style-installer.exe";
+        private const string UninstallRegSubKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeStudio";
+        private const string StartupLnkName = "Claude-Studio.lnk";
+        private const string LauncherLnkName = "Antigravity (Claude Studio).lnk";
+        private const string WatcherExeName = "agy-claude-studio-watcher.exe";
+        private const string SelfInstalledExeName = "agy-claude-studio-installer.exe";
         private const string InstallModeFileName = ".install-mode";
 
         public static string GetTestSystemRoot()
@@ -144,7 +144,7 @@ namespace AgyClaudeStyle.Installer
             {
                 localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             }
-            return Path.Combine(localAppData, "agy-claude-style");
+            return Path.Combine(localAppData, "agy-claude-studio");
         }
 
         public static string GetDirHash(string dir)
@@ -200,7 +200,7 @@ namespace AgyClaudeStyle.Installer
                 lnkType.InvokeMember("Arguments", BindingFlags.SetProperty, null, lnk, new object[] { "--launch --relaunch --exit-on-host-close --dir \"" + cleanDir + "\"" });
                 lnkType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, lnk, new object[] { cleanDir });
                 lnkType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, lnk, new object[] { iconTarget + ",0" });
-                lnkType.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Launch Antigravity Desktop with AGY Claude Style (Managed Mode)" });
+                lnkType.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Launch Antigravity Desktop with Claude Studio (Managed Mode)" });
                 lnkType.InvokeMember("Save", BindingFlags.InvokeMethod, null, lnk, null);
             }
             catch { }
@@ -399,7 +399,7 @@ namespace AgyClaudeStyle.Installer
                             string hash = GetDirHash(dir);
                             try
                             {
-                                using (EventWaitHandle stopEvt = EventWaitHandle.OpenExisting("Local\\AGYClaudeStyleStop_" + hash))
+                                using (EventWaitHandle stopEvt = EventWaitHandle.OpenExisting("Local\\AGYClaudeStudioStop_" + hash))
                                 {
                                     stopEvt.Set();
                                 }
@@ -454,7 +454,7 @@ namespace AgyClaudeStyle.Installer
                         {
                             try
                             {
-                                using (EventWaitHandle stopEvt = EventWaitHandle.OpenExisting("Local\\AGYClaudeStyleStop_" + hash))
+                                using (EventWaitHandle stopEvt = EventWaitHandle.OpenExisting("Local\\AGYClaudeStudioStop_" + hash))
                                 {
                                     stopEvt.Set();
                                 }
@@ -558,7 +558,7 @@ namespace AgyClaudeStyle.Installer
 
                             string parentDir = Path.GetDirectoryName(Path.GetFullPath(scriptArg));
                             if (string.IsNullOrEmpty(parentDir) ||
-                                parentDir.IndexOf("agy-claude-style", StringComparison.OrdinalIgnoreCase) < 0)
+                                parentDir.IndexOf("agy-claude-studio", StringComparison.OrdinalIgnoreCase) < 0)
                             {
                                 continue;
                             }
@@ -619,7 +619,7 @@ namespace AgyClaudeStyle.Installer
             lnkType.InvokeMember("Arguments", BindingFlags.SetProperty, null, lnk, new object[] { "--watch --dir \"" + cleanDir + "\"" });
             lnkType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, lnk, new object[] { cleanDir });
             lnkType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, lnk, new object[] { targetExe + ",0" });
-            lnkType.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "AGY Claude Style (agy-claude-style) watcher" });
+            lnkType.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Claude Studio (agy-claude-studio) watcher" });
             lnkType.InvokeMember("Save", BindingFlags.InvokeMethod, null, lnk, null);
         }
 
@@ -630,9 +630,9 @@ namespace AgyClaudeStyle.Installer
             {
                 if (key == null) return;
                 string exePath = Path.Combine(installDir, SelfInstalledExeName);
-                key.SetValue("DisplayName", "AGY Claude Style (Antigravity 界面增强补丁)", RegistryValueKind.String);
+                key.SetValue("DisplayName", "Claude Studio (Antigravity 界面增强补丁)", RegistryValueKind.String);
                 key.SetValue("DisplayVersion", version ?? "2.1.0", RegistryValueKind.String);
-                key.SetValue("Publisher", "AGY Claude Style", RegistryValueKind.String);
+                key.SetValue("Publisher", "Claude Studio", RegistryValueKind.String);
                 key.SetValue("InstallLocation", installDir, RegistryValueKind.String);
                 key.SetValue("DisplayIcon", exePath + ",0", RegistryValueKind.String);
                 key.SetValue("UninstallString", "\"" + exePath + "\" --uninstall", RegistryValueKind.String);
@@ -856,7 +856,7 @@ namespace AgyClaudeStyle.Installer
                                     titles.Add(CdpHelper.ShortTitle(pages[p]));
                                     using (CdpSession s = CdpSession.ConnectAsync(pages[p].WebSocketDebuggerUrl, 2000).GetAwaiter().GetResult())
                                     {
-                                        object okVal = s.EvaluateAsync("Boolean(window.__agClaudeStyle)", false).GetAwaiter().GetResult();
+                                        object okVal = s.EvaluateAsync("Boolean(window.__agClaudeStudio)", false).GetAwaiter().GetResult();
                                         if (!(okVal is bool) || !((bool)okVal))
                                         {
                                             allReady = false;
@@ -900,7 +900,7 @@ namespace AgyClaudeStyle.Installer
             {
                 result.Headline = string.Format("修补成功！已实时注入 {0} 个 Antigravity 窗口", result.InjectedPages.Count);
                 result.Detail = runMode == "managed"
-                    ? "当前为「免后台常驻」托管模式：已按需附加监听，Antigravity 关闭后自动退出。后续请通过桌面或开始菜单「Antigravity (AGY Claude Style)」快捷方式启动。"
+                    ? "当前为「免后台常驻」托管模式：已按需附加监听，Antigravity 关闭后自动退出。后续请通过桌面或开始菜单「Antigravity (Claude Studio)」快捷方式启动。"
                     : "当前为「开机自启 · 常驻守护」模式：后台无损守护已运行并已配置开机自启，后续打开新窗口或更新 Antigravity 后也会自动注入。";
                 for (int i = 0; i < result.InjectedPages.Count; i++)
                 {
@@ -922,14 +922,14 @@ namespace AgyClaudeStyle.Installer
                 if (runMode == "managed")
                 {
                     result.Headline = "安装完成（免后台常驻模式）！当前 Antigravity 未开启 CDP";
-                    result.Detail = "平时后台 0 进程常驻。请点击下方「以 CDP 模式重启」立即生效，或关闭后使用桌面/开始菜单「Antigravity (AGY Claude Style)」启动。";
+                    result.Detail = "平时后台 0 进程常驻。请点击下方「以 CDP 模式重启」立即生效，或关闭后使用桌面/开始菜单「Antigravity (Claude Studio)」启动。";
                 }
                 else
                 {
                     result.Headline = "已安装并启动常驻守护！但当前 Antigravity 未开启 CDP 端口";
                     result.Detail = autoRelaunchEnabled
                         ? "当前为「开机自启 · 常驻守护」模式。后台守护已启用自动接管，将在数秒内尝试温和重启；也可点击下方「以 CDP 模式重启」立即生效。"
-                        : "当前为「开机自启 · 常驻守护」模式。请点击下方「以 CDP 模式重启」，或通过「Antigravity (AGY Claude Style)」快捷方式启动。";
+                        : "当前为「开机自启 · 常驻守护」模式。请点击下方「以 CDP 模式重启」，或通过「Antigravity (Claude Studio)」快捷方式启动。";
                 }
                 report(95, "[!] 检测到 Antigravity 正在运行但未开启 CDP（2.33.0+ 需带参 --remote-debugging-port=0 启动）");
             }
@@ -938,12 +938,12 @@ namespace AgyClaudeStyle.Installer
                 if (runMode == "managed")
                 {
                     result.Headline = "安装成功！（免后台常驻 · 托管模式已就绪）";
-                    result.Detail = "后台 0 进程常驻。请通过桌面或开始菜单「Antigravity (AGY Claude Style)」快捷方式（或下方按钮）启动 Antigravity，关闭后监听自动退出。";
+                    result.Detail = "后台 0 进程常驻。请通过桌面或开始菜单「Antigravity (Claude Studio)」快捷方式（或下方按钮）启动 Antigravity，关闭后监听自动退出。";
                 }
                 else
                 {
                     result.Headline = "安装成功！开机自启与后台常驻守护已就绪";
-                    result.Detail = "当前为「开机自启 · 常驻守护」模式：守护进程已在后台待命并已写入 Startup 自启。也可使用「Antigravity (AGY Claude Style)」快捷方式启动。";
+                    result.Detail = "当前为「开机自启 · 常驻守护」模式：守护进程已在后台待命并已写入 Startup 自启。也可使用「Antigravity (Claude Studio)」快捷方式启动。";
                 }
             }
             report(100, result.Headline);
@@ -1132,10 +1132,10 @@ namespace AgyClaudeStyle.Installer
         {
             _opts = opts;
             _activeInstallDir = Path.GetFullPath(string.IsNullOrEmpty(opts.InstallDir) ? InstallerCore.GetDefaultInstallDir() : opts.InstallDir).TrimEnd('\\', '/');
-            bool isInstalled = Directory.Exists(_activeInstallDir) && File.Exists(Path.Combine(_activeInstallDir, "agy-claude-style-watcher.exe"));
+            bool isInstalled = Directory.Exists(_activeInstallDir) && File.Exists(Path.Combine(_activeInstallDir, "agy-claude-studio-watcher.exe"));
             string initialMode = InstallerCore.ResolveRunMode(opts, _activeInstallDir);
 
-            Text = "AGY Claude Style 安装与模式管理";
+            Text = "Claude Studio 安装与模式管理";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -1152,7 +1152,7 @@ namespace AgyClaudeStyle.Installer
             header.Padding = new Padding(20, 12, 20, 10);
 
             _titleLabel = new Label();
-            _titleLabel.Text = "AGY Claude Style · 无损界面增强安装器";
+            _titleLabel.Text = "Claude Studio · 无损界面增强安装器";
             _titleLabel.ForeColor = Color.FromArgb(250, 248, 245);
             _titleLabel.Font = new Font("Microsoft YaHei UI", 13.5f, FontStyle.Bold);
             _titleLabel.AutoSize = true;
@@ -1197,7 +1197,7 @@ namespace AgyClaudeStyle.Installer
             _daemonRadio.Checked = (initialMode == "daemon");
 
             _desktopShortcutCheck = new CheckBox();
-            _desktopShortcutCheck.Text = "在桌面创建「Antigravity (AGY Claude Style)」启动快捷方式";
+            _desktopShortcutCheck.Text = "在桌面创建「Antigravity (Claude Studio)」启动快捷方式";
             _desktopShortcutCheck.ForeColor = Color.FromArgb(87, 83, 78);
             _desktopShortcutCheck.Location = new Point(14, 86);
             _desktopShortcutCheck.Size = new Size(550, 22);
@@ -1363,7 +1363,7 @@ namespace AgyClaudeStyle.Installer
         private void LaunchManagedAntigravity()
         {
             string cleanDir = Path.GetFullPath(_activeInstallDir).TrimEnd('\\', '/');
-            string watcherExe = Path.Combine(cleanDir, "agy-claude-style-watcher.exe");
+            string watcherExe = Path.Combine(cleanDir, "agy-claude-studio-watcher.exe");
             if (!File.Exists(watcherExe))
             {
                 AppendLog("[!] 未找到托管启动器: " + watcherExe);
@@ -1421,7 +1421,7 @@ namespace AgyClaudeStyle.Installer
             {
                 DialogResult dr = MessageBox.Show(
                     this,
-                    "确认要卸载 AGY Claude Style 并恢复 Antigravity Desktop 原生界面吗？",
+                    "确认要卸载 Claude Studio 并恢复 Antigravity Desktop 原生界面吗？",
                     "卸载确认",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question
@@ -1435,7 +1435,7 @@ namespace AgyClaudeStyle.Installer
                 return;
             }
 
-            bool isInstalled = Directory.Exists(_activeInstallDir) && File.Exists(Path.Combine(_activeInstallDir, "agy-claude-style-watcher.exe"));
+            bool isInstalled = Directory.Exists(_activeInstallDir) && File.Exists(Path.Combine(_activeInstallDir, "agy-claude-studio-watcher.exe"));
             if (isInstalled)
             {
                 try
@@ -1509,7 +1509,7 @@ namespace AgyClaudeStyle.Installer
         {
             DialogResult dr = MessageBox.Show(
                 this,
-                "确认卸载 AGY Claude Style、停止后台守护并立即恢复 Antigravity 原生界面？",
+                "确认卸载 Claude Studio、停止后台守护并立即恢复 Antigravity 原生界面？",
                 "卸载并恢复原版",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question
@@ -1586,7 +1586,7 @@ namespace AgyClaudeStyle.Installer
                 string installedMode = InstallerCore.ReadInstalledMode(dir);
                 string runMode = InstallerCore.ResolveRunMode(opts, dir);
                 Dictionary<string, object> st = new Dictionary<string, object>(StringComparer.Ordinal);
-                st["installed"] = Directory.Exists(dir) && File.Exists(Path.Combine(dir, "agy-claude-style-watcher.exe"));
+                st["installed"] = Directory.Exists(dir) && File.Exists(Path.Combine(dir, "agy-claude-studio-watcher.exe"));
                 st["installDir"] = dir;
                 st["installedMode"] = installedMode;
                 st["runMode"] = runMode;
@@ -1594,7 +1594,7 @@ namespace AgyClaudeStyle.Installer
                 st["startupShortcut"] = File.Exists(InstallerCore.GetStartupShortcutPath());
                 st["startMenuShortcut"] = File.Exists(InstallerCore.GetStartMenuLauncherShortcutPath());
                 st["desktopShortcut"] = File.Exists(InstallerCore.GetDesktopLauncherShortcutPath());
-                st["launcherShortcut"] = File.Exists(Path.Combine(dir, "Antigravity (AGY Claude Style).lnk"));
+                st["launcherShortcut"] = File.Exists(Path.Combine(dir, "Antigravity (Claude Studio).lnk"));
                 st["antigravityExe"] = ag.ExePath;
                 st["antigravityVersion"] = ag.Version;
                 st["antigravityRunning"] = ag.IsRunning;
@@ -1634,7 +1634,7 @@ namespace AgyClaudeStyle.Installer
                     }
                     if (opts.Popup)
                     {
-                        MessageBox.Show(ex.Message, "AGY Claude Style 操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show(ex.Message, "Claude Studio 操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                     return 1;
                 }

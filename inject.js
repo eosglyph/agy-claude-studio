@@ -1,4 +1,4 @@
-// Inject AGY Claude Style (agy-claude-style) into every open Antigravity window over CDP.
+// Inject Claude Studio (agy-claude-studio) into every open Antigravity window over CDP.
 //
 //   node inject.js            one-shot: inject now and exit
 //   node inject.js --watch    daemon mode: auto-inject into new/reloaded windows
@@ -113,7 +113,7 @@ async function injectOnce({ log: outLog = log } = {}) {
         continue;
       }
       injected += 1;
-      outLog(`[✓] ${shortTitle(page)} (agy-claude-style ${res.version} · 状态: ${res.status})`);
+      outLog(`[✓] ${shortTitle(page)} (agy-claude-studio ${res.version} · 状态: ${res.status})`);
     } finally {
       session.close();
     }
@@ -316,7 +316,7 @@ async function watch({
     fs.writeFileSync(LOG_FILE, '');
   } catch {}
   log(
-    `[*] AGY Claude Style (agy-claude-style) 守护模式启动 (PID ${process.pid})，每 ${POLL_INTERVAL_MS / 1000} 秒检查一次窗口`
+    `[*] Claude Studio (agy-claude-studio) 守护模式启动 (PID ${process.pid})，每 ${POLL_INTERVAL_MS / 1000} 秒检查一次窗口`
   );
 
   const watchStartedAt = Date.now();
@@ -423,7 +423,7 @@ async function watch({
       await session.send('Runtime.addBinding', { name: SETTING_BINDING });
       const res = await apply(entry);
       hadAttachedWindow = true;
-      log(`[✓] 已注入 agy-claude-style: ${shortTitle(page)} (${res.status})`);
+      log(`[✓] 已注入 agy-claude-studio: ${shortTitle(page)} (${res.status})`);
     } catch (err) {
       const entry = attached.get(page.id);
       if (entry) entry.session.close();

@@ -127,10 +127,10 @@ test('buildPeriodicSyncPrompt generates self-contained AI Studio sync prompts fo
     const prompt = periodicCore.buildPeriodicSyncPrompt(lang);
     assert.ok(prompt.includes('aistudio.google.com'), `${lang} includes aistudio.google.com`);
     assert.ok(prompt.includes('H, C, Ne, Ar'), `${lang} includes known symbols`);
-    assert.ok(prompt.includes('agy-claude-style'), `${lang} references repo`);
+    assert.ok(prompt.includes('agy-claude-studio'), `${lang} references repo`);
     assert.ok(prompt.includes('periodic-core.js'), `${lang} includes periodic-core.js`);
     assert.ok(prompt.includes('style.css'), `${lang} includes style.css`);
-    assert.ok(prompt.includes('%LOCALAPPDATA%\\agy-claude-style'), `${lang} includes deploy dir`);
+    assert.ok(prompt.includes('~/.gemini/config/plugins/agy-claude-studio/'), `${lang} includes plugin deploy dir`);
     assert.equal(/[A-Za-z]:\\/.test(prompt), false, `${lang} contains no hardcoded drive path`);
   }
 });

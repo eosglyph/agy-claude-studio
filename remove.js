@@ -1,4 +1,4 @@
-// Stop the background watcher (if running) and remove AGY Claude Style (agy-claude-style) from all Antigravity windows.
+// Stop the background watcher (if running) and remove Claude Studio (agy-claude-studio) from all Antigravity windows.
 const fs = require('fs');
 const {
   PID_FILE,
@@ -40,7 +40,7 @@ function stopWatcherWithResult(opts = {}) {
   const pid = decision.pid;
   try {
     killFn(pid);
-    console.log(`[✓] 已停止 agy-claude-style 后台守护进程 (PID ${pid})`);
+    console.log(`[✓] 已停止 agy-claude-studio 后台守护进程 (PID ${pid})`);
   } catch (err) {
     if (!err || err.code !== 'ESRCH') throw err;
   }
@@ -74,7 +74,7 @@ async function removeFromAllWindows({ log = console.log, warn = console.warn } =
         try {
           const evalRes = await session.evaluate(REMOVE_EXPRESSION);
           removedWindows += 1;
-          log(`[✓] 已移除 agy-claude-style: ${page.title || page.url} (清理节点: ${evalRes.removed})`);
+          log(`[✓] 已移除 agy-claude-studio: ${page.title || page.url} (清理节点: ${evalRes.removed})`);
         } finally {
           session.close();
         }
@@ -101,7 +101,7 @@ if (require.main === module) {
     } catch {}
     const removed = await removeFromAllWindows();
     if (!stopped && removed === 0 && res.reason !== 'unknown') {
-      console.log('[*] 未发现运行中的 agy-claude-style 守护进程或 Antigravity 调试端口');
+      console.log('[*] 未发现运行中的 agy-claude-studio 守护进程或 Antigravity 调试端口');
     }
   })();
 }

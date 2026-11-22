@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace AgyClaudeStyle
+namespace AgyClaudeStudio
 {
     public static class MiniJson
     {

@@ -1,4 +1,4 @@
-// Background CDP watcher controller for AGY Claude Style (agy-claude-style).
+// Background CDP watcher controller for Claude Studio (agy-claude-studio).
 const fs = require('fs');
 const path = require('path');
 const {
@@ -26,8 +26,8 @@ const {
   acquireWatcherLock,
 } = require('./lifecycle');
 
-const STATE_DIR = process.env.AGY_CLAUDE_STYLE_STATE_DIR
-  ? path.resolve(process.env.AGY_CLAUDE_STYLE_STATE_DIR)
+const STATE_DIR = (process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR)
+  ? path.resolve(process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR)
   : CDP_STATE_DIR || __dirname;
 const LOG_FILE = path.join(STATE_DIR, 'watch.log');
 
@@ -136,7 +136,7 @@ async function startWatchController(options = {}) {
 
   logger.resetLogFile();
   logger.log(
-    `[*] AGY Claude Style (agy-claude-style) 守护模式启动 (PID ${process.pid}, mode=${mode}${keepAlive ? ', keep-alive' : ''})，每 ${Math.round(tickIntervalMs / 1000)} 秒检查一次窗口`
+    `[*] Claude Studio (agy-claude-studio) 守护模式启动 (PID ${process.pid}, mode=${mode}${keepAlive ? ', keep-alive' : ''})，每 ${Math.round(tickIntervalMs / 1000)} 秒检查一次窗口`
   );
 
   const attached = new Map();
@@ -218,7 +218,7 @@ async function startWatchController(options = {}) {
         return;
       }
       idleTracker.markAttached();
-      logger.log(`[✓] 已注入 agy-claude-style: ${shortTitle(page)} (${res.status})`);
+      logger.log(`[✓] 已注入 agy-claude-studio: ${shortTitle(page)} (${res.status})`);
     } catch (err) {
       const entry = attached.get(page.id);
       if (entry && entry.session) {

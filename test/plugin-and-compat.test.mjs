@@ -77,12 +77,12 @@ function matchesSelector(node, sel) {
   });
 }
 
-test('cdp.isAntigravityPageTarget allows conversation titles starting with AGY Claude Style and rejects sidecars/plugins', () => {
+test('cdp.isAntigravityPageTarget allows conversation titles starting with Claude Studio and rejects sidecars/plugins', () => {
   assert.equal(
     cdp.isAntigravityPageTarget({
       type: 'page',
-      title: 'Agy Claude Style 迁移归档 - agy-claude-style - Antigravity',
-      url: 'https://127.0.0.1:1161/c/acfe92b1-1a9a-410b-a9a3-df07467cd7a8?tab=sidecar__agy-claude-style%2Fstudio__%2F',
+      title: 'Agy Claude Style 迁移归档 - agy-claude-studio - Antigravity',
+      url: 'https://127.0.0.1:1161/c/acfe92b1-1a9a-410b-a9a3-df07467cd7a8?tab=sidecar__agy-claude-studio%2Fstudio__%2F',
       webSocketDebuggerUrl: 'ws://127.0.0.1:1159/devtools/page/1',
     }),
     true
@@ -91,8 +91,8 @@ test('cdp.isAntigravityPageTarget allows conversation titles starting with AGY C
   assert.equal(
     cdp.isAntigravityPageTarget({
       type: 'iframe',
-      title: 'plugin://agy-claude-style--studio-6155/?token=abc',
-      url: 'plugin://agy-claude-style--studio-6155/?token=abc',
+      title: 'plugin://agy-claude-studio--studio-6155/?token=abc',
+      url: 'plugin://agy-claude-studio--studio-6155/?token=abc',
       webSocketDebuggerUrl: 'ws://127.0.0.1:1159/devtools/page/2',
     }),
     false
@@ -101,7 +101,7 @@ test('cdp.isAntigravityPageTarget allows conversation titles starting with AGY C
   assert.equal(
     cdp.isAntigravityPageTarget({
       type: 'page',
-      title: 'AGY Claude Style Studio',
+      title: 'Claude Studio',
       url: 'http://127.0.0.1:6155/',
       webSocketDebuggerUrl: 'ws://127.0.0.1:1159/devtools/page/3',
     }),
@@ -445,7 +445,7 @@ test('usageStatsEnabled defaults to false, controls all in-chat HUD without muta
     assert.equal(footer.querySelector('.ag-cs-context-ring'), null, 'Ring must hide when usageStatsEnabled is false');
     assert.equal(footer.querySelector('.ag-cs-inline-stats'), null, 'Inline stats must hide when usageStatsEnabled is false');
     assert.equal(card.querySelector('.ag-cs-hud-top-bar'), null, 'Top HUD bar must hide when usageStatsEnabled is false');
-    const st = sandbox.window.__agClaudeStyle.getState();
+    const st = sandbox.window.__agClaudeStudio.getState();
     assert.equal(st.cfg.inlineStats, true, 'Saved inlineStats preference must remain intact');
     assert.equal(st.cfg.hudTopBar, true, 'Saved hudTopBar preference must remain intact');
 
@@ -486,7 +486,7 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } },
     '1.3.0'
   );
-  assert.equal(initRes.result.serverInfo.name, 'agy-claude-style-host');
+  assert.equal(initRes.result.serverInfo.name, 'agy-claude-studio-host');
   assert.equal(initRes.result.serverInfo.version, '1.3.0');
 
   const toolsRes = mcpHost.handleMcpJsonRpcMessage({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, '1.3.0');
@@ -501,7 +501,7 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   assert.ok(studioHtml.includes('periodicSelector'), 'Studio UI includes periodicSelector toggle');
   assert.equal(studioHtml.includes('paletteEnabled'), false, 'Studio UI no longer has redundant paletteEnabled toggle');
   assert.equal(studioHtml.includes('Gemini Aurora'), false, 'Studio UI no longer has Aurora wallpaper themes');
-  assert.ok(studioHtml.includes('Antigravity UI 增强'), 'Studio UI uses renamed brand title');
+  assert.ok(studioHtml.includes('Claude Studio'), 'Studio UI uses renamed brand title');
   assert.ok(studioHtml.includes('section-body') && studioHtml.includes('section-chevron') && studioHtml.includes('is-collapsed'), 'Studio UI provides collapsible section panels');
   assert.ok(studioHtml.includes('agCsStudioCollapsedGroups'), 'Studio UI persists collapsed group state in localStorage');
   assert.equal(/liangwufeng|performanceBackdrop/i.test(studioHtml), false, 'Studio UI contains no Liang Wufeng controls');
@@ -511,7 +511,7 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   assert.match(css, /\.ag-cs-um-ctx-proxy[\s\S]*?order:\s*8;/, 'Composer CSS places mirrored usage-monitor context ring at far right edge');
 
   const studioMod = await import('../sidecars/studio/main.mjs');
-  assert.equal(studioMod.isLocalHostRequest({ headers: { host: '127.0.0.1:6155', origin: 'plugin://agy-claude-style--studio-6155' } }), true);
+  assert.equal(studioMod.isLocalHostRequest({ headers: { host: '127.0.0.1:6155', origin: 'plugin://agy-claude-studio--studio-6155' } }), true);
   assert.equal(studioMod.isLocalHostRequest({ headers: { host: 'evil.example.com', origin: 'https://evil.example.com' } }), false);
 
   const logoSvg = fs.readFileSync(path.join(ROOT_DIR, 'assets', 'logo.svg'), 'utf8');
@@ -711,13 +711,13 @@ test('usage-monitor composer footer split mirrors context ring to far right, for
 
     // Move usage-monitor back to top bar -> proxy & shadow split CSS must automatically clean up
     topBar.appendChild(umCap);
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: false, composerRestyle: true });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: false, composerRestyle: true });
     assert.equal(footer.querySelector('.ag-cs-um-ctx-proxy'), null, 'Proxy must unmount when usage-monitor moves out of footer');
     assert.equal(sr.getElementById('ag-cs-um-split-css'), null, 'Shadow DOM split style must be removed when usage-monitor moves back to top bar');
 
     // Move back into footer and verify REMOVE_EXPRESSION cleans both proxy and shadow style
     footer.appendChild(umCap);
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: false, composerRestyle: true });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: false, composerRestyle: true });
     assert.ok(footer.querySelector('.ag-cs-um-ctx-proxy'));
     assert.ok(sr.getElementById('ag-cs-um-split-css'));
 
@@ -805,7 +805,7 @@ test('openUsageMonitorPane switches existing tab or opens via host sidecar link 
 
   const auxPane = root.appendChild(makeEl('div', { attrs: { 'data-aux-pane-open': 'false' } }));
   const toggleBtn = auxPane.appendChild(makeEl('button', { attrs: { 'data-testid': 'toggle-aux-sidebar' } }));
-  const strip = auxPane.appendChild(makeEl('div', { attrs: { 'data-side-panel-strip': '', 'data-active-tab-id': 'sidecar__agy-claude-style/studio__/' } }));
+  const strip = auxPane.appendChild(makeEl('div', { attrs: { 'data-side-panel-strip': '', 'data-active-tab-id': 'sidecar__agy-claude-studio/studio__/' } }));
 
   const sidecarCalls = [];
   root.__reactContainer$test = {
@@ -866,17 +866,17 @@ test('openUsageMonitorPane switches existing tab or opens via host sidecar link 
     assert.deepEqual(sidecarCalls, ['usage-monitor/panel/'], 'Auto-opens Usage Monitor pane once when entering conversation');
 
     // Re-syncing same conversation must NOT re-trigger (polite: never steals focus!)
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinUsageMonitorPane: true });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinUsageMonitorPane: true });
     assert.equal(sidecarCalls.length, 1, 'Must not re-open Usage Monitor within the same conversation');
 
     // 2. Switching to a new conversation triggers once again
     conv.setAttribute('data-cascade-id', '22222222-2222-4222-8222-222222222222');
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinUsageMonitorPane: true });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinUsageMonitorPane: true });
     assert.equal(sidecarCalls.length, 2, 'Auto-opens Usage Monitor once when switching to a new conversation');
 
     // 3. Explicit openUsageMonitorPane when tab already exists expands closed pane & clicks tab
     const umTabBtn = strip.appendChild(makeEl('button', { text: '用量监控' }));
-    const res = sandbox.window.__agClaudeStyle.openUsageMonitorPane({ forceSwitch: true });
+    const res = sandbox.window.__agClaudeStudio.openUsageMonitorPane({ forceSwitch: true });
     assert.equal(res.ok, true);
     assert.equal(res.status, 'switched');
     assert.equal(toggleBtn.clicks, 1, 'Expands closed aux pane before switching tab');
@@ -952,6 +952,35 @@ test('lifecycle lock and MCP host registry ignore recycled OS PIDs (EPERM / non-
     lock.release();
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('cdp.ensureMigratedPluginConfig migrates legacy agy-claude-style plugin_data config seamlessly', () => {
+  const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cs-migrate-'));
+  try {
+    const oldPluginData = path.join(tmpBase, 'agy-claude-style');
+    const newPluginData = path.join(tmpBase, 'agy-claude-studio');
+    fs.mkdirSync(oldPluginData, { recursive: true });
+    fs.writeFileSync(
+      path.join(oldPluginData, 'config.json'),
+      JSON.stringify({ palette: 'obsidian', glassEffect: false, usageStatsEnabled: false, pinUsageMonitorPane: true }),
+      'utf8'
+    );
+    const newConfigPath = path.join(newPluginData, 'config.json');
+    const migrated = cdp.ensureMigratedPluginConfig({
+      pluginDataDir: newPluginData,
+      configFile: newConfigPath,
+      legacyConfigFile: path.join(tmpBase, 'nonexistent-legacy.json'),
+      explicitConfig: false,
+    });
+    assert.equal(migrated, true, 'Must migrate config from sibling plugin_data/agy-claude-style');
+    const parsed = JSON.parse(fs.readFileSync(newConfigPath, 'utf8'));
+    assert.equal(parsed.palette, 'obsidian');
+    assert.equal(parsed.glassEffect, false);
+    assert.equal(parsed.usageStatsEnabled, false);
+    assert.equal(parsed.pinUsageMonitorPane, true);
+  } finally {
+    fs.rmSync(tmpBase, { recursive: true, force: true });
   }
 });
 
