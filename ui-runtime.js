@@ -57,6 +57,7 @@
   const crabAssets = globalThis.__agCsCrabAssets;
   const effortCore = globalThis.__agCsEffortCore;
   const perfAssets = globalThis.__agCsPerfAssets;
+  const periodicCore = globalThis.__agCsPeriodicCore;
   const i18nCore = globalThis.__agCsI18nCore;
   const i18nLocales = globalThis.__agCsLocales;
   const domTranslator =
@@ -182,6 +183,7 @@
     if (inHero && cfg.homeLayout === 'studio') renderHomePanel(true);
     refreshOpenEffortPopover();
     refreshOpenContextPopover();
+    refreshOpenPeriodicSelector();
     syncComposers();
     ensureSettingsSection();
   }
@@ -234,6 +236,7 @@
         rippleMount.refreshTheme();
       }
       refreshOpenEffortPopover();
+      refreshOpenPeriodicSelector();
     }
   }
 
@@ -3374,6 +3377,21 @@
     }
   }
 
+  function getModelFiberProps(modelBtn) {
+    if (!modelBtn) return null;
+    const fk = Object.keys(modelBtn).find((k) => k.startsWith('__reactFiber$'));
+    for (let cur = fk && modelBtn[fk], d = 0; cur && d < 35; cur = cur.return, d++) {
+      const mp = cur.memoizedProps;
+      if (mp && Array.isArray(mp.modelOptions) && typeof mp.setSelectedModel === 'function') {
+        return mp;
+      }
+      if (mp && mp.value && Array.isArray(mp.value.modelOptions) && typeof mp.value.setSelectedModel === 'function') {
+        return mp.value;
+      }
+    }
+    return null;
+  }
+
   function resolveModelEffortContext(modelBtn, badgeEl) {
     const readLiveBadgeEffort = (el) => {
       if (!el) return '';
@@ -3395,21 +3413,7 @@
         }
       }
     }
-    let fiberProps = null;
-    if (modelBtn) {
-      const fk = Object.keys(modelBtn).find((k) => k.startsWith('__reactFiber$'));
-      for (let cur = fk && modelBtn[fk], d = 0; cur && d < 30; cur = cur.return, d++) {
-        const mp = cur.memoizedProps;
-        if (mp && Array.isArray(mp.modelOptions) && typeof mp.setSelectedModel === 'function') {
-          fiberProps = mp;
-          break;
-        }
-        if (mp && mp.value && Array.isArray(mp.value.modelOptions) && typeof mp.value.setSelectedModel === 'function') {
-          fiberProps = mp.value;
-          break;
-        }
-      }
-    }
+    const fiberProps = getModelFiberProps(modelBtn);
 
     const selectedLabel = fiberProps?.selectedModel?.label || getCurrentModelLabel(modelBtn?.closest?.('.surface-composer-card')) || '';
     const resolved = effortCore.resolveClaudeEffortSteps(fiberProps?.modelOptions, selectedLabel, badgeEffort);
@@ -4353,6 +4357,758 @@
     }
   }
 
+  // ── Gemini 4 Periodic Table Model Selector (.ag-cs-ps-drawer) ──────────
+  let openPsBackdrop = null;
+  let openPsDrawer = null;
+  let openPsTrigger = null;
+  let openPsModelBtn = null;
+  let openPsResizeFn = null;
+  let psTab = 'periodic';
+  let psQuery = '';
+  let psPinnedSymbol = '';
+
+  function positionPeriodicPopover(drawer, anchorBtn) {
+    if (!drawer) return;
+    const vw = window.innerWidth || 900;
+    const vh = window.innerHeight || 700;
+    const target = anchorBtn && anchorBtn.isConnected ? anchorBtn : document.querySelector('[data-testid="model-selector-trigger"]');
+    const fallbackW = Math.min(700, Math.max(280, vw - 24));
+    const popW = Math.min(vw - 24, drawer.offsetWidth || drawer.getBoundingClientRect().width || fallbackW);
+
+    if (!target || typeof target.getBoundingClientRect !== 'function') {
+      drawer.style.left = Math.max(12, Math.round((vw - popW) / 2)) + 'px';
+      drawer.style.bottom = '64px';
+      drawer.style.top = '';
+      drawer.style.maxHeight = Math.min(620, Math.max(240, vh - 88)) + 'px';
+      drawer.style.transformOrigin = 'bottom center';
+      return;
+    }
+
+    const aRect = target.getBoundingClientRect();
+    const card = typeof target.closest === 'function' ? target.closest('.surface-composer-card') : null;
+    const cRect = card && typeof card.getBoundingClientRect === 'function' ? card.getBoundingClientRect() : null;
+    const desiredLeft = cRect ? cRect.left + (cRect.width - popW) / 2 : aRect.right - popW;
+    const left = Math.max(12, Math.min(vw - popW - 12, desiredLeft));
+    drawer.style.left = Math.round(left) + 'px';
+
+    if (aRect.top >= 320 || aRect.top >= vh - aRect.bottom) {
+      const bottomPx = Math.max(12, Math.round(vh - aRect.top + 10));
+      drawer.style.top = '';
+      drawer.style.bottom = bottomPx + 'px';
+      drawer.style.maxHeight = Math.min(620, Math.max(260, Math.floor(aRect.top - 22))) + 'px';
+      drawer.style.transformOrigin = 'bottom center';
+    } else {
+      const topPx = Math.max(12, Math.round(aRect.bottom + 10));
+      drawer.style.bottom = '';
+      drawer.style.top = topPx + 'px';
+      drawer.style.maxHeight = Math.min(620, Math.max(240, Math.floor(vh - aRect.bottom - 22))) + 'px';
+      drawer.style.transformOrigin = 'top center';
+    }
+  }
+
+  function closePeriodicSelector() {
+    if (openPsResizeFn && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('resize', openPsResizeFn);
+    }
+    openPsResizeFn = null;
+    if (openPsTrigger && openPsTrigger.isConnected) {
+      openPsTrigger.setAttribute('aria-expanded', 'false');
+    }
+    if (openPsBackdrop && openPsBackdrop.parentElement) {
+      openPsBackdrop.parentElement.removeChild(openPsBackdrop);
+    }
+    if (openPsDrawer && openPsDrawer.parentElement) {
+      openPsDrawer.parentElement.removeChild(openPsDrawer);
+    }
+    openPsBackdrop = null;
+    openPsDrawer = null;
+    openPsTrigger = null;
+    openPsModelBtn = null;
+  }
+
+  function refreshOpenPeriodicSelector() {
+    if (!openPsDrawer || !openPsDrawer.isConnected) return;
+    const theme = isDarkTheme() ? 'dark' : 'light';
+    if (openPsBackdrop) openPsBackdrop.setAttribute('data-ps-theme', theme);
+    openPsDrawer.setAttribute('data-ps-theme', theme);
+    renderPeriodicDrawerShell(openPsDrawer);
+    positionPeriodicPopover(openPsDrawer, openPsTrigger || openPsModelBtn);
+  }
+
+  function buildPeriodicTriggerButton() {
+    const lang = getLang();
+    const ui = uiText(lang);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ag-cs-periodic-trigger';
+    btn.setAttribute('data-ag-no-i18n', '');
+    btn.setAttribute('aria-haspopup', 'dialog');
+    btn.setAttribute('aria-expanded', 'false');
+    const tip = ui.psTriggerTooltip || 'Gemini 4 Periodic Table Model Selector';
+    btn.setAttribute('aria-label', tip);
+    btn.setAttribute('title', tip);
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+      '<defs><linearGradient id="ag-cs-gemini-star-grad" x1="0%" y1="0%" x2="100%" y2="100%">' +
+      '<stop offset="0%" stop-color="#4285f4"/>' +
+      '<stop offset="52%" stop-color="#9b72cb"/>' +
+      '<stop offset="100%" stop-color="#22c1dc"/>' +
+      '</linearGradient></defs>' +
+      '<path fill="url(#ag-cs-gemini-star-grad)" d="M12 2C12.35 7.45 16.55 11.65 22 12C16.55 12.35 12.35 16.55 12 22C11.65 16.55 7.45 12.35 2 12C7.45 11.65 11.65 7.45 12 2Z"/>' +
+      '</svg>';
+    btn.addEventListener('pointerdown', (ev) => {
+      ev.stopPropagation();
+    });
+    btn.addEventListener('mousedown', (ev) => {
+      ev.stopPropagation();
+    });
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const card = btn.closest('.surface-composer-card');
+      const mBtn = card?.querySelector('[data-testid="model-selector-trigger"]') || btn._agCsModelBtn || null;
+      openPeriodicSelector(btn, mBtn);
+    });
+    return btn;
+  }
+
+  function syncPeriodicTrigger(card, footer, modelBtn) {
+    if (!card) return;
+    const existing = card.querySelector('.ag-cs-periodic-trigger');
+    if (cfg.periodicSelector === false || !modelBtn || !periodicCore) {
+      if (existing) {
+        if (openPsTrigger === existing) closePeriodicSelector();
+        existing.remove();
+      }
+      return;
+    }
+
+    const lang = getLang();
+    const ui = uiText(lang);
+    const tip = ui.psTriggerTooltip || 'Gemini 4 Periodic Table Model Selector';
+    const inlineMode = !footer || cfg.composerRestyle === false;
+    const desiredParent = inlineMode ? modelBtn.parentElement : footer;
+    if (!desiredParent) return;
+
+    const btn = existing || buildPeriodicTriggerButton();
+    btn._agCsModelBtn = modelBtn;
+    if (inlineMode) btn.classList.add('is-inline');
+    else btn.classList.remove('is-inline');
+    if (btn.getAttribute('title') !== tip) {
+      btn.setAttribute('title', tip);
+      btn.setAttribute('aria-label', tip);
+    }
+    btn.setAttribute('aria-expanded', openPsTrigger === btn && openPsDrawer?.isConnected ? 'true' : 'false');
+
+    if (inlineMode) {
+      if (btn.parentElement !== desiredParent || btn.nextSibling !== modelBtn) {
+        desiredParent.insertBefore(btn, modelBtn);
+      }
+    } else {
+      if (btn.parentElement !== footer) {
+        footer.appendChild(btn);
+      }
+    }
+  }
+
+  function createEl(tag, cls, text) {
+    const el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text !== undefined && text !== null) el.textContent = String(text);
+    return el;
+  }
+
+  function commitPeriodicModelOption(fiberProps, option) {
+    if (!option || !fiberProps || typeof fiberProps.setSelectedModel !== 'function') return;
+    try {
+      fiberProps.setSelectedModel(option);
+    } catch {}
+    closePeriodicSelector();
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => scheduleSync());
+    } else {
+      scheduleSync();
+    }
+  }
+
+  function findTargetComposerEditor(sourceCard) {
+    const fromSource = sourceCard?.querySelector?.('[contenteditable="true"]');
+    if (fromSource) return fromSource;
+    const boxes = Array.from(document.querySelectorAll('[data-testid="agent-input-box"]'));
+    for (const box of boxes) {
+      if (box.closest && box.closest('[data-testid="subagent-tab-conversation"]')) continue;
+      const ed = box.querySelector('[contenteditable="true"]');
+      if (ed) return ed;
+    }
+    return document.querySelector('[data-testid="agent-input-box"] [contenteditable="true"]');
+  }
+
+  function insertTextIntoComposer(text, sourceCard) {
+    if (!text) return false;
+    const ed = findTargetComposerEditor(sourceCard);
+    if (!ed) {
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          Promise.resolve(navigator.clipboard.writeText(text)).catch(() => {});
+        }
+      } catch {}
+      return false;
+    }
+
+    if (typeof ed.focus === 'function') ed.focus();
+    const existing = (ed.textContent || '').replace(/\u200b/g, '').trim();
+    if (existing && existing.endsWith(text.trim())) return true;
+    const payload = existing ? '\n\n' + text : text;
+
+    try {
+      if (typeof document.createRange === 'function' && typeof window.getSelection === 'function') {
+        const range = document.createRange();
+        range.selectNodeContents(ed);
+        range.collapse(false);
+        const sel = window.getSelection();
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+    } catch {}
+
+    let inserted = false;
+    if (
+      typeof DataTransfer === 'function' &&
+      typeof ClipboardEvent === 'function' &&
+      typeof ed.dispatchEvent === 'function'
+    ) {
+      try {
+        const dt = new DataTransfer();
+        dt.setData('text/plain', payload);
+        const beforeLen = (ed.textContent || '').length;
+        const pasteEv = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
+        const dispatchOk = ed.dispatchEvent(pasteEv);
+        const grew = (ed.textContent || '').length > beforeLen;
+        if (!dispatchOk || pasteEv.defaultPrevented || grew) inserted = true;
+      } catch {}
+    }
+
+    if (!inserted && typeof document.execCommand === 'function') {
+      try {
+        const beforeLen = (ed.textContent || '').length;
+        const cmdOk = document.execCommand('insertText', false, payload);
+        const grew = (ed.textContent || '').length > beforeLen;
+        if (cmdOk || grew) inserted = true;
+      } catch {}
+    }
+
+    if (!inserted && !ed.__lexicalEditor) {
+      ed.textContent = existing ? existing + '\n\n' + text : text;
+      inserted = true;
+    }
+
+    setTimeout(() => {
+      if (!destroyed) {
+        queueSmoothCaret(true, true);
+        scheduleSync();
+      }
+    }, 40);
+
+    return inserted;
+  }
+
+  function resolveQuotaBadgeText(baseName, ui) {
+    if (typeof usageCore?.getActiveQuotaInfo !== 'function' || !cachedQuotaData) return '';
+    const q = usageCore.getActiveQuotaInfo(cachedQuotaData, baseName);
+    if (!q || typeof q.effectiveRemainingPct !== 'number') return '';
+    const label = ui.psQuotaLabel || 'Quota';
+    const pct = Math.round(q.effectiveRemainingPct);
+    const rst = fmtBucketReset(q.b5h || q.bWeek, getLang());
+    return rst ? `${label}: ${pct}% · ${rst}` : `${label}: ${pct}%`;
+  }
+
+  function renderPeriodicPreviewBar(previewEl, tile, fiberProps, curEffortId, ui) {
+    if (!previewEl) return;
+    previewEl.textContent = '';
+    if (!tile) {
+      previewEl.classList.add('is-dormant');
+      return;
+    }
+    if (tile.isLaunched) previewEl.classList.remove('is-dormant');
+    else previewEl.classList.add('is-dormant');
+
+    const row = createEl('div', 'ag-cs-ps-preview-row');
+    const swatchCls = tile.isLaunched
+      ? `ag-cs-ps-swatch is-launched ag-cs-ps-theme-${tile.theme || 'hydrogen'}`
+      : 'ag-cs-ps-swatch is-dormant';
+    const swatch = createEl('div', swatchCls);
+    if (tile.num !== '' && tile.num !== undefined) {
+      swatch.appendChild(createEl('span', 'ag-cs-ps-num', tile.num));
+    }
+    swatch.appendChild(createEl('span', 'ag-cs-ps-sym', tile.symbol));
+    row.appendChild(swatch);
+
+    const details = createEl('div', 'ag-cs-ps-preview-details');
+    const head = createEl('div', 'ag-cs-ps-preview-head');
+    const spec = tile.spec || null;
+    const fam = tile.family || null;
+
+    if (!tile.isLaunched) {
+      head.appendChild(createEl('span', 'ag-cs-ps-preview-title', tile.name || tile.symbol));
+      details.appendChild(head);
+      row.appendChild(details);
+      previewEl.appendChild(row);
+      return;
+    }
+
+    const titleTxt = fam?.baseName || tile.disabledInfo?.baseName || spec?.title || `Gemini 4 ${tile.name}`;
+    const slugTxt = fam?.modelIdBase || spec?.slug || tile.disabledInfo?.modelId || '';
+    head.appendChild(createEl('span', 'ag-cs-ps-preview-title', titleTxt));
+    if (slugTxt) head.appendChild(createEl('span', 'ag-cs-ps-preview-slug', slugTxt));
+    if (tile.isNew) {
+      head.appendChild(createEl('span', 'ag-cs-ps-badge is-new', 'New'));
+    }
+    if (tile.isSubscriptionLocked) {
+      head.appendChild(createEl('span', 'ag-cs-ps-badge is-locked', ui.psSubscriptionLocked || 'Unavailable on current plan'));
+    } else if (tile.isPreviewOnly) {
+      head.appendChild(createEl('span', 'ag-cs-ps-badge is-preview', ui.psPreviewOnly || 'Not available on current account'));
+    }
+    details.appendChild(head);
+
+    const descTxt = spec?.desc || fam?.tagDescription || tile.disabledInfo?.tagDescription || '';
+    if (descTxt) {
+      details.appendChild(createEl('p', 'ag-cs-ps-preview-desc', descTxt));
+    }
+    row.appendChild(details);
+    previewEl.appendChild(row);
+
+    const drawerBody = createEl('div', 'ag-cs-ps-drawer-body is-open');
+    const drawerInner = createEl('div', 'ag-cs-ps-drawer-inner');
+
+    const chipsRow = createEl('div', 'ag-cs-ps-chips-row');
+    if (spec?.context) chipsRow.appendChild(createEl('span', 'ag-cs-ps-meta-chip', spec.context));
+    if (spec?.pricing) chipsRow.appendChild(createEl('span', 'ag-cs-ps-meta-chip', spec.pricing));
+    if (spec?.released) chipsRow.appendChild(createEl('span', 'ag-cs-ps-meta-chip', spec.released));
+    const quotaTxt = fam ? resolveQuotaBadgeText(fam.baseName, ui) : '';
+    if (quotaTxt) chipsRow.appendChild(createEl('span', 'ag-cs-ps-meta-chip', quotaTxt));
+    if (chipsRow.childElementCount > 0) drawerInner.appendChild(chipsRow);
+
+    if (fam && Array.isArray(fam.variants) && fam.variants.length > 0) {
+      const effRow = createEl('div', 'ag-cs-ps-effort-row');
+      effRow.appendChild(createEl('span', 'ag-cs-ps-effort-lbl', `${ui.psEffortLabel || 'Effort'}:`));
+      for (const v of fam.variants) {
+        const isActive = fam.isSelected && v.effortId === fam.selectedEffortId;
+        const eb = createEl('button', `ag-cs-ps-effort-btn${isActive ? ' is-active' : ''}`, v.effortDisplay || v.label);
+        eb.type = 'button';
+        eb.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          commitPeriodicModelOption(fiberProps, v.option);
+        });
+        effRow.appendChild(eb);
+      }
+      drawerInner.appendChild(effRow);
+    }
+
+    drawerBody.appendChild(drawerInner);
+    previewEl.appendChild(drawerBody);
+  }
+
+  function renderPeriodicContentArea(contentEl, grouped, fiberProps, curEffortId, ui) {
+    if (!contentEl) return;
+    contentEl.textContent = '';
+
+    const showPeriodic = psTab === 'periodic' && !psQuery.trim();
+    if (showPeriodic) {
+      const stage = createEl('div', 'ag-cs-ps-stage');
+      const grid = createEl('div', 'ag-cs-ps-grid');
+
+      const saddle = createEl('div', 'ag-cs-ps-saddle');
+      saddle.appendChild(createEl('div', 'ag-cs-ps-eyebrow', 'THE PERIODIC TABLE OF'));
+      const h2 = createEl('h2', 'ag-cs-ps-board-title', 'Gemini 4');
+      saddle.appendChild(h2);
+
+      const legend = createEl('div', 'ag-cs-ps-legend');
+      const countVal = Math.max(1, grouped.releasedCount || 4);
+      const roller = createEl('span', 'ag-cs-ps-roller');
+      const track = createEl('span', 'ag-cs-ps-roller-track');
+      track.style.setProperty('--roll-steps', String(countVal - 1));
+      for (let d = 1; d <= countVal; d++) {
+        track.appendChild(createEl('span', '', String(d)));
+      }
+      roller.appendChild(track);
+      legend.appendChild(roller);
+      legend.appendChild(createEl('span', '', ui.psReleased || 'released'));
+      saddle.appendChild(legend);
+      grid.appendChild(saddle);
+
+      const previewEl = createEl('div', 'ag-cs-ps-preview');
+
+      const defaultTile =
+        (psPinnedSymbol && grouped.tiles.find((t) => t.symbol === psPinnedSymbol && t.isLaunched)) ||
+        grouped.tiles.find((t) => t.isSelected) ||
+        grouped.tiles.find((t) => t.symbol === 'Ne' && t.isLaunched) ||
+        grouped.tiles.find((t) => t.isLaunched) ||
+        null;
+
+      for (const tile of grouped.tiles) {
+        const cls = ['ag-cs-ps-tile'];
+        if (tile.isLaunched) {
+          cls.push('is-launched', `ag-cs-ps-theme-${tile.theme || 'hydrogen'}`);
+          if (tile.isHero) cls.push('is-neon');
+          if (tile.isSelected) cls.push('is-selected');
+          if (tile.isPreviewOnly) cls.push('is-preview-only');
+        } else {
+          cls.push('is-dormant');
+          if (tile.faded) cls.push('is-faded-row');
+          if (tile.isRange) cls.push('is-range-placeholder');
+        }
+
+        const cell = document.createElement(tile.isLaunched ? 'button' : 'div');
+        cell.className = cls.join(' ');
+        cell.style.gridColumn = String(tile.col);
+        cell.style.gridRow = String(tile.row);
+
+        if (tile.isLaunched) {
+          cell.type = 'button';
+          cell.setAttribute('data-ps-symbol', tile.symbol);
+          if (tile.num !== '' && tile.num !== undefined) {
+            cell.setAttribute('data-atomic-number', String(tile.num));
+          }
+          cell.setAttribute('aria-pressed', tile.isSelected ? 'true' : 'false');
+          const titleLabel = tile.family?.baseName || tile.spec?.title || tile.name;
+          cell.setAttribute('aria-label', `${tile.name}, element ${tile.num} — ${titleLabel}`);
+        }
+
+        if (tile.isHero && tile.isLaunched) {
+          const flipper = createEl('span', 'ag-cs-ps-card-flipper');
+          const front = createEl('span', 'ag-cs-ps-card-face ag-cs-ps-card-face--front');
+          front.appendChild(createEl('span', 'ag-cs-ps-num', tile.num));
+          front.appendChild(createEl('span', 'ag-cs-ps-sym', tile.symbol));
+          const back = createEl('span', `ag-cs-ps-card-face ag-cs-ps-card-face--back ag-cs-ps-theme-${tile.theme || 'neon'}`);
+          back.appendChild(createEl('span', 'ag-cs-ps-num', tile.num));
+          if (tile.isNew) back.appendChild(createEl('span', 'ag-cs-ps-pip'));
+          back.appendChild(createEl('span', 'ag-cs-ps-sym', tile.symbol));
+          flipper.appendChild(front);
+          flipper.appendChild(back);
+          cell.appendChild(flipper);
+        } else {
+          if (tile.num !== '' && tile.num !== undefined) {
+            cell.appendChild(createEl('span', 'ag-cs-ps-num', tile.num));
+          }
+          if (tile.isNew && tile.isLaunched) {
+            cell.appendChild(createEl('span', 'ag-cs-ps-pip'));
+          }
+          cell.appendChild(createEl('span', 'ag-cs-ps-sym', tile.symbol));
+        }
+
+        if (!tile.isRange) {
+          cell.addEventListener('mouseenter', () => {
+            renderPeriodicPreviewBar(previewEl, tile, fiberProps, curEffortId, ui);
+          });
+        }
+        if (tile.isLaunched) {
+          cell.addEventListener('focus', () => {
+            renderPeriodicPreviewBar(previewEl, tile, fiberProps, curEffortId, ui);
+          });
+          cell.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (tile.isAvailableInHost && tile.family) {
+              const preferred = periodicCore.pickPreferredVariant(tile.family, curEffortId);
+              if (preferred?.option) {
+                commitPeriodicModelOption(fiberProps, preferred.option);
+                return;
+              }
+            }
+            psPinnedSymbol = tile.symbol;
+            renderPeriodicPreviewBar(previewEl, tile, fiberProps, curEffortId, ui);
+          });
+        }
+        grid.appendChild(cell);
+      }
+
+      grid.addEventListener('mouseleave', () => {
+        const fallbackTile =
+          (psPinnedSymbol && grouped.tiles.find((t) => t.symbol === psPinnedSymbol && t.isLaunched)) ||
+          defaultTile;
+        renderPeriodicPreviewBar(previewEl, fallbackTile, fiberProps, curEffortId, ui);
+      });
+
+      stage.appendChild(grid);
+      contentEl.appendChild(stage);
+      renderPeriodicPreviewBar(previewEl, defaultTile, fiberProps, curEffortId, ui);
+      contentEl.appendChild(previewEl);
+      return;
+    }
+
+    const effectiveTab = psTab === 'periodic' ? 'all' : psTab;
+    const list = periodicCore.filterModelFamilies(grouped.families, effectiveTab, psQuery);
+    if (list.length === 0) {
+      contentEl.appendChild(createEl('div', 'ag-cs-ps-empty', ui.psNoResults || 'No matching models'));
+      return;
+    }
+
+    const listEl = createEl('div', 'ag-cs-ps-list');
+    for (const fam of list) {
+      const card = createEl('div', `ag-cs-ps-list-card${fam.isSelected ? ' is-selected' : ''}`);
+      card.setAttribute('data-ps-family', fam.id);
+
+      const top = createEl('div', 'ag-cs-ps-list-top');
+      const titleWrap = createEl('div', 'ag-cs-ps-list-title-wrap');
+      titleWrap.appendChild(createEl('span', 'ag-cs-ps-preview-title', fam.baseName));
+      if (fam.modelIdBase) {
+        titleWrap.appendChild(createEl('span', 'ag-cs-ps-preview-slug', fam.modelIdBase));
+      }
+      if (fam.tagTitle) {
+        const badgeCls = fam.tagTitle.toLowerCase() === 'new' ? 'ag-cs-ps-badge is-new' : 'ag-cs-ps-badge';
+        titleWrap.appendChild(createEl('span', badgeCls, fam.tagTitle));
+      }
+      top.appendChild(titleWrap);
+      card.appendChild(top);
+
+      const desc = fam.spec?.desc || fam.tagDescription || '';
+      if (desc) {
+        card.appendChild(createEl('p', 'ag-cs-ps-preview-desc', desc));
+      }
+
+      const metaRow = createEl('div', 'ag-cs-ps-chips-row');
+      metaRow.style.paddingTop = '0';
+      if (fam.spec?.context) metaRow.appendChild(createEl('span', 'ag-cs-ps-meta-chip', fam.spec.context));
+      if (fam.spec?.pricing) metaRow.appendChild(createEl('span', 'ag-cs-ps-meta-chip', fam.spec.pricing));
+      const quotaTxt = resolveQuotaBadgeText(fam.baseName, ui);
+      if (quotaTxt) metaRow.appendChild(createEl('span', 'ag-cs-ps-meta-chip', quotaTxt));
+      if (metaRow.childElementCount > 0) card.appendChild(metaRow);
+
+      if (fam.variants.length > 0) {
+        const effRow = createEl('div', 'ag-cs-ps-effort-row');
+        for (const v of fam.variants) {
+          const isActive = fam.isSelected && v.effortId === fam.selectedEffortId;
+          const eb = createEl('button', `ag-cs-ps-effort-btn${isActive ? ' is-active' : ''}`, v.effortDisplay || v.label);
+          eb.type = 'button';
+          eb.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            commitPeriodicModelOption(fiberProps, v.option);
+          });
+          effRow.appendChild(eb);
+        }
+        card.appendChild(effRow);
+      }
+
+      card.addEventListener('click', () => {
+        const preferred = periodicCore.pickPreferredVariant(fam, curEffortId);
+        if (preferred?.option) {
+          commitPeriodicModelOption(fiberProps, preferred.option);
+        }
+      });
+      listEl.appendChild(card);
+    }
+    contentEl.appendChild(listEl);
+  }
+
+  function renderPeriodicDrawerShell(drawer) {
+    if (!drawer || !periodicCore) return;
+    drawer.textContent = '';
+
+    const lang = getLang();
+    const ui = uiText(lang);
+    const fiberProps = getModelFiberProps(openPsModelBtn);
+    const grouped = periodicCore.groupModelOptions(fiberProps?.modelOptions || [], fiberProps?.selectedModel || null);
+    const curEffortId = periodicCore.parseOptionEffort(fiberProps?.selectedModel?.label).effortId || 'high';
+
+    const header = createEl('div', 'ag-cs-ps-header');
+    header.appendChild(createEl('span', 'ag-cs-ps-title', ui.psTitle || 'Model selection'));
+    const actions = createEl('div', 'ag-cs-ps-header-actions');
+    const syncBtn = createEl('button', 'ag-cs-ps-sync-btn');
+    syncBtn.type = 'button';
+    const syncTip =
+      ui.psSyncTooltip ||
+      'Insert a prompt into the chat box so Gemini scrapes new elements, theme colors, and pricing from AI Studio';
+    syncBtn.setAttribute('title', syncTip);
+    syncBtn.setAttribute('aria-label', syncTip);
+    syncBtn.innerHTML =
+      '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.88L2.5 10.3M2.5 13.5v-3.2h3.2"/>' +
+      '<path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.88L13.5 5.7M13.5 2.5v3.2h-3.2"/>' +
+      '</svg>';
+    syncBtn.appendChild(createEl('span', 'ag-cs-ps-sync-lbl', ui.psSyncBtn || 'Sync AI Studio'));
+    syncBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const sourceCard = (openPsTrigger || openPsModelBtn)?.closest?.('.surface-composer-card') || null;
+      const prompt =
+        typeof periodicCore.buildPeriodicSyncPrompt === 'function'
+          ? periodicCore.buildPeriodicSyncPrompt(getLang())
+          : '';
+      closePeriodicSelector();
+      if (prompt) insertTextIntoComposer(prompt, sourceCard);
+    });
+    const closeBtn = createEl('button', 'ag-cs-ps-close', '×');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', () => closePeriodicSelector());
+    actions.appendChild(syncBtn);
+    actions.appendChild(closeBtn);
+    header.appendChild(actions);
+    drawer.appendChild(header);
+
+    const body = createEl('div', 'ag-cs-ps-body');
+
+    const searchWrap = createEl('div', 'ag-cs-ps-search-wrap');
+    const searchIcon = document.createElement('span');
+    searchIcon.className = 'ag-cs-ps-search-icon';
+    searchIcon.innerHTML =
+      '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15" aria-hidden="true">' +
+      '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l4 4" stroke-linecap="round"/></svg>';
+    const searchInput = createEl('input', 'ag-cs-ps-search');
+    searchInput.type = 'text';
+    searchInput.value = psQuery;
+    searchInput.setAttribute('placeholder', ui.psSearchPlaceholder || 'Search for a model or agent');
+    const clearBtn = createEl('button', 'ag-cs-ps-search-clear', '×');
+    clearBtn.type = 'button';
+    clearBtn.style.display = psQuery ? '' : 'none';
+    searchWrap.appendChild(searchIcon);
+    searchWrap.appendChild(searchInput);
+    searchWrap.appendChild(clearBtn);
+    body.appendChild(searchWrap);
+
+    const tabsRow = createEl('div', 'ag-cs-ps-tabs');
+    const contentArea = createEl('div', 'ag-cs-ps-content');
+
+    const hasCat = (cat) => grouped.families.some((f) => f.category === cat);
+    const tabSpecs = [
+      { id: 'periodic', label: '4', isFour: true },
+      { id: 'all', label: ui.psTabAll || 'All' },
+      { id: 'gemini', label: ui.psTabGemini || 'Gemini' },
+    ];
+    if (hasCat('orchestrator')) tabSpecs.push({ id: 'orchestrator', label: ui.psTabOrchestrator || 'Orchestrator' });
+    if (hasCat('claude')) tabSpecs.push({ id: 'claude', label: ui.psTabClaude || 'Claude' });
+    if (hasCat('other')) tabSpecs.push({ id: 'other', label: ui.psTabOther || 'Other' });
+
+    const tabButtons = [];
+    const syncTabsActive = () => {
+      const searching = Boolean(psQuery.trim());
+      for (const { id, el } of tabButtons) {
+        const active = searching ? (id === 'all' && psTab === 'periodic') || id === psTab : id === psTab;
+        if (active) el.classList.add('is-active');
+        else el.classList.remove('is-active');
+        el.setAttribute('aria-selected', active ? 'true' : 'false');
+      }
+    };
+
+    for (const spec of tabSpecs) {
+      const tb = createEl('button', `ag-cs-ps-chip${spec.isFour ? ' ag-cs-ps-chip-4' : ''}`);
+      tb.type = 'button';
+      tb.setAttribute('data-ps-tab', spec.id);
+      if (spec.isFour) {
+        tb.setAttribute('aria-label', 'Periodic table of Gemini 4');
+        tb.appendChild(createEl('span', 'ag-cs-ps-chip-4-glyph', '4'));
+      } else {
+        tb.textContent = spec.label;
+      }
+      tb.addEventListener('click', () => {
+        psTab = spec.id;
+        if (spec.id === 'periodic' && psQuery) {
+          psQuery = '';
+          searchInput.value = '';
+          clearBtn.style.display = 'none';
+        }
+        syncTabsActive();
+        renderPeriodicContentArea(contentArea, grouped, fiberProps, curEffortId, ui);
+      });
+      tabButtons.push({ id: spec.id, el: tb });
+      tabsRow.appendChild(tb);
+    }
+
+    searchInput.addEventListener('input', () => {
+      psQuery = searchInput.value || '';
+      clearBtn.style.display = psQuery ? '' : 'none';
+      syncTabsActive();
+      renderPeriodicContentArea(contentArea, grouped, fiberProps, curEffortId, ui);
+    });
+    clearBtn.addEventListener('click', () => {
+      psQuery = '';
+      searchInput.value = '';
+      clearBtn.style.display = 'none';
+      syncTabsActive();
+      renderPeriodicContentArea(contentArea, grouped, fiberProps, curEffortId, ui);
+      if (typeof searchInput.focus === 'function') searchInput.focus();
+    });
+
+    syncTabsActive();
+    body.appendChild(tabsRow);
+    renderPeriodicContentArea(contentArea, grouped, fiberProps, curEffortId, ui);
+    body.appendChild(contentArea);
+    drawer.appendChild(body);
+    drawer._agCsRefreshContent = () => {
+      const latestFp = getModelFiberProps(openPsModelBtn);
+      const latestGrouped = periodicCore.groupModelOptions(latestFp?.modelOptions || [], latestFp?.selectedModel || null);
+      const latestEff = periodicCore.parseOptionEffort(latestFp?.selectedModel?.label).effortId || 'high';
+      renderPeriodicContentArea(contentArea, latestGrouped, latestFp, latestEff, uiText(getLang()));
+    };
+  }
+
+  function openPeriodicSelector(triggerBtn, modelBtn) {
+    if (!periodicCore) return;
+    const btn = triggerBtn || document.querySelector('.ag-cs-periodic-trigger');
+    const mBtn =
+      modelBtn ||
+      btn?._agCsModelBtn ||
+      btn?.closest?.('.surface-composer-card')?.querySelector('[data-testid="model-selector-trigger"]') ||
+      document.querySelector('[data-testid="model-selector-trigger"]');
+
+    if (openPsDrawer && openPsDrawer.isConnected && (!btn || openPsTrigger === btn)) {
+      closePeriodicSelector();
+      return;
+    }
+
+    closePeriodicSelector();
+    closeEffortPopover();
+    closeContextPopover();
+
+    psTab = 'periodic';
+    psQuery = '';
+    psPinnedSymbol = '';
+
+    const theme = isDarkTheme() ? 'dark' : 'light';
+    const backdrop = createEl('div', 'ag-cs-ps-backdrop');
+    backdrop.setAttribute('data-ag-no-i18n', '');
+    backdrop.setAttribute('data-ps-theme', theme);
+    backdrop.addEventListener('click', () => closePeriodicSelector());
+
+    const drawer = createEl('div', 'ag-cs-ps-drawer');
+    drawer.setAttribute('role', 'dialog');
+    drawer.setAttribute('aria-modal', 'true');
+    drawer.setAttribute('data-ag-no-i18n', '');
+    drawer.setAttribute('data-ps-theme', theme);
+    drawer.addEventListener('click', (ev) => ev.stopPropagation());
+
+    openPsBackdrop = backdrop;
+    openPsDrawer = drawer;
+    openPsTrigger = btn || null;
+    openPsModelBtn = mBtn || null;
+    if (openPsTrigger) openPsTrigger.setAttribute('aria-expanded', 'true');
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(drawer);
+    renderPeriodicDrawerShell(drawer);
+    positionPeriodicPopover(drawer, openPsTrigger || openPsModelBtn);
+
+    if (typeof window.addEventListener === 'function') {
+      openPsResizeFn = () => {
+        if (openPsDrawer === drawer && drawer.isConnected) {
+          positionPeriodicPopover(drawer, openPsTrigger || openPsModelBtn);
+        }
+      };
+      window.addEventListener('resize', openPsResizeFn);
+    }
+
+    if (!cachedQuotaData || Date.now() - lastQuotaFetchAt >= 25000) {
+      const qp = fetchQuotaData(false);
+      if (qp && typeof qp.then === 'function') {
+        qp.then((q) => {
+          if (!destroyed && q && openPsDrawer === drawer && drawer.isConnected && typeof drawer._agCsRefreshContent === 'function') {
+            drawer._agCsRefreshContent();
+          }
+        });
+      }
+    }
+  }
+
   // ── Smooth Typing Cursor Gliding Animation (.ag-cs-smooth-caret) ───────
   let caretTypingTimer = null;
   let caretRaf = 0;
@@ -4721,6 +5477,7 @@
 
       // 3. Inline stats, remaining-usage ring, turn badges & surround HUD (both new conversations & active chats)
       const footer = card.querySelector('.agy-composer-footer');
+      syncPeriodicTrigger(card, footer, modelBtn);
       const isHomeCard = Boolean(card.closest('.agy-home') && !card.closest('[data-testid="conversation-view"]'));
       const cascadeId = isHomeCard ? '' : resolveCascadeId(inputBox);
       const inConvo = Boolean(cascadeId || card.closest('[data-testid="conversation-view"]'));
@@ -5080,6 +5837,15 @@
           [false, ui.offLabel || 'Off'],
         ],
       },
+      periodicSelector: {
+        key: 'periodicSelector',
+        title: ui.setPeriodicTitle || 'Gemini 4 Periodic Model Selector',
+        desc: ui.setPeriodicDesc || 'Add a Gemini sparkle icon left of the model name to open the Periodic Table model selector.',
+        opts: [
+          [true, ui.onLabel || 'On'],
+          [false, ui.offLabel || 'Off'],
+        ],
+      },
       inlineStats: {
         key: 'inlineStats',
         title: ui.setInlineStatsTitle || 'Inline Stats & Remaining Ring',
@@ -5163,7 +5929,7 @@
       {
         id: 'interaction',
         title: ui.grpInteraction || 'Slider, Caret & Mascot',
-        keys: ['effortSliderStyle', 'effortAccent', 'performanceBackdrop', 'smoothCaret', 'mascot', 'homeRipple'],
+        keys: ['periodicSelector', 'effortSliderStyle', 'effortAccent', 'performanceBackdrop', 'smoothCaret', 'mascot', 'homeRipple'],
       },
       {
         id: 'telemetry',
@@ -5452,6 +6218,7 @@
 
   function onDocKeyDown(ev) {
     if (ev.key === 'Escape') {
+      if (openPsDrawer) closePeriodicSelector();
       if (openPopover) closeContextPopover();
       if (openEffortPop) closeEffortPopover();
       return;
@@ -5748,8 +6515,12 @@
       }
       applyRootAttrs();
       refreshOpenEffortPopover();
+      refreshOpenPeriodicSelector();
       runSync();
       scheduleSync();
+    },
+    openPeriodicSelector(triggerBtn, modelBtn) {
+      openPeriodicSelector(triggerBtn, modelBtn);
     },
     openEffortPopover(badgeEl, modelBtn) {
       const b = badgeEl || document.querySelector('[data-testid="model-selector-trigger"] .ag-cs-effort-badge, [data-testid="model-selector-trigger"] [data-ag-cs-effort]');
@@ -5781,11 +6552,13 @@
         hasSmoothCaret: Boolean(document.querySelector('.ag-cs-smooth-caret')),
         hasEffortPopover: Boolean(openEffortPop && openEffortPop.isConnected),
         hasContextPopover: Boolean(openPopover && openPopover.isConnected),
+        hasPeriodicSelector: Boolean(openPsDrawer && openPsDrawer.isConnected),
       };
     },
     destroy() {
       teardownCore();
       for (const fn of [
+        closePeriodicSelector,
         closeContextPopover,
         closeEffortPopover,
         teardownSmoothCarets,
@@ -5816,7 +6589,7 @@
       });
       document
         .querySelectorAll(
-          '.ag-cs-inline-stats, .ag-cs-context-ring, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-perf-backdrop, #' + SETTINGS_SEC_ID
+          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-perf-backdrop, #' + SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());
       const html = document.documentElement;

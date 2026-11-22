@@ -21,6 +21,7 @@
   "sidebarRestyle": true,
   "sidebarCompact": false,
   "placeholderStyle": "studio",
+  "periodicSelector": true,
   "autoRelaunchWithCdp": true,
   "exitOnHostClose": false
 }

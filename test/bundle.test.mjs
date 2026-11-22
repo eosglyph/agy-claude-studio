@@ -440,7 +440,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     const settingKeys = new Set(
       appearancePanel.querySelectorAll('#ag-cs-settings-sec button').map((b) => b.getAttribute('data-ag-cs-key'))
     );
-    assert.equal(settingKeys.size, 20);
+    assert.equal(settingKeys.size, 21);
     for (const expectedKey of [
       'language',
       'homeLayout',
@@ -448,6 +448,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
       'logoInk',
       'sidebarRestyle',
       'composerRestyle',
+      'periodicSelector',
       'effortSliderStyle',
       'effortAccent',
       'performanceBackdrop',
@@ -4640,4 +4641,270 @@ test('inject expression enters sidecar-lite mode on plugin://swarm-- iframe with
   assert.equal(html.getAttribute('lang'), 'en');
   assert.equal(sandbox.window.__agClaudeStyle, undefined);
   assert.equal(sandbox.globalThis.__agCsSidecarCore, undefined);
+});
+
+test('periodic selector sparkle trigger mounts left of model selector, switches models via Fiber, and cleans up on remove', () => {
+  const timers = new Set();
+  function makeEl(tag, opts = {}) {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const listeners = new Map();
+    const children = [];
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const node = {
+      tagName: tag.toUpperCase(),
+      id: opts.id || '',
+      value: '',
+      style: {
+        _props: {},
+        setProperty(k, v) { this._props[k] = String(v); },
+        getPropertyValue(k) { return this._props[k] || ''; },
+        removeProperty(k) { delete this._props[k]; },
+      },
+      classList: {
+        contains: (c) => classes.has(c),
+        add: (c) => classes.add(c),
+        remove: (c) => classes.delete(c),
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v).split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      children,
+      parentElement: null,
+      parentNode: null,
+      isConnected: true,
+      _text: opts.text || '',
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { children.length = 0; this._text = String(v); },
+      set innerHTML(html) { children.length = 0; this._html = html; },
+      get innerHTML() { return this._html || ''; },
+      get childElementCount() { return children.length; },
+      get nextSibling() {
+        if (!this.parentElement) return null;
+        const idx = this.parentElement.children.indexOf(this);
+        return idx >= 0 ? this.parentElement.children[idx + 1] || null : null;
+      },
+      get lastElementChild() { return children[children.length - 1] || null; },
+      clientWidth: 900,
+      clientHeight: 700,
+      appendChild(ch) {
+        ch.parentElement = this;
+        ch.parentNode = this;
+        children.push(ch);
+        return ch;
+      },
+      insertBefore(ch, ref) {
+        ch.parentElement = this;
+        ch.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, ch);
+        else children.push(ch);
+        return ch;
+      },
+      removeChild(ch) {
+        const idx = children.indexOf(ch);
+        if (idx >= 0) children.splice(idx, 1);
+        ch.parentElement = null;
+        ch.parentNode = null;
+        return ch;
+      },
+      remove() {
+        if (this.parentElement) this.parentElement.removeChild(this);
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') this.id = String(v); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      toggleAttribute(k, force) {
+        const on = force === undefined ? !attrs.has(k) : Boolean(force);
+        if (on) attrs.set(k, ''); else attrs.delete(k);
+        return on;
+      },
+      addEventListener(ev, cb) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(cb);
+      },
+      removeEventListener() {},
+      dispatch(ev, payload = {}) {
+        for (const fn of [...(listeners.get(ev) || [])]) fn({ type: ev, stopPropagation() {}, preventDefault() {}, ...payload });
+      },
+      getContext() { return null; },
+      getBoundingClientRect() { return { left: 0, top: 0, right: 480, bottom: 300, width: 480, height: 300 }; },
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (matches(cur, sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (matches(c, sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return node;
+  }
+  function matchesSimple(node, simple) {
+    let rest = simple.trim();
+    if (!rest) return false;
+    const tagMatch = /^[a-zA-Z0-9_-]+/.exec(rest);
+    if (tagMatch) {
+      if (node.tagName !== tagMatch[0].toUpperCase()) return false;
+      rest = rest.slice(tagMatch[0].length);
+    }
+    while (rest.length > 0) {
+      if (rest[0] === '#') {
+        const m = /^#([a-zA-Z0-9_-]+)/.exec(rest);
+        if (!m || node.id !== m[1]) return false;
+        rest = rest.slice(m[0].length);
+      } else if (rest[0] === '.') {
+        const m = /^\.([a-zA-Z0-9_-]+)/.exec(rest);
+        if (!m || !node.classList.contains(m[1])) return false;
+        rest = rest.slice(m[0].length);
+      } else if (rest[0] === '[') {
+        const m = /^\[([^\]=]+)(?:="([^"]*)")?\]/.exec(rest);
+        if (!m) return false;
+        const ok = m[2] === undefined ? node.hasAttribute(m[1]) : node.getAttribute(m[1]) === m[2];
+        if (!ok) return false;
+        rest = rest.slice(m[0].length);
+      } else return false;
+    }
+    return true;
+  }
+  function matches(node, selector) {
+    return selector.split(',').some((part) => {
+      const tokens = part.trim().split(/\s+/).filter(Boolean);
+      if (tokens.length === 0 || !matchesSimple(node, tokens[tokens.length - 1])) return false;
+      let cur = node.parentElement;
+      let idx = tokens.length - 2;
+      while (cur && idx >= 0) {
+        if (matchesSimple(cur, tokens[idx])) idx--;
+        cur = cur.parentElement;
+      }
+      return idx < 0;
+    });
+  }
+
+  const html = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body', { className: 'theme-dark' });
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const inputBox = makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } });
+  const card = makeEl('div', { className: 'surface-composer-card' });
+  const editor = makeEl('div', { attrs: { contenteditable: 'true' } });
+  const footer = makeEl('div', { className: 'agy-composer-footer' });
+  const modelBtn = makeEl('button', { attrs: { 'data-testid': 'model-selector-trigger' } });
+  const modelText = makeEl('span', { text: 'Gemini 4 Hydrogen (High)' });
+  modelBtn.appendChild(modelText);
+
+  const selectedCalls = [];
+  const options = [
+    { label: 'Gemini 4 Hydrogen (High)', value: 1525, disabled: false, modelId: 'gemini-4-hydrogen-high' },
+    { label: 'Gemini 4 Neon (High)', value: 1532, disabled: false, modelId: 'gemini-4-neon-high' },
+    { label: 'Gemini 4 Argon (High)', value: 1417, disabled: false, modelId: 'gemini-4-argon-high' },
+    { label: 'Claude Opus 5.5 (High)', value: 1402, disabled: false, modelId: 'claude-opus-5-5-high' },
+  ];
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      selectedModel: options[0],
+      modelOptions: options,
+      setSelectedModel(opt) { selectedCalls.push(opt); },
+    },
+    return: null,
+  };
+
+  footer.appendChild(modelBtn);
+  card.appendChild(editor);
+  card.appendChild(footer);
+  inputBox.appendChild(card);
+  body.appendChild(inputBox);
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    createElement: (tag) => makeEl(tag),
+    getElementById: (id) => html.querySelector(`#${id}`),
+    querySelector: (sel) => html.querySelector(sel),
+    querySelectorAll: (sel) => html.querySelectorAll(sel),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+
+  const sandbox = {
+    window: null,
+    globalThis: null,
+    document: doc,
+    navigator: { language: 'zh-CN' },
+    location: { pathname: '/' },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => setTimeout(() => fn(Date.now()), 5),
+    cancelAnimationFrame: (id) => clearTimeout(id),
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    const res = vm.runInNewContext(cdp.buildInjectExpression(cdp.DEFAULT_CONFIG), sandbox);
+    assert.equal(res.status, 'ok');
+
+    const trigger = footer.querySelector('.ag-cs-periodic-trigger');
+    assert.ok(trigger, 'Gemini sparkle trigger button mounted in footer');
+    assert.equal(trigger.getAttribute('data-ag-no-i18n'), '');
+
+    trigger.dispatch('click');
+    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, true);
+    const drawer = body.querySelector('.ag-cs-ps-drawer');
+    assert.ok(drawer, 'Periodic Table drawer opened');
+
+    const carbonTile = drawer.querySelector('[data-ps-symbol="C"]');
+    assert.ok(carbonTile, '6 C tile present');
+    carbonTile.dispatch('click');
+    const lockedBadge = drawer.querySelector('.ag-cs-ps-badge.is-locked');
+    assert.ok(lockedBadge, 'subscription-locked badge rendered for Carbon');
+    assert.ok(lockedBadge.textContent.includes('当前订阅暂不可用'));
+
+    const syncBtn = drawer.querySelector('.ag-cs-ps-sync-btn');
+    assert.ok(syncBtn, 'AI Studio sync button present in header');
+    syncBtn.dispatch('click');
+    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, false);
+    assert.ok(editor.textContent.includes('aistudio.google.com'), 'composer populated with AI Studio sync prompt');
+
+    trigger.dispatch('click');
+    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, true);
+    const drawer2 = body.querySelector('.ag-cs-ps-drawer');
+    const neonTile = drawer2.querySelector('[data-ps-symbol="Ne"]');
+    assert.ok(neonTile, '10 Ne tile present');
+    neonTile.dispatch('click');
+    assert.equal(selectedCalls.length, 1);
+    assert.equal(selectedCalls[0].modelId, 'gemini-4-neon-high');
+    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, false);
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(body.querySelector('.ag-cs-periodic-trigger'), null);
+    assert.equal(body.querySelector('.ag-cs-ps-drawer'), null);
+    assert.equal(sandbox.__agCsPeriodicCore, undefined);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
 });
