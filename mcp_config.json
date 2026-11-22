@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "agy-claude-style-host": {
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/plugin/mcp-host.js"
+      ],
+      "env": {
+        "AGY_CLAUDE_STYLE_PLUGIN_DATA": "${PLUGIN_DATA}"
+      }
+    }
+  }
+}

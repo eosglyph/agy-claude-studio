@@ -2,6 +2,8 @@
 const fs = require('fs');
 const {
   PID_FILE,
+  LOCK_FILE,
+  readActivePorts,
   readPort,
   listPages,
   resolveExistingWatchPidAction,
@@ -52,40 +54,54 @@ function stopWatcher(opts = {}) {
   return stopWatcherWithResult(opts).stopped;
 }
 
+async function removeFromAllWindows({ log = console.log, warn = console.warn } = {}) {
+  const ports = typeof readActivePorts === 'function' ? readActivePorts() : [readPort()].filter(Boolean);
+  if (!ports.length) return 0;
+  let removedWindows = 0;
+  const seenIds = new Set();
+  for (const port of ports) {
+    let pages = [];
+    try {
+      pages = await listPages(port);
+    } catch {
+      continue;
+    }
+    for (const page of pages) {
+      if (seenIds.has(page.id)) continue;
+      seenIds.add(page.id);
+      try {
+        const session = await CdpSession.connect(page.webSocketDebuggerUrl);
+        try {
+          const evalRes = await session.evaluate(REMOVE_EXPRESSION);
+          removedWindows += 1;
+          log(`[✓] 已移除 agy-claude-style: ${page.title || page.url} (清理节点: ${evalRes.removed})`);
+        } finally {
+          session.close();
+        }
+      } catch (err) {
+        warn(`[!] 清理失败: ${page.title || page.url} — ${err.message}`);
+      }
+    }
+  }
+  return removedWindows;
+}
+
 module.exports = {
   stopWatcher,
   stopWatcherWithResult,
+  removeFromAllWindows,
 };
 
 if (require.main === module) {
   (async () => {
     const res = stopWatcherWithResult();
     const stopped = res.stopped;
-    const port = readPort();
-    if (!port) {
-      if (!stopped && res.reason !== 'unknown') {
-        console.log('[*] 未发现运行中的 agy-claude-style 守护进程或 Antigravity 调试端口');
-      }
-      return;
-    }
-    let pages = [];
     try {
-      pages = await listPages(port);
-    } catch {
-      return;
-    }
-    for (const page of pages) {
-      try {
-        const session = await CdpSession.connect(page.webSocketDebuggerUrl);
-        try {
-          const evalRes = await session.evaluate(REMOVE_EXPRESSION);
-          console.log(`[✓] 已移除 agy-claude-style: ${page.title || page.url} (清理节点: ${evalRes.removed})`);
-        } finally {
-          session.close();
-        }
-      } catch (err) {
-        console.warn(`[!] 清理失败: ${page.title || page.url} — ${err.message}`);
-      }
+      if (stopped && LOCK_FILE) fs.unlinkSync(LOCK_FILE);
+    } catch {}
+    const removed = await removeFromAllWindows();
+    if (!stopped && removed === 0 && res.reason !== 'unknown') {
+      console.log('[*] 未发现运行中的 agy-claude-style 守护进程或 Antigravity 调试端口');
     }
   })();
 }

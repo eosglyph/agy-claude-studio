@@ -78,32 +78,47 @@ function shortTitle(page) {
   return t.length > 60 ? t.slice(0, 57) + '...' : t;
 }
 
-async function injectOnce() {
-  const port = cdpApi.readPort();
-  if (!port) {
+async function injectOnce({ log: outLog = log } = {}) {
+  const ports = typeof cdpApi.readActivePorts === 'function' ? cdpApi.readActivePorts() : [cdpApi.readPort()].filter(Boolean);
+  if (!ports.length) {
     const proc = cdpApi.detectAntigravityProcess();
     throw new Error(cdpApi.formatCdpUnavailableMessage({ running: proc.running, port: null }));
   }
-  let pages;
-  try {
-    pages = await cdpApi.listPages(port);
-  } catch {
+  let port = null;
+  let pages = null;
+  for (const cand of ports) {
+    try {
+      const list = await cdpApi.listPages(cand);
+      port = cand;
+      pages = list;
+      if (pages.length > 0) break;
+    } catch {}
+  }
+  if (!pages) {
     const proc = cdpApi.detectAntigravityProcess();
-    throw new Error(cdpApi.formatCdpUnavailableMessage({ running: proc.running, port }));
+    throw new Error(cdpApi.formatCdpUnavailableMessage({ running: proc.running, port: ports[0] }));
   }
   if (pages.length === 0) throw new Error('未找到 Antigravity 窗口页面');
 
-  log(`[+] 调试端口 ${port}，发现 ${pages.length} 个窗口`);
+  outLog(`[+] 调试端口 ${port}，发现 ${pages.length} 个窗口`);
   const expr = cdpApi.buildInjectExpression();
+  let injected = 0;
+  let skipped = 0;
   for (const page of pages) {
     const session = await cdpApi.CdpSession.connect(page.webSocketDebuggerUrl);
     try {
       const res = await session.evaluate(expr);
-      log(`[✓] ${shortTitle(page)} (agy-claude-style ${res.version} · 状态: ${res.status})`);
+      if (res && res.status === 'skipped-non-host') {
+        skipped += 1;
+        continue;
+      }
+      injected += 1;
+      outLog(`[✓] ${shortTitle(page)} (agy-claude-style ${res.version} · 状态: ${res.status})`);
     } finally {
       session.close();
     }
   }
+  return { port, injected, skipped };
 }
 
 async function launchWithCdp({ autoRelaunchFromConfig = false } = {}) {
@@ -612,6 +627,10 @@ async function main() {
 module.exports = {
   acquireLock,
   applyPageScripts,
+  updateConfigSetting: cdpApi.updateConfigSetting,
+  injectOnce,
+  launchWithCdp,
+  watch,
 };
 
 if (require.main === module) {
