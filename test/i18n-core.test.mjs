@@ -261,7 +261,7 @@ test('normalizeLanguage, LANG_OPTIONS, and UI_TABLE support all 5 required langu
     assert.ok(ui.tabOverview);
     assert.ok(ui.tabQuotas);
     assert.ok(ui.studioPlaceholder);
-    assert.ok(ui.perfKicker);
+    assert.ok(ui.effortTitle);
   }
 });
 

@@ -4,7 +4,6 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const effortCore = require('../effort-core.js');
-const perfAssets = require('../perf-assets.js');
 
 test('resolveClaudeEffortSteps groups model variants in ascending strength and falls back cleanly', () => {
   const options = [
@@ -122,90 +121,12 @@ test('5-row matrix-field solver and plume fade envelope stay within expected bou
   }
 });
 
-test('resolvePerformancePresets pairs Flash+Argon, Flash+Hydrogen, Claude Sonnet+Opus, and fallback', () => {
-  const realAntigravityOpts = [
-    { label: 'Gemini 3.8 Flash Low' },
-    { label: 'Gemini 3.8 Flash Medium' },
-    { label: 'Gemini 3.8 Flash High' },
-    { label: 'Gemini 4 Argon Low' },
-    { label: 'Gemini 4 Argon Medium' },
-    { label: 'Gemini 4 Argon High' },
-    { label: 'Gemini 4 Hydrogen Low' },
-    { label: 'Gemini 4 Hydrogen Medium' },
-    { label: 'Gemini 4 Hydrogen High' },
-    { label: 'Gemini 4 Hydrogen XHigh' },
-    { label: 'Claude Sonnet 5.5 Low' },
-    { label: 'Claude Sonnet 5.5 Medium' },
-    { label: 'Claude Sonnet 5.5 High' },
-    { label: 'Claude Opus 5.5 Low' },
-    { label: 'Claude Opus 5.5 Medium' },
-    { label: 'Claude Opus 5.5 High' },
-  ];
-
-  // Argon selected -> 6 tiers spanning Flash Low/Med/High -> Argon Low/Med/High
-  const argon = effortCore.resolvePerformancePresets(realAntigravityOpts, 'Gemini 4 Argon High', 'high', true);
-  assert.equal(argon.presets.length, 6);
-  assert.equal(argon.presets[0].modelShort, 'Flash');
-  assert.equal(argon.presets[5].modelShort, 'Argon');
-  assert.equal(argon.activeIdx, 5);
-
-  // Hydrogen selected -> 6 tiers spanning Flash Low/Med/High -> Hydrogen Low/High/XHigh (or Med/High/XHigh when Med active)
-  const hydro = effortCore.resolvePerformancePresets(realAntigravityOpts, 'Gemini 4 Hydrogen XHigh', 'xhigh', true);
-  assert.equal(hydro.presets.length, 6);
-  assert.equal(hydro.presets[5].fullLabel, 'Gemini 4 Hydrogen XHigh');
-  assert.equal(hydro.presets[5].effort, 'xhigh');
-  assert.equal(hydro.presets[5].effortDisplay, 'XHigh');
-  assert.equal(hydro.activeIdx, 5);
-
-  const hydroExtra = effortCore.resolvePerformancePresets(realAntigravityOpts, 'Gemini 4 Hydrogen (XHigh)', 'Extra', true);
-  assert.equal(hydroExtra.presets[5].effort, 'xhigh');
-  assert.equal(hydroExtra.presets[5].effortDisplay, 'Extra');
-  assert.equal(hydroExtra.activeIdx, 5);
-
-  const hydroLabelOnlyExtra = effortCore.resolvePerformancePresets(realAntigravityOpts, 'Gemini 4 Hydrogen Extra', '', true);
-  assert.equal(hydroLabelOnlyExtra.presets[5].effort, 'xhigh');
-  assert.equal(hydroLabelOnlyExtra.presets[5].effortDisplay, 'Extra');
-  assert.equal(hydroLabelOnlyExtra.activeIdx, 5);
-
-  // Claude selected -> 6 tiers spanning Sonnet Low/Med/High -> Opus Low/Med/High
-  const claude = effortCore.resolvePerformancePresets(realAntigravityOpts, 'Claude Opus 5.5 Medium', 'medium', false);
-  assert.equal(claude.presets.length, 6);
-  assert.equal(claude.presets[0].modelShort, 'Sonnet');
-  assert.equal(claude.presets[4].fullLabel, 'Claude Opus 5.5 Medium');
-  assert.equal(claude.activeIdx, 4);
-
-  // Fallback with empty options
-  const fb = effortCore.resolvePerformancePresets([], '', '', true);
-  assert.equal(fb.presets.length, 6);
-});
-
-test('frameForLevel, levelForFrame, interpolatePerfColor, and perf-assets 31 WebP frames stay consistent', () => {
-  assert.equal(effortCore.PERF_FRAME_COUNT, 31);
-  assert.equal(effortCore.frameForLevel(0, 6), 0);
-  assert.equal(effortCore.frameForLevel(5, 6), 30);
-  assert.equal(effortCore.frameForLevel(4, 6), 24);
-  assert.equal(effortCore.levelForFrame(24, 6), 4);
-  assert.equal(effortCore.levelForFrame(0, 6), 0);
-  assert.equal(effortCore.levelForFrame(30, 6), 5);
-
-  const colStart = effortCore.interpolatePerfColor(0);
-  const colEnd = effortCore.interpolatePerfColor(30);
-  assert.match(colStart, /^rgb\(\d+, \d+, \d+\)$/);
-  assert.notEqual(colStart, colEnd);
-
-  assert.equal(perfAssets.FRAME_COUNT, 31);
-  assert.equal(perfAssets.frames.length, 31);
-  for (const frame of perfAssets.frames) {
-    assert.ok(frame.startsWith('data:image/webp;base64,'));
-  }
-});
-
 test('normalizeEffortStyle and Codex effort math stay consistent with dsh-codex-effort-slider', () => {
   assert.equal(effortCore.normalizeEffortStyle('claude'), 'claude');
   assert.equal(effortCore.normalizeEffortStyle('chatgpt'), 'chatgpt');
   assert.equal(effortCore.normalizeEffortStyle('codex'), 'chatgpt');
-  assert.equal(effortCore.normalizeEffortStyle('liangwufeng'), 'liangwufeng');
-  assert.equal(effortCore.normalizeEffortStyle('performance'), 'liangwufeng');
+  assert.equal(effortCore.normalizeEffortStyle('liangwufeng'), 'claude');
+  assert.equal(effortCore.normalizeEffortStyle('performance'), 'claude');
   assert.equal(effortCore.normalizeEffortStyle('unknown'), 'claude');
 
   assert.equal(effortCore.CODEX_PARTICLES.length, 22);

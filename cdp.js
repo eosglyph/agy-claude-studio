@@ -40,7 +40,6 @@ const DEFAULT_CONFIG = {
   hudCompact: false,
   effortSliderStyle: 'claude',
   effortAccent: true,
-  performanceBackdrop: 'card',
   smoothCaret: true,
   sidebarRestyle: true,
   sidebarCompact: false,
@@ -68,9 +67,8 @@ const CONFIG_VALIDATORS = {
   hudRimProgress: 'boolean',
   hudFooterChip: 'boolean',
   hudCompact: 'boolean',
-  effortSliderStyle: ['claude', 'chatgpt', 'liangwufeng'],
+  effortSliderStyle: ['claude', 'chatgpt'],
   effortAccent: 'boolean',
-  performanceBackdrop: ['off', 'card', 'page'],
   smoothCaret: 'boolean',
   sidebarRestyle: 'boolean',
   sidebarCompact: 'boolean',
@@ -256,7 +254,7 @@ function readCss() {
   return fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
 }
 
-const RUNTIME_PARTS = ['i18n-locales.js', 'i18n-core.js', 'sidecar-core.js', 'usage-core.js', 'ripple-core.js', 'mascot-core.js', 'crab-assets.js', 'effort-core.js', 'perf-assets.js', 'periodic-core.js', 'ui-runtime.js'];
+const RUNTIME_PARTS = ['i18n-locales.js', 'i18n-core.js', 'sidecar-core.js', 'usage-core.js', 'ripple-core.js', 'mascot-core.js', 'crab-assets.js', 'effort-core.js', 'periodic-core.js', 'ui-runtime.js'];
 
 function readRuntimeBundle() {
   return RUNTIME_PARTS.map((f) => fs.readFileSync(path.join(__dirname, f), 'utf8')).join('\n');
@@ -398,7 +396,6 @@ const REMOVE_EXPRESSION = `(() => {
   delete globalThis.__agCsRippleCore;
   delete globalThis.__agCsUsageCore;
   delete globalThis.__agCsEffortCore;
-  delete globalThis.__agCsPerfAssets;
   delete globalThis.__agCsPeriodicCore;
   delete globalThis.__agCsI18nCore;
   delete globalThis.__agCsSidecarCore;
@@ -406,13 +403,12 @@ const REMOVE_EXPRESSION = `(() => {
   const root = document.documentElement;
   if (root) {
     root.removeAttribute('data-ag-cs-effort-accent');
-    root.removeAttribute('data-ag-cs-perf-backdrop');
     root.removeAttribute('data-ag-cs-lang');
     root.removeAttribute('data-ag-cs-cjk');
     if (root.getAttribute('data-ag-cjk') === '1') root.removeAttribute('data-ag-cjk');
   }
   const nodes = document.querySelectorAll(
-    'style#${STYLE_ID}, style#ag-token-hud-style, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-perf-backdrop, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
+    'style#${STYLE_ID}, style#ag-token-hud-style, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
   );
   nodes.forEach((n) => n.remove());
   return { removed: nodes.length };

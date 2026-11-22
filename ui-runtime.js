@@ -56,7 +56,6 @@
   const mascotCore = globalThis.__agCsMascotCore;
   const crabAssets = globalThis.__agCsCrabAssets;
   const effortCore = globalThis.__agCsEffortCore;
-  const perfAssets = globalThis.__agCsPerfAssets;
   const periodicCore = globalThis.__agCsPeriodicCore;
   const i18nCore = globalThis.__agCsI18nCore;
   const i18nLocales = globalThis.__agCsLocales;
@@ -223,11 +222,6 @@
       }
     }
 
-    const perfBd = cfg.performanceBackdrop === 'page' || cfg.performanceBackdrop === 'off' ? cfg.performanceBackdrop : 'card';
-    html.setAttribute('data-ag-cs-perf-backdrop', perfBd);
-    if (perfBd !== 'page' || effortCore.normalizeEffortStyle(cfg.effortSliderStyle) !== 'liangwufeng') {
-      unmountPerfBackdrop();
-    }
     const dark = isDarkTheme();
     const themeKey = `${palette}|${dark ? 'd' : 'l'}`;
     if (themeKey !== lastThemeKey) {
@@ -3303,12 +3297,11 @@
     }
   }
 
-  // ── Interactive Thinking Effort Slider Popover (Claude Code & ChatGPT Performance) ──
+  // ── Interactive Thinking Effort Slider Popover (Claude Code & ChatGPT Codex) ──
   let openEffortPop = null;
   let openEffortAnchor = null;
   let openEffortModelBtn = null;
   let openEffortBadgeEl = null;
-  let perfBackdropEl = null;
   let effortMatrixRaf = 0;
   let codexMotionRaf = 0;
 
@@ -3319,46 +3312,12 @@
     }
   }
 
-  function unmountPerfBackdrop() {
-    if (perfBackdropEl && perfBackdropEl.parentElement) {
-      perfBackdropEl.parentElement.removeChild(perfBackdropEl);
-    }
-    perfBackdropEl = null;
-  }
-
-  function syncPerfBackdrop(frameUrl, rgb, dark) {
-    if (effortCore.normalizeEffortStyle(cfg.effortSliderStyle) !== 'liangwufeng' || cfg.performanceBackdrop !== 'page' || !openEffortPop || !openEffortPop.isConnected) {
-      unmountPerfBackdrop();
-      return;
-    }
-    let imgEl = perfBackdropEl?.querySelector?.('.ag-cs-perf-backdrop-img') || null;
-    if (!perfBackdropEl || !perfBackdropEl.isConnected) {
-      perfBackdropEl = document.createElement('div');
-      perfBackdropEl.className = 'ag-cs-perf-backdrop';
-      perfBackdropEl.setAttribute('aria-hidden', 'true');
-      perfBackdropEl.setAttribute('data-ag-no-i18n', '');
-      imgEl = document.createElement('div');
-      imgEl.className = 'ag-cs-perf-backdrop-img';
-      perfBackdropEl.appendChild(imgEl);
-      document.body.appendChild(perfBackdropEl);
-    }
-    perfBackdropEl.setAttribute('data-perf-theme', dark ? 'dark' : 'light');
-    const [r, g, b] = Array.isArray(rgb) ? rgb : [245, 165, 36];
-    perfBackdropEl.style.backgroundImage = dark
-      ? `radial-gradient(640px 380px at 82% 8%, rgba(${r},${g},${b},0.28), transparent 64%), radial-gradient(560px 360px at 14% 94%, rgba(${r},${g},${b},0.18), transparent 58%), linear-gradient(180deg, rgba(7,9,14,0.34), rgba(7,9,14,0.52))`
-      : `radial-gradient(640px 380px at 82% 8%, rgba(${r},${g},${b},0.22), transparent 64%), radial-gradient(560px 360px at 14% 94%, rgba(${r},${g},${b},0.16), transparent 58%), linear-gradient(180deg, rgba(248,250,252,0.38), rgba(241,245,249,0.54))`;
-    if (imgEl) {
-      imgEl.style.backgroundImage = frameUrl ? `url("${frameUrl}")` : 'none';
-    }
-  }
-
   function closeEffortPopover() {
     if (effortMatrixRaf) {
       cancelAnimationFrame(effortMatrixRaf);
       effortMatrixRaf = 0;
     }
     cancelCodexMotionRaf();
-    unmountPerfBackdrop();
     if (openEffortPop && openEffortPop.parentElement) {
       openEffortPop.parentElement.removeChild(openEffortPop);
     }
@@ -3478,10 +3437,6 @@
         if (!step) return;
         commitSelection(step.option, step.id, step.display, step.option?.label, onHostResolved);
       },
-      selectPreset(preset, onHostResolved) {
-        if (!preset) return;
-        commitSelection(preset.option, preset.effort, preset.effortDisplay, preset.fullLabel, onHostResolved);
-      },
     };
   }
 
@@ -3550,7 +3505,6 @@
    * Render the ChatGPT Codex effort slider popover (Microqian2th/dsh-codex-effort-slider style).
    */
   function renderCodexEffortPopover(pop, ctx, lang) {
-    unmountPerfBackdrop();
     const ui = uiText(lang);
     const steps = ctx.steps || [];
     const count = steps.length;
@@ -3832,11 +3786,9 @@
     const ctx = resolveModelEffortContext(modelBtn, badgeEl);
     pop.setAttribute('data-effort-style', styleMode);
     pop.setAttribute('data-effort-theme', dark ? 'dark' : 'light');
-    pop.setAttribute('data-perf-theme', dark ? 'dark' : 'light');
     pop._syncEffortKnob = null;
 
     if (styleMode === 'claude') {
-      unmountPerfBackdrop();
       let currentIdx = ctx.selectedIdx;
       const count = ctx.steps.length;
       const maxIdx = Math.max(1, count - 1);
@@ -4085,233 +4037,8 @@
           }
         });
       }
-    } else if (styleMode === 'chatgpt') {
-      renderCodexEffortPopover(pop, ctx, lang);
     } else {
-      // Liang Wufeng / Performance Slider style (mobius/dsh-performance-slider)
-      const perfCtx = effortCore.resolvePerformancePresets(ctx.fiberProps?.modelOptions, ctx.selectedLabel, ctx.badgeEffort, lang);
-      const presets = perfCtx.presets;
-      const totalPresets = presets.length;
-      const maxFrame = effortCore.PERF_FRAME_COUNT - 1;
-      let currentIdx = perfCtx.activeIdx;
-      let currentFrame = effortCore.frameForLevel(currentIdx, totalPresets);
-      let isDragging = false;
-
-      const activePreset = presets[currentIdx] || presets[0];
-      const gridCols =
-        totalPresets >= 2
-          ? '0.5fr ' + (totalPresets > 2 ? '1fr '.repeat(totalPresets - 2) : '') + '0.5fr'
-          : '1fr';
-
-      pop.style.setProperty('--ag-cs-perf-color', activePreset.color);
-
-      const composeCardBackdropCss = (frameUrl, aura, isDark) => {
-        if (cfg.performanceBackdrop === 'card' && frameUrl) {
-          return isDark
-            ? `linear-gradient(180deg, rgba(7,9,14,0.68) 0%, rgba(7,9,14,0.20) 24%, rgba(7,9,14,0.24) 46%, rgba(7,9,14,0.62) 60%, rgba(7,9,14,0.82) 76%, rgba(7,9,14,0.92) 100%), url("${frameUrl}"), ${aura}`
-            : `linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.26) 24%, rgba(248,250,252,0.32) 46%, rgba(248,250,252,0.68) 60%, rgba(241,245,249,0.86) 76%, rgba(241,245,249,0.95) 100%), url("${frameUrl}"), ${aura}`;
-        }
-        if (cfg.performanceBackdrop === 'page') {
-          const auraStr = String(aura || '');
-          const lgIdx = auraStr.lastIndexOf(', linear-gradient(');
-          const softAura = lgIdx >= 0 ? auraStr.slice(0, lgIdx) : auraStr;
-          return isDark
-            ? `linear-gradient(180deg, rgba(14,17,24,0.24), rgba(14,17,24,0.42))${softAura ? ', ' + softAura : ''}`
-            : `linear-gradient(180deg, rgba(255,255,255,0.38), rgba(241,245,249,0.52))${softAura ? ', ' + softAura : ''}`;
-        }
-        return isDark ? `${effortCore.PERF_SCRIM}, ${aura}` : `linear-gradient(180deg, rgba(255,255,255,0.48), rgba(241,245,249,0.68)), ${aura}`;
-      };
-
-      pop.innerHTML = `
-        <div class="ag-cs-perf-card-bg" aria-hidden="true"></div>
-        <div class="ag-cs-perf-head">
-          <span class="ag-cs-perf-kicker">${escapeHtml(ui.perfKicker || 'PERFORMANCE')}</span>
-          <span class="ag-cs-perf-meta">${escapeHtml(activePreset.modelShort)} · ${escapeHtml(activePreset.effortDisplay || activePreset.effort)} · frame ${String(currentFrame).padStart(2, '0')}</span>
-        </div>
-        <div class="ag-cs-perf-bar ag-cs-chatgpt-rail" role="slider" tabindex="0" aria-label="${escapeHtml(ui.perfSliderAria || 'Performance slider')}" aria-valuemin="0" aria-valuemax="${maxFrame}" aria-valuenow="${currentFrame}" aria-valuetext="${escapeHtml(activePreset.fullLabel)}">
-          <div class="ag-cs-perf-thumb" style="left:calc(15px + ${(currentFrame / maxFrame).toFixed(4)} * (100% - 30px))"></div>
-        </div>
-        <div class="ag-cs-perf-ticks" style="grid-template-columns:${gridCols}">
-          ${presets
-            .map(
-              (p, idx) => `
-            <button type="button" class="ag-cs-perf-tick${idx === currentIdx ? ' is-active' : ''}" data-step-idx="${idx}" data-effort-id="${escapeHtml(p.effort)}" title="${escapeHtml(p.fullLabel)}">
-              <span class="ag-cs-perf-tick-model">${escapeHtml(p.modelShort)}</span>
-              <span class="ag-cs-perf-tick-effort">${escapeHtml(p.effortSubtitle)}</span>
-            </button>`
-            )
-            .join('')}
-        </div>
-      `;
-
-      const bgEl = pop.querySelector('.ag-cs-perf-card-bg');
-      const metaEl = pop.querySelector('.ag-cs-perf-meta');
-      const bar = pop.querySelector('.ag-cs-perf-bar');
-      const thumb = pop.querySelector('.ag-cs-perf-thumb');
-      const tickBtns = Array.from(pop.querySelectorAll('.ag-cs-perf-tick'));
-      let hasCommittedStatus = false;
-      let committedStatusText = '';
-
-      const setPerfStatus = (txt) => {
-        let statusEl = pop.querySelector('.ag-cs-perf-status');
-        if (!txt) {
-          if (statusEl) statusEl.remove();
-          return;
-        }
-        if (!statusEl) {
-          statusEl = document.createElement('div');
-          statusEl.className = 'ag-cs-perf-status';
-          pop.appendChild(statusEl);
-        }
-        statusEl.textContent = txt;
-      };
-
-      const applyVisual = (rawFrameFloat, idx, commit, draggingNow, showStatus = true) => {
-        const clampedFloat = Math.max(0, Math.min(maxFrame, rawFrameFloat));
-        const frameInt = Math.round(clampedFloat);
-        currentFrame = frameInt;
-        currentIdx = Math.max(0, Math.min(totalPresets - 1, idx));
-        const preset = presets[currentIdx] || presets[0];
-        const curDark = isDarkTheme();
-        const color = draggingNow ? effortCore.interpolatePerfColor(clampedFloat) : preset.color;
-        const aura = curDark ? preset.auraDark : preset.auraLight;
-        const frameUrl = perfAssets?.frames?.[frameInt] || '';
-        const cardBgCss = composeCardBackdropCss(frameUrl, aura, curDark);
-
-        pop.setAttribute('data-effort-theme', curDark ? 'dark' : 'light');
-        pop.setAttribute('data-perf-theme', curDark ? 'dark' : 'light');
-        pop.style.setProperty('--ag-cs-perf-color', color);
-        if (bgEl) bgEl.style.backgroundImage = cardBgCss;
-        syncPerfBackdrop(frameUrl, preset.rgb, curDark);
-
-        if (metaEl) {
-          metaEl.textContent = `${preset.modelShort} · ${preset.effortDisplay || preset.effort} · frame ${String(frameInt).padStart(2, '0')}`;
-        }
-        if (thumb) {
-          const prog = clampedFloat / maxFrame;
-          thumb.style.left = `calc(15px + ${prog.toFixed(4)} * (100% - 30px))`;
-        }
-        if (bar) {
-          bar.setAttribute('aria-valuenow', String(frameInt));
-          bar.setAttribute('aria-valuetext', preset.fullLabel);
-        }
-        tickBtns.forEach((tb, i) => {
-          tb.classList.toggle('is-active', i === currentIdx);
-        });
-        if (showStatus) {
-          const frameStr = String(frameInt).padStart(2, '0');
-          const txt = draggingNow
-            ? typeof ui.perfPreviewStatus === 'function'
-              ? ui.perfPreviewStatus(frameStr, preset.modelShort, preset.effortSubtitle, preset.fullLabel)
-              : `Frame ${frameStr} · Release to select ${preset.fullLabel}`
-            : typeof ui.perfCommittedStatus === 'function'
-              ? ui.perfCommittedStatus(currentIdx + 1, preset.fullLabel)
-              : `Preset ${currentIdx + 1}: ${preset.fullLabel}`;
-          if (!draggingNow) {
-            hasCommittedStatus = true;
-            committedStatusText = txt;
-          }
-          setPerfStatus(txt);
-        } else {
-          setPerfStatus('');
-        }
-        if (commit) {
-          ctx.selectPreset(preset, (resolvedDisplay) => {
-            if (!resolvedDisplay || presets[currentIdx] !== preset) return;
-            preset.effortDisplay = resolvedDisplay;
-            if (metaEl && metaEl.isConnected) {
-              metaEl.textContent = `${preset.modelShort} · ${resolvedDisplay} · frame ${String(frameInt).padStart(2, '0')}`;
-            }
-          });
-        }
-      };
-
-      applyVisual(currentFrame, currentIdx, false, false, false);
-
-      tickBtns.forEach((btn) => {
-        const showHoverStatus = () => {
-          if (isDragging) return;
-          const idx = Number(btn.getAttribute('data-step-idx') || 0);
-          const p = presets[idx];
-          if (!p) return;
-          const msg =
-            typeof ui.perfHoverStatus === 'function'
-              ? ui.perfHoverStatus(idx + 1, p.fullLabel)
-              : `Select preset ${idx + 1}: ${p.fullLabel}`;
-          setPerfStatus(msg);
-        };
-        const clearHoverStatus = () => {
-          if (isDragging) return;
-          setPerfStatus(hasCommittedStatus ? committedStatusText : '');
-        };
-        btn.addEventListener('pointerenter', showHoverStatus);
-        btn.addEventListener('mouseenter', showHoverStatus);
-        btn.addEventListener('focus', showHoverStatus);
-        btn.addEventListener('pointerleave', clearHoverStatus);
-        btn.addEventListener('mouseleave', clearHoverStatus);
-        btn.addEventListener('blur', clearHoverStatus);
-        btn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          const idx = Number(btn.getAttribute('data-step-idx') || 0);
-          const f = effortCore.frameForLevel(idx, totalPresets);
-          applyVisual(f, idx, true, false, true);
-        });
-      });
-
-      if (bar) {
-        const resolveFrameFromClientX = (clientX) => {
-          const r = bar.getBoundingClientRect();
-          const span = Math.max(1, r.width - 30);
-          const rel = Math.max(0, Math.min(1, (clientX - r.left - 15) / span));
-          const fFloat = rel * maxFrame;
-          const idx = effortCore.levelForFrame(Math.round(fFloat), totalPresets);
-          return { fFloat, idx };
-        };
-
-        bar.addEventListener('pointerdown', (ev) => {
-          if (ev.button !== 0) return;
-          ev.stopPropagation();
-          isDragging = true;
-          bar.classList.add('is-dragging');
-          try {
-            bar.setPointerCapture(ev.pointerId);
-          } catch {}
-          const { fFloat, idx } = resolveFrameFromClientX(ev.clientX);
-          applyVisual(fFloat, idx, false, true, true);
-        });
-        bar.addEventListener('pointermove', (ev) => {
-          if (!isDragging) return;
-          const { fFloat, idx } = resolveFrameFromClientX(ev.clientX);
-          applyVisual(fFloat, idx, false, true, true);
-        });
-        const finishPerfDrag = (ev) => {
-          if (!isDragging) return;
-          isDragging = false;
-          bar.classList.remove('is-dragging');
-          const { idx } = resolveFrameFromClientX(ev.clientX);
-          const snapF = effortCore.frameForLevel(idx, totalPresets);
-          applyVisual(snapF, idx, true, false, true);
-        };
-        bar.addEventListener('pointerup', finishPerfDrag);
-        bar.addEventListener('pointercancel', finishPerfDrag);
-        bar.addEventListener('keydown', (ev) => {
-          if (ev.key === 'ArrowRight' || ev.key === 'ArrowUp') {
-            ev.preventDefault();
-            const next = Math.min(totalPresets - 1, currentIdx + 1);
-            applyVisual(effortCore.frameForLevel(next, totalPresets), next, true, false, true);
-          } else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowDown') {
-            ev.preventDefault();
-            const next = Math.max(0, currentIdx - 1);
-            applyVisual(effortCore.frameForLevel(next, totalPresets), next, true, false, true);
-          } else if (ev.key === 'Home') {
-            ev.preventDefault();
-            applyVisual(0, 0, true, false, true);
-          } else if (ev.key === 'End') {
-            ev.preventDefault();
-            applyVisual(maxFrame, totalPresets - 1, true, false, true);
-          }
-        });
-      }
+      renderCodexEffortPopover(pop, ctx, lang);
     }
   }
 
@@ -5778,11 +5505,10 @@
       effortSliderStyle: {
         key: 'effortSliderStyle',
         title: ui.setEffortStyleTitle || 'Thinking Effort Slider Style',
-        desc: ui.setEffortStyleDesc || 'Style of the interactive effort slider popover (Claude Code, ChatGPT Codex, or Liang Wufeng portrait).',
+        desc: ui.setEffortStyleDesc || 'Style of the interactive effort slider popover (Claude Code or ChatGPT Codex).',
         opts: [
           ['claude', 'Claude Code'],
           ['chatgpt', 'ChatGPT Codex'],
-          ['liangwufeng', ui.optLiangWufeng || 'Liang Wufeng'],
         ],
       },
       effortAccent: {
@@ -5795,19 +5521,6 @@
         opts: [
           [true, ui.onLabel || 'On'],
           [false, ui.offLabel || 'Off'],
-        ],
-      },
-      performanceBackdrop: {
-        key: 'performanceBackdrop',
-        subRow: true,
-        condStyle: 'liangwufeng',
-        badge: ui.badgeLwf || 'Liang Wufeng',
-        title: ui.setPerfBackdropTitle || 'Liang Wufeng Portrait Backdrop',
-        desc: ui.setPerfBackdropDesc || 'Where the 31-frame cutout portrait renders in Liang Wufeng mode.',
-        opts: [
-          ['card', ui.optBackdropCard || 'Card'],
-          ['page', ui.optBackdropPage || 'Window'],
-          ['off', ui.offLabel || 'Off'],
         ],
       },
       smoothCaret: {
@@ -5929,7 +5642,7 @@
       {
         id: 'interaction',
         title: ui.grpInteraction || 'Slider, Caret & Mascot',
-        keys: ['periodicSelector', 'effortSliderStyle', 'effortAccent', 'performanceBackdrop', 'smoothCaret', 'mascot', 'homeRipple'],
+        keys: ['periodicSelector', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
       },
       {
         id: 'telemetry',
@@ -5993,7 +5706,7 @@
           }
           saveSetting(r.key, val);
           syncCondDims(sec);
-          if (r.key === 'effortSliderStyle' || r.key === 'effortAccent' || r.key === 'performanceBackdrop') {
+          if (r.key === 'effortSliderStyle' || r.key === 'effortAccent') {
             refreshOpenEffortPopover();
           }
         });
@@ -6081,7 +5794,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-context-ring, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-perf-backdrop, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, #' +
+        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-style-css'
       )
@@ -6589,7 +6302,7 @@
       });
       document
         .querySelectorAll(
-          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-perf-backdrop, #' + SETTINGS_SEC_ID
+          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #' + SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());
       const html = document.documentElement;
@@ -6604,7 +6317,6 @@
           'data-ag-cs-sidebar-compact',
           'data-ag-cs-hud-compact',
           'data-ag-cs-effort-accent',
-          'data-ag-cs-perf-backdrop',
           'data-ag-cs-lang',
           'data-ag-cs-cjk',
         ]) {

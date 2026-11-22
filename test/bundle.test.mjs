@@ -330,16 +330,14 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.equal(editorWrap.getAttribute('data-ag-cs-caret-host'), '1');
     assert.ok(editorWrap.querySelector('.ag-cs-smooth-caret'));
 
-    // Interactive Thinking Effort Slider Popover (Claude Code & ChatGPT Performance Styles — NO inline style switch)
-    assert.equal(sandbox.globalThis.__agCsPerfAssets.FRAME_COUNT, 31);
-    assert.ok(sandbox.globalThis.__agCsPerfAssets.frames.every((u) => u.startsWith('data:image/webp;base64,')));
+    // Interactive Thinking Effort Slider Popover (Claude Code & ChatGPT Codex Styles — NO inline style switch)
+    assert.equal(sandbox.globalThis.__agCsPerfAssets, undefined);
 
     sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn);
     const effortPop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(effortPop);
     assert.equal(effortPop.getAttribute('data-effort-style'), 'claude');
     assert.equal(effortPop.getAttribute('data-effort-theme'), 'dark');
-    assert.equal(effortPop.getAttribute('data-perf-theme'), 'dark');
     assert.ok(effortPop.innerHTML.includes('ag-cs-effort-matrix'));
     assert.ok(effortPop.innerHTML.includes('ag-cs-effort-knob'));
     assert.ok(effortPop.innerHTML.includes('ag-cs-effort-value-slot'));
@@ -352,7 +350,6 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(effortPop.getAttribute('data-effort-theme'), 'light');
-    assert.equal(effortPop.getAttribute('data-perf-theme'), 'light');
     body.className = 'theme-dark';
 
     // Switch Effort Slider to ChatGPT (Codex) style via settings refresh
@@ -360,7 +357,6 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     sandbox.window.__agClaudeStyle.refreshConfig({
       ...cdp.DEFAULT_CONFIG,
       effortSliderStyle: 'chatgpt',
-      performanceBackdrop: 'page',
     });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
@@ -376,30 +372,6 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.ok(codexPop.innerHTML.includes('ag-cs-codex-stars'));
     assert.equal((codexPop.innerHTML.match(/class="ag-cs-codex-star"/g) || []).length, 22);
     assert.ok(codexPop.innerHTML.includes('ag-cs-codex-knob'));
-    assert.equal(body.querySelector('.ag-cs-perf-backdrop'), null);
-
-    // Switch Effort Slider to Liang Wufeng (31-frame performance portrait) + page backdrop
-    doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({
-      ...cdp.DEFAULT_CONFIG,
-      effortSliderStyle: 'liangwufeng',
-      performanceBackdrop: 'page',
-    });
-    await new Promise((r) => setTimeout(r, 80));
-    doc.hidden = false;
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn); // closes Codex
-    sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn); // reopens in liangwufeng style
-    const lwfPop = body.querySelector('.ag-cs-effort-popover');
-    assert.ok(lwfPop);
-    assert.equal(lwfPop.getAttribute('data-effort-style'), 'liangwufeng');
-    assert.equal(lwfPop.getAttribute('data-effort-theme'), 'dark');
-    assert.ok(lwfPop.innerHTML.includes('ag-cs-chatgpt-rail'));
-    assert.ok(lwfPop.innerHTML.includes('ag-cs-perf-bar'));
-    assert.ok(lwfPop.innerHTML.includes('ag-cs-perf-thumb'));
-    assert.ok(lwfPop.innerHTML.includes('ag-cs-perf-ticks'));
-    assert.equal(lwfPop.innerHTML.includes('ag-cs-perf-status'), false);
-    assert.equal(lwfPop.innerHTML.includes('ag-cs-effort-style-switch'), false);
-    assert.ok(body.querySelector('.ag-cs-perf-backdrop'));
 
     // Context HUD popover opens cleanly with NO embedded settings controls, concise tab names, and clamps maxHeight on short viewports
     sandbox.window.innerHeight = 650;
@@ -433,14 +405,12 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.ok(hudDetails);
     assert.equal(hudDetails.hasAttribute('open'), false);
     const claudeCondRow = settingsSec.querySelector('[data-ag-cs-cond="claude"]');
-    const lwfCondRow = settingsSec.querySelector('[data-ag-cs-cond="liangwufeng"]');
-    assert.equal(claudeCondRow?.getAttribute('data-ag-cs-dim'), '1'); // because liangwufeng is currently active
-    assert.equal(lwfCondRow?.hasAttribute('data-ag-cs-dim'), false);
+    assert.equal(claudeCondRow?.getAttribute('data-ag-cs-dim'), '1'); // because chatgpt is currently active
 
     const settingKeys = new Set(
       appearancePanel.querySelectorAll('#ag-cs-settings-sec button').map((b) => b.getAttribute('data-ag-cs-key'))
     );
-    assert.equal(settingKeys.size, 21);
+    assert.equal(settingKeys.size, 20);
     for (const expectedKey of [
       'language',
       'homeLayout',
@@ -451,7 +421,6 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
       'periodicSelector',
       'effortSliderStyle',
       'effortAccent',
-      'performanceBackdrop',
       'smoothCaret',
       'mascot',
       'homeRipple',
@@ -510,15 +479,15 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
 
     // Also verify live open Effort Popover refreshes across languages
     sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn);
-    const activeLwfPop = body.querySelector('.ag-cs-effort-popover');
-    assert.ok(activeLwfPop);
-    assert.ok(activeLwfPop.innerHTML.includes('性能 · PERFORMANCE'));
+    const activeEffortPop = body.querySelector('.ag-cs-effort-popover');
+    assert.ok(activeEffortPop);
+    assert.ok(activeEffortPop.innerHTML.includes('推理等级'));
     getLangBtns().find((b) => b.getAttribute('data-ag-cs-val') === '"ja"').dispatch('click');
-    assert.ok(activeLwfPop.innerHTML.includes('パフォーマンス'));
+    assert.ok(activeEffortPop.innerHTML.includes('推論レベル'));
     getLangBtns().find((b) => b.getAttribute('data-ag-cs-val') === '"en"').dispatch('click');
-    assert.ok(activeLwfPop.innerHTML.includes('PERFORMANCE'));
+    assert.ok(activeEffortPop.innerHTML.includes('Reasoning effort'));
     getLangBtns().find((b) => b.getAttribute('data-ag-cs-val') === '"zh-CN"').dispatch('click');
-    assert.ok(activeLwfPop.innerHTML.includes('性能 · PERFORMANCE'));
+    assert.ok(activeEffortPop.innerHTML.includes('推理等级'));
 
     assert.deepEqual(
       bindingCalls.map((c) => [c.key, c.value]),
@@ -535,13 +504,12 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     );
     appearanceH2.textContent = '外观';
 
-    // Refreshing config to chatgpt (Codex) dims BOTH claude and liangwufeng sub-rows
+    // Refreshing config to chatgpt (Codex) dims claude sub-row
     doc.hidden = true;
     sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'chatgpt' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(appearancePanel.querySelector('[data-ag-cs-cond="claude"]')?.getAttribute('data-ag-cs-dim'), '1');
-    assert.equal(appearancePanel.querySelector('[data-ag-cs-cond="liangwufeng"]')?.getAttribute('data-ag-cs-dim'), '1');
 
     // Refreshing config externally syncs open Settings buttons & conditional row dimming immediately
     doc.hidden = true;
@@ -550,9 +518,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     doc.hidden = false;
     assert.equal(html.getAttribute('data-ag-cs-palette'), 'claude');
     assert.equal(html.getAttribute('data-ag-cs-effort-accent'), 'on');
-    assert.equal(html.getAttribute('data-ag-cs-perf-backdrop'), 'card');
     assert.equal(appearancePanel.querySelector('[data-ag-cs-cond="claude"]')?.hasAttribute('data-ag-cs-dim'), false);
-    assert.equal(appearancePanel.querySelector('[data-ag-cs-cond="liangwufeng"]')?.getAttribute('data-ag-cs-dim'), '1');
     const claudeBtn = appearancePanel
       .querySelectorAll('#ag-cs-settings-sec button')
       .find((b) => b.getAttribute('data-ag-cs-key') === 'palette' && b.getAttribute('data-ag-cs-val') === '"claude"');
@@ -572,13 +538,10 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.ok(rem.removed >= 1);
     assert.equal(html.hasAttribute('data-ag-cs-style'), false);
     assert.equal(html.hasAttribute('data-ag-cs-effort-accent'), false);
-    assert.equal(html.hasAttribute('data-ag-cs-perf-backdrop'), false);
     assert.equal(html.hasAttribute('data-ag-cs-lang'), false);
     assert.equal(html.hasAttribute('data-ag-cs-cjk'), false);
     assert.equal(sandbox.globalThis.__agCsEffortCore, undefined);
-    assert.equal(sandbox.globalThis.__agCsPerfAssets, undefined);
     assert.equal(sandbox.globalThis.__agCsCleanups, undefined);
-    assert.equal(body.querySelector('.ag-cs-perf-backdrop'), null);
     assert.equal(h1.textContent, 'Welcome back, girl. Where should we pick up?');
     assert.equal(placeholder.hasAttribute('data-ag-cs-placeholder'), false);
     assert.equal(effortSpan.hasAttribute('data-ag-cs-effort'), false);
@@ -927,7 +890,6 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
     const pop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(pop);
     assert.equal(pop.getAttribute('data-effort-theme'), 'light');
-    assert.equal(pop.getAttribute('data-perf-theme'), 'light');
     assert.equal(pop.querySelector('.ag-cs-effort-value')?.textContent.trim(), 'Extra');
 
     const knob = pop.querySelector('.ag-cs-effort-knob');
@@ -961,35 +923,6 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
     assert.equal(pop.querySelector('.ag-cs-codex-value')?.textContent.trim(), 'Low');
     codexTrack.dispatch('keydown', { key: 'End' });
     assert.equal(pop.querySelector('.ag-cs-codex-value')?.textContent.trim(), 'Extra');
-
-    // 2b. Switch to Liang Wufeng mode: preserves "Extra" in meta, verifies card scrim & translucent page backdrop, omits idle status until tick hover/click
-    doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'liangwufeng', hudTopBar: true });
-    await new Promise((r) => setTimeout(r, 80));
-    doc.hidden = false;
-
-    const bgEl = pop.querySelector('.ag-cs-perf-card-bg');
-    assert.ok(bgEl?.style?.backgroundImage.includes('76%'), 'Expected tightened 76% stop in card scrim');
-
-    const meta = pop.querySelector('.ag-cs-perf-meta');
-    assert.ok(meta?.textContent.includes('Extra'), `Expected Extra in meta, got: ${meta?.textContent}`);
-    assert.equal(pop.querySelector('.ag-cs-perf-status'), null);
-
-    const firstTick = pop.querySelector('.ag-cs-perf-tick');
-    firstTick.dispatch('mouseenter');
-    assert.ok(pop.querySelector('.ag-cs-perf-status'));
-    firstTick.dispatch('mouseleave');
-    assert.equal(pop.querySelector('.ag-cs-perf-status'), null);
-    firstTick.dispatch('click');
-    assert.ok(pop.querySelector('.ag-cs-perf-status'));
-
-    doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'liangwufeng', performanceBackdrop: 'page', hudTopBar: true });
-    await new Promise((r) => setTimeout(r, 80));
-    doc.hidden = false;
-    const pageBgEl = pop.querySelector('.ag-cs-perf-card-bg');
-    assert.ok(pageBgEl);
-    assert.equal((pageBgEl.style.backgroundImage.match(/linear-gradient\(/g) || []).length, 1, 'Expected only translucent scrim linear-gradient in page mode');
 
     // 3. Clicking XHigh from High when host dynamically sets badge to " Extra" updates open popover to "Extra"
     doc.hidden = true;

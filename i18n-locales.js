@@ -103,8 +103,6 @@
     effortTitle: ['推理等级', '推理等級', '推理等級', 'Reasoning effort', '推論レベル'],
     effortFaster: ['更快', '更快', '更快', 'Faster', '高速'],
     effortSmarter: ['更强', '更強', '更強', 'Smarter', '高精度'],
-    perfKicker: ['性能 · PERFORMANCE', '效能 · PERFORMANCE', '效能 · PERFORMANCE', 'PERFORMANCE', 'パフォーマンス'],
-    perfSliderAria: ['性能滑块', '效能滑桿', '效能滑桿', 'Performance slider', 'パフォーマンススライダー'],
 
     // ── Settings Panel ───────────────────────────────────────────────────────
     grpAppearance: ['外观与版面', '外觀與版面', '外觀同版面', 'Appearance & Layout', '外観とレイアウト'],
@@ -112,7 +110,6 @@
     grpTelemetry: ['Token 用量与环绕 HUD', 'Token 用量與環繞 HUD', 'Token 用量同環繞 HUD', 'Usage Ring & HUD', '使用量リングと HUD'],
     hudSummaryLabel: ['输入框环绕 HUD（可选增强）', '輸入框環繞 HUD（可選增強）', '輸入框環繞 HUD（可選增強）', 'Composer Surround HUD (Optional)', '入力欄サラウンド HUD（オプション）'],
     badgeClaude: ['仅 Claude Code', '僅 Claude Code', '只限 Claude Code', 'Claude Code', 'Claude Code のみ'],
-    badgeLwf: ['仅 梁武峰', '僅 梁武峰', '只限 梁武峰', 'Liang Wufeng', '梁武峰 のみ'],
     onLabel: ['开启', '開啟', '開啟', 'On', 'オン'],
     offLabel: ['关闭', '關閉', '關閉', 'Off', 'オフ'],
 
@@ -173,13 +170,12 @@
     ],
     setEffortStyleTitle: ['思考强度滑块风格', '思考強度滑桿風格', '思考強度滑桿風格', 'Thinking Effort Slider Style', '推論レベルスライダースタイル'],
     setEffortStyleDesc: [
-      '点击模型名右侧思考等级徽章弹出调节器：支持 Claude Code 像素矩阵、ChatGPT Codex 星空能量条与 梁武峰 性能人像风格。',
-      '點擊模型名稱右側思考等級徽章彈出調節器：支援 Claude Code 像素矩陣、ChatGPT Codex 星空能量條與 梁武峰 效能人像風格。',
-      '撳模型名右邊嘅思考等級徽章彈出調節器：支援 Claude Code 像素矩陣、ChatGPT Codex 星空能量條同 梁武峰 效能人像風格。',
-      'Style of the interactive effort slider popover (Claude Code, ChatGPT Codex, or Liang Wufeng portrait).',
+      '点击模型名右侧思考等级徽章弹出调节器：支持 Claude Code 像素矩阵与 ChatGPT Codex 星空能量条风格。',
+      '點擊模型名稱右側思考等級徽章彈出調節器：支援 Claude Code 像素矩陣與 ChatGPT Codex 星空能量條風格。',
+      '撳模型名右邊嘅思考等級徽章彈出調節器：支援 Claude Code 像素矩陣同 ChatGPT Codex 星空能量條風格。',
+      'Style of the interactive effort slider popover (Claude Code or ChatGPT Codex).',
       'モデル横の推論バッジクリック時に開くスライダーのデザインを選択します。',
     ],
-    optLiangWufeng: ['梁武峰', '梁武峰', '梁武峰', 'Liang Wufeng', '梁武峰'],
     setEffortAccentTitle: ['Claude 推理色阶强调', 'Claude 推理色階強調', 'Claude 推理色階強調', 'Claude Effort Color Accent', 'Claude 推論カラー強調'],
     setEffortAccentDesc: [
       '控制 Claude 推理滑块与顶部像素矩阵是否使用蓝紫梯度着色，关闭后为极简黑白灰。',
@@ -188,16 +184,6 @@
       'Use blue-violet effort tint ramp on Claude slider & pixel matrix.',
       'Claude スライダーとドットマトリクスに青紫グラデーションを適用します。',
     ],
-    setPerfBackdropTitle: ['梁武峰 性能人像背景', '梁武峰 效能人像背景', '梁武峰 效能人像背景', 'Liang Wufeng Portrait Backdrop', '梁武峰 ポートレート背景'],
-    setPerfBackdropDesc: [
-      '控制 梁武峰 性能滑块打开时的 31 帧人像背景展示位置。',
-      '控制 梁武峰 效能滑桿開啟時的 31 影格人像背景顯示位置。',
-      '控制 梁武峰 效能滑桿開咗嗰陣 31 格人像背景顯示喺邊。',
-      'Where the 31-frame cutout portrait renders in Liang Wufeng mode.',
-      '梁武峰モード時の 31 フレーム背景表示位置を設定します。',
-    ],
-    optBackdropCard: ['仅滑块卡片', '僅滑桿卡片', '只限滑桿卡片', 'Card', 'カード内'],
-    optBackdropPage: ['全窗口背景', '全視窗背景', '成個視窗背景', 'Window', 'ウィンドウ全体'],
     setSmoothCaretTitle: ['打字光标流畅滑动', '打字游標流暢滑動', '打字游標流暢滑動', 'Smooth Typing Caret', 'スムーズ入力カーソル'],
     setSmoothCaretDesc: [
       '为底部输入框启用丝滑光标位移插值动画。',
@@ -422,27 +408,6 @@
       if (lang === 'yue') return `剩低可用 ${remStr} / ${maxStr} (${remPctStr}%) · 用咗 ${usedStr} (${usedPctStr}%)${qTip}`;
       if (lang === 'ja') return `残り ${remStr} / ${maxStr} (${remPctStr}%) · 使用済 ${usedStr} (${usedPctStr}%)${qTip}`;
       return `Remaining ${remStr} / ${maxStr} (${remPctStr}%) · Used ${usedStr} (${usedPctStr}%)${qTip}`;
-    };
-    out.perfPreviewStatus = (frameStr, modelShort, subTitle, fullLabel) => {
-      if (lang === 'zh-CN') return `预览帧 ${frameStr} · 松手吸附到 ${modelShort} ${subTitle}`;
-      if (lang === 'zh-TW') return `預覽影格 ${frameStr} · 放開吸附至 ${modelShort} ${subTitle}`;
-      if (lang === 'yue') return `預覽第 ${frameStr} 格 · 放手揀 ${modelShort} ${subTitle}`;
-      if (lang === 'ja') return `フレーム ${frameStr} · 離して ${fullLabel} を選択`;
-      return `Frame ${frameStr} · Release to select ${fullLabel}`;
-    };
-    out.perfCommittedStatus = (num, fullLabel) => {
-      if (lang === 'zh-CN') return `已落到档位 ${num}：${fullLabel}`;
-      if (lang === 'zh-TW') return `已切換至檔位 ${num}：${fullLabel}`;
-      if (lang === 'yue') return `已揀第 ${num} 級：${fullLabel}`;
-      if (lang === 'ja') return `プリセット ${num}：${fullLabel}`;
-      return `Preset ${num}: ${fullLabel}`;
-    };
-    out.perfHoverStatus = (num, fullLabel) => {
-      if (lang === 'zh-CN') return `切换到档位 ${num}：${fullLabel}`;
-      if (lang === 'zh-TW') return `切換到檔位 ${num}：${fullLabel}`;
-      if (lang === 'yue') return `轉去第 ${num} 級：${fullLabel}`;
-      if (lang === 'ja') return `プリセット ${num} に切替：${fullLabel}`;
-      return `Select preset ${num}: ${fullLabel}`;
     };
     return out;
   }
