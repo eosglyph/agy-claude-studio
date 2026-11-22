@@ -129,9 +129,18 @@
   const DETENT = 0.8;
   const DRAG_THRESHOLD_PX = 3;
 
+  function stripContextWindowSuffix(label) {
+    return String(label || '')
+      .trim()
+      .replace(/\s*[·•]\s*(?:\d+(?:\.\d+)?\s*[kKmM](?:\s*(?:ctx|context|tokens?))?|standard|extended)\s*$/i, '')
+      .trim();
+  }
+
   function parseModelLabelEffort(label) {
-    const raw = String(label || '').trim();
-    const m = raw.match(/^(.+?)\s*(?:\((None|Off|Minimal|Light|Low|Medium|High|Extra|XHigh|Max|Ultra)\)|\s+(None|Off|Minimal|Light|Low|Medium|High|Extra|XHigh|Max|Ultra))\s*$/i);
+    const raw = stripContextWindowSuffix(label);
+    const m = raw.match(
+      /^(.+?)\s*(?:\((None|Off|Minimal|Light|Low|Medium|High|Extra|XHigh|Max|Ultra)(?:\s+Thinking)?\)|\s+(None|Off|Minimal|Light|Low|Medium|High|Extra|XHigh|Max|Ultra))\s*$/i
+    );
     if (!m) return { base: raw, effort: '' };
     const rawEff = (m[2] || m[3] || '').toLowerCase();
     return {
@@ -676,6 +685,7 @@
     effortTierDesc,
     DETENT,
     DRAG_THRESHOLD_PX,
+    stripContextWindowSuffix,
     parseModelLabelEffort,
     orderEffortSteps,
     resolveClaudeEffortSteps,

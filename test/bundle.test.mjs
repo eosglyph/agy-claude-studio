@@ -195,7 +195,12 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
   html.appendChild(head);
   html.appendChild(body);
 
-  // Build simulated Antigravity Home DOM
+  // Build simulated Antigravity top-right pane toolbar + Home DOM
+  const paneToolbar = makeNode('div', { attrs: { 'data-testid': 'pane-titlebar-toolbar' } });
+  const existingToolbarBtn = makeNode('button', { text: 'Split' });
+  paneToolbar.appendChild(existingToolbarBtn);
+  body.appendChild(paneToolbar);
+
   const home = makeNode('div', { className: 'agy-home' });
   const scrollWrap = makeNode('div');
   const scrollCol = makeNode('div');
@@ -304,7 +309,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     const res = vm.runInNewContext(cdp.buildInjectExpression(cdp.DEFAULT_CONFIG), sandbox);
     assert.equal(res.status, 'ok');
     assert.equal(html.getAttribute('data-ag-cs-style'), '1');
-    assert.equal(html.getAttribute('data-ag-cs-palette'), 'obsidian');
+    assert.equal(html.getAttribute('data-ag-cs-palette'), 'claude');
     assert.equal(html.getAttribute('data-ag-cs-home'), 'studio');
     assert.equal(h1.textContent, "What's up next?");
     assert.equal(placeholder.getAttribute('data-ag-cs-placeholder'), '描述任务或提出问题');
@@ -333,6 +338,12 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     // Interactive Thinking Effort Slider Popover (Claude Code & ChatGPT Codex Styles — NO inline style switch)
     assert.equal(sandbox.globalThis.__agCsPerfAssets, undefined);
 
+    // Switch to Claude Code effort style explicitly to test Claude slider popover
+    doc.hidden = true;
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude' });
+    await new Promise((r) => setTimeout(r, 80));
+    doc.hidden = false;
+
     sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn);
     const effortPop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(effortPop);
@@ -346,7 +357,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     // Light theme (even under obsidian/claude palettes) must update popover theme attributes to "light"
     body.className = 'theme-light';
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'obsidian' });
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude', palette: 'obsidian' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(effortPop.getAttribute('data-effort-theme'), 'light');
@@ -356,6 +367,7 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     doc.hidden = true;
     sandbox.window.__agClaudeStyle.refreshConfig({
       ...cdp.DEFAULT_CONFIG,
+      usageStatsEnabled: true,
       effortSliderStyle: 'chatgpt',
     });
     await new Promise((r) => setTimeout(r, 80));
@@ -390,140 +402,53 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.equal(ctxPop.innerHTML.includes('Token HUD 与圆环快捷设置'), false);
     assert.equal(ctxPop.innerHTML.includes('data-hud-key'), false);
 
-    // Settings section must mount ONLY in Appearance, NOT General, grouped cleanly into 3 cards + collapsible HUD details
+    // Legacy Settings -> Appearance section must NOT be injected (settings now live in right Aux Pane)
     assert.equal(generalPanel.querySelector('#ag-cs-settings-sec'), null);
-    const settingsSec = appearancePanel.querySelector('#ag-cs-settings-sec');
-    assert.ok(settingsSec);
-    assert.equal(settingsSec.querySelector('h3')?.textContent, 'AGY Claude Style (agy-claude-style)');
-    const settingGroups = settingsSec.querySelectorAll('.ag-cs-settings-group');
-    assert.equal(settingGroups.length, 3);
-    assert.deepEqual(
-      settingGroups.map((g) => g.getAttribute('data-ag-cs-group')),
-      ['appearance', 'interaction', 'telemetry']
-    );
-    const hudDetails = settingsSec.querySelector('.ag-cs-settings-details');
-    assert.ok(hudDetails);
-    assert.equal(hudDetails.hasAttribute('open'), false);
-    const claudeCondRow = settingsSec.querySelector('[data-ag-cs-cond="claude"]');
-    assert.equal(claudeCondRow?.getAttribute('data-ag-cs-dim'), '1'); // because chatgpt is currently active
+    assert.equal(appearancePanel.querySelector('#ag-cs-settings-sec'), null);
 
-    const settingKeys = new Set(
-      appearancePanel.querySelectorAll('#ag-cs-settings-sec button').map((b) => b.getAttribute('data-ag-cs-key'))
-    );
-    assert.equal(settingKeys.size, 20);
-    for (const expectedKey of [
-      'language',
-      'homeLayout',
-      'palette',
-      'logoInk',
-      'sidebarRestyle',
-      'composerRestyle',
-      'periodicSelector',
-      'effortSliderStyle',
-      'effortAccent',
-      'smoothCaret',
-      'mascot',
-      'homeRipple',
-      'inlineStats',
-      'ringMode',
-      'turnBadges',
-      'hudTopBar',
-      'hudBottomBar',
-      'hudRimProgress',
-      'hudFooterChip',
-      'hudCompact',
-    ]) {
-      assert.ok(settingKeys.has(expectedKey), `Missing settings control for ${expectedKey}`);
-    }
-
-    // Verify all 5 language buttons exist in Appearance settings and clicking switches UI + emits CDP binding
-    const bindingCalls = [];
-    sandbox[cdp.SETTING_BINDING] = (payload) => bindingCalls.push(JSON.parse(payload));
-    const getLangBtns = () =>
-      appearancePanel
-        .querySelectorAll('#ag-cs-settings-sec button')
-        .filter((b) => b.getAttribute('data-ag-cs-key') === 'language');
-    assert.deepEqual(
-      getLangBtns().map((b) => [b.getAttribute('data-ag-cs-val'), b.textContent]),
-      [
-        ['"zh-CN"', '简体中文'],
-        ['"zh-TW"', '繁體中文'],
-        ['"yue"', '粵語'],
-        ['"en"', 'English'],
-        ['"ja"', '日本語'],
-      ]
-    );
-
-    const checkLangSwitch = (targetLang, hostTitle, expectedSettingsLangTitle, expectedOverviewTab, expectedPlaceholder, expectedQuotaTab) => {
-      appearanceH2.textContent = hostTitle;
-      const btn = getLangBtns().find((b) => b.getAttribute('data-ag-cs-val') === JSON.stringify(targetLang));
-      assert.ok(btn, `Expected language button for ${targetLang}`);
-      btn.dispatch('click');
+    // Verify all 5 languages refresh live across home dashboard, composer placeholder, context popover, and effort popover
+    const checkLangSwitch = async (targetLang, expectedOverviewTab, expectedPlaceholder, expectedQuotaTab) => {
+      doc.hidden = true;
+      sandbox.window.__agClaudeStyle.refreshConfig({
+        ...cdp.DEFAULT_CONFIG,
+        usageStatsEnabled: true,
+        language: targetLang,
+      });
+      await new Promise((r) => setTimeout(r, 60));
+      doc.hidden = false;
       assert.equal(html.getAttribute('data-ag-cs-lang'), targetLang);
-      const secNow = appearancePanel.querySelector('#ag-cs-settings-sec');
-      assert.ok(secNow, `Settings section should stay mounted when Appearance title is ${hostTitle}`);
-      assert.equal(secNow.getAttribute('data-ag-cs-lang'), targetLang);
-      assert.equal(secNow.querySelector('[data-ag-cs-row="language"] [data-k="t"]')?.textContent, expectedSettingsLangTitle);
       assert.equal(home.querySelector('.ag-cs-home-tab[data-tab="overview"]')?.textContent, expectedOverviewTab);
       assert.equal(placeholder.getAttribute('data-ag-cs-placeholder'), expectedPlaceholder);
       assert.ok(ctxPop.innerHTML.includes(expectedQuotaTab));
     };
 
-    checkLangSwitch('zh-TW', '外觀', '介面語言', '概覽', '描述任務或提出問題', '模型配額');
-    checkLangSwitch('yue', '外觀', '介面語言', '概覽', '寫低你想做嘅任務或者問題', '模型配額');
-    checkLangSwitch('en', 'Appearance', 'Interface Language', 'Overview', 'How can I help you today?', 'Quotas');
+    await checkLangSwitch('zh-TW', '概覽', '描述任務或提出問題', '模型配額');
+    await checkLangSwitch('yue', '概覽', '寫低你想做嘅任務或者問題', '模型配額');
+    await checkLangSwitch('en', 'Overview', 'How can I help you today?', 'Quotas');
     assert.equal(html.hasAttribute('data-ag-cs-cjk'), false);
-    checkLangSwitch('ja', '外観', '表示言語', '概要', 'タスクの説明や質問を入力してください', 'クォータ');
+    await checkLangSwitch('ja', '概要', 'タスクの説明や質問を入力してください', 'クォータ');
     assert.equal(html.getAttribute('data-ag-cs-cjk'), '1');
-    checkLangSwitch('zh-CN', '外观', '界面语言', '概览', '描述任务或提出问题', '模型配额');
+    await checkLangSwitch('zh-CN', '概览', '描述任务或提出问题', '模型配额');
 
     // Also verify live open Effort Popover refreshes across languages
     sandbox.window.__agClaudeStyle.openEffortPopover(effortSpan, modelBtn);
     const activeEffortPop = body.querySelector('.ag-cs-effort-popover');
     assert.ok(activeEffortPop);
     assert.ok(activeEffortPop.innerHTML.includes('推理等级'));
-    getLangBtns().find((b) => b.getAttribute('data-ag-cs-val') === '"ja"').dispatch('click');
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'ja' });
     assert.ok(activeEffortPop.innerHTML.includes('推論レベル'));
-    getLangBtns().find((b) => b.getAttribute('data-ag-cs-val') === '"en"').dispatch('click');
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'en' });
     assert.ok(activeEffortPop.innerHTML.includes('Reasoning effort'));
-    getLangBtns().find((b) => b.getAttribute('data-ag-cs-val') === '"zh-CN"').dispatch('click');
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'zh-CN' });
     assert.ok(activeEffortPop.innerHTML.includes('推理等级'));
 
-    assert.deepEqual(
-      bindingCalls.map((c) => [c.key, c.value]),
-      [
-        ['language', 'zh-TW'],
-        ['language', 'yue'],
-        ['language', 'en'],
-        ['language', 'ja'],
-        ['language', 'zh-CN'],
-        ['language', 'ja'],
-        ['language', 'en'],
-        ['language', 'zh-CN'],
-      ]
-    );
-    appearanceH2.textContent = '外观';
-
-    // Refreshing config to chatgpt (Codex) dims claude sub-row
-    doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'chatgpt' });
-    await new Promise((r) => setTimeout(r, 80));
-    doc.hidden = false;
-    assert.equal(appearancePanel.querySelector('[data-ag-cs-cond="claude"]')?.getAttribute('data-ag-cs-dim'), '1');
-
-    // Refreshing config externally syncs open Settings buttons & conditional row dimming immediately
+    // Refreshing palette externally updates palette attribute immediately
     doc.hidden = true;
     sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'claude' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(html.getAttribute('data-ag-cs-palette'), 'claude');
     assert.equal(html.getAttribute('data-ag-cs-effort-accent'), 'on');
-    assert.equal(appearancePanel.querySelector('[data-ag-cs-cond="claude"]')?.hasAttribute('data-ag-cs-dim'), false);
-    const claudeBtn = appearancePanel
-      .querySelectorAll('#ag-cs-settings-sec button')
-      .find((b) => b.getAttribute('data-ag-cs-key') === 'palette' && b.getAttribute('data-ag-cs-val') === '"claude"');
-    assert.equal(claudeBtn.getAttribute('aria-pressed'), 'true');
-    assert.equal(claudeBtn.hasAttribute('data-pressed'), true);
 
     // Effort word-boundary guard: "Flow" inside a model label must not be tagged "low"
     effortSpan.textContent = 'Flow';
@@ -531,15 +456,35 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'obsidian' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
+    assert.equal(html.getAttribute('data-ag-cs-palette'), 'obsidian');
     assert.equal(effortSpan.hasAttribute('data-ag-cs-effort'), false);
 
+    // Standalone Glass Effect toggle & no top-bar theme capsule
+    assert.equal(paneToolbar.querySelector('#ag-cs-theme-selector'), null, 'Top-bar theme capsule must not mount');
+    assert.equal(html.getAttribute('data-ag-cs-glass'), 'on', 'glassEffect defaults to on');
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, glassEffect: false });
+    assert.equal(html.getAttribute('data-ag-cs-glass'), 'off');
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, glassEffect: true });
+    assert.equal(html.getAttribute('data-ag-cs-glass'), 'on');
+
+    // Legacy aurora palette in config sanitizes cleanly to obsidian
+    assert.equal(cdp.sanitizeConfig({ palette: 'gemini' }).palette, 'obsidian');
+    assert.equal(cdp.sanitizeConfig({ paletteEnabled: false, palette: 'gemini' }).palette, 'host');
     // Teardown must cleanly remove everything and restore host greeting text!
     const rem = vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
     assert.ok(rem.removed >= 1);
     assert.equal(html.hasAttribute('data-ag-cs-style'), false);
     assert.equal(html.hasAttribute('data-ag-cs-effort-accent'), false);
+    assert.equal(html.hasAttribute('data-ag-cs-glass'), false);
     assert.equal(html.hasAttribute('data-ag-cs-lang'), false);
     assert.equal(html.hasAttribute('data-ag-cs-cjk'), false);
+    assert.equal(html.hasAttribute('data-ag-custom-theme'), false);
+    assert.equal(html.hasAttribute('data-aux-pane-maximized'), false);
+    assert.equal(html.style.getPropertyValue('--antigravity-active-theme-id'), '');
+    assert.equal(head.querySelector('#ag-cs-aurora-theme-css'), null);
+    assert.equal(paneToolbar.querySelector('#ag-cs-theme-selector'), null);
+    assert.equal(body.querySelector('#ag-cs-theme-dropdown'), null);
+    assert.equal(sandbox.globalThis.__agCsCustomThemes, undefined);
     assert.equal(sandbox.globalThis.__agCsEffortCore, undefined);
     assert.equal(sandbox.globalThis.__agCsCleanups, undefined);
     assert.equal(h1.textContent, 'Welcome back, girl. Where should we pick up?');
@@ -882,7 +827,7 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
   sandbox.globalThis = sandbox;
 
   try {
-    vm.runInNewContext(cdp.buildInjectExpression(), sandbox);
+    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude' }), sandbox);
     assert.equal(winListeners.get('resize')?.size || 0, 1);
 
     // 1. Open Claude slider on Light theme + Extra badge + scaled getBoundingClientRect()
@@ -1188,7 +1133,7 @@ test('bottom-right context ring navigates directly to quotas or breakdown tab ba
   sandbox.globalThis = sandbox;
 
   try {
-    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, ringMode: 'context' }), sandbox);
+    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'context' }), sandbox);
     await new Promise((r) => setTimeout(r, 80));
 
     const ringBtn = footer.querySelector('.ag-cs-context-ring');
@@ -1200,7 +1145,7 @@ test('bottom-right context ring navigates directly to quotas or breakdown tab ba
     pop?.querySelector('.ag-cs-ctx-close')?.dispatch('click');
 
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, ringMode: 'quota' });
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
 
@@ -1459,7 +1404,7 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
 
   try {
     const res = vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, ringMode: 'quota', hudFooterChip: true, hudTopBar: true }),
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota', hudFooterChip: true, hudTopBar: true }),
       sandbox
     );
     assert.equal(res.status, 'ok');
@@ -1502,7 +1447,7 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
     };
     convView.appendChild(inputBox);
     body.appendChild(convView);
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, ringMode: 'quota' });
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
     await new Promise((r) => setTimeout(r, 60));
 
     assert.ok(footer.querySelector('.ag-cs-inline-stats'), 'Expected inline stats during Turn 1 before generatorMetadata');
@@ -1533,7 +1478,7 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
       },
     };
     doc.hidden = true;
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, ringMode: 'quota' });
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota' });
     await new Promise((r) => setTimeout(r, 60));
     doc.hidden = false;
 
@@ -2062,7 +2007,7 @@ test('ring and popover stay live despite static trajectorySummaries and non-root
   sandbox.globalThis = sandbox;
 
   try {
-    const res = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, ringMode: 'context' }), sandbox);
+    const res = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'context' }), sandbox);
     assert.equal(res.status, 'ok');
     await new Promise((r) => setTimeout(r, 40));
 
@@ -2418,7 +2363,7 @@ test('syncTurnBadges mounts exactly one #T badge on the final agent-response of 
   sandbox.globalThis = sandbox;
 
   try {
-    const res = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, turnBadges: true }), sandbox);
+    const res = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, turnBadges: true }), sandbox);
     assert.equal(res.status, 'ok');
     await new Promise((r) => setTimeout(r, 80));
 
@@ -2703,7 +2648,7 @@ test('streaming Turn 2 response does not hijack #T1 badge, observer ignores exte
 
   try {
     const res = vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, turnBadges: true, pollIntervalMs: 3200 }),
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, turnBadges: true, pollIntervalMs: 3200 }),
       sandbox
     );
     assert.equal(res.status, 'ok');
@@ -3005,7 +2950,7 @@ test('virtualized 20-turn chat with thinking Turn 21 never leaks #T11 or #T20 on
 
   try {
     const res = vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, turnBadges: true }),
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, turnBadges: true }),
       sandbox
     );
     assert.equal(res.status, 'ok');
@@ -3391,6 +3336,7 @@ test('remote (cloud) conversation populates Token HUD, top bar, turn badges, and
     const res = vm.runInNewContext(
       cdp.buildInjectExpression({
         ...cdp.DEFAULT_CONFIG,
+        usageStatsEnabled: true,
         ringMode: 'quota',
         hudTopBar: true,
         hudBottomBar: true,
@@ -3723,7 +3669,7 @@ test('fallback to createAgentStateProviderForConvo when getCascadeTrajectory thr
   sandbox.globalThis = sandbox;
 
   try {
-    const res = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, ringMode: 'context' }), sandbox);
+    const res = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'context' }), sandbox);
     assert.equal(res.status, 'ok');
     await new Promise((r) => setTimeout(r, 120));
 
@@ -3993,7 +3939,7 @@ test('hudBottomBar triggers quota fetch in context mode, low-context triggers /c
 
   try {
     const res = vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, ringMode: 'context', hudBottomBar: true, hudTopBar: true }),
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'context', hudBottomBar: true, hudTopBar: true }),
       sandbox
     );
     assert.equal(res.status, 'ok');
@@ -4250,7 +4196,7 @@ test('unmountRipple tolerates zero-size .agy-home (field=null) and copy honestly
 
   try {
     vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, homeLayout: 'studio', homeRipple: true, ringMode: 'context' }),
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, homeLayout: 'studio', homeRipple: true, ringMode: 'context' }),
       sandbox
     );
     await new Promise((r) => setTimeout(r, 80));
@@ -4258,12 +4204,12 @@ test('unmountRipple tolerates zero-size .agy-home (field=null) and copy honestly
     // 1. Zero-size ripple mounted with field=null -> turning off homeRipple MUST NOT throw TypeError in unmountRipple()
     assert.ok(home.querySelector('.ag-cs-ripple-host'), 'Expected zero-size ripple host attached');
     assert.doesNotThrow(() => {
-      sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, homeLayout: 'studio', homeRipple: false, ringMode: 'context' });
+      sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, homeLayout: 'studio', homeRipple: false, ringMode: 'context' });
     });
     assert.equal(home.querySelector('.ag-cs-ripple-host'), null);
 
     // Re-enable zero-size ripple, then REMOVE_EXPRESSION (destroy -> unmountRipple) must also not throw
-    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, homeLayout: 'studio', homeRipple: true, ringMode: 'context' });
+    sandbox.window.__agClaudeStyle.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, homeLayout: 'studio', homeRipple: true, ringMode: 'context' });
     assert.ok(home.querySelector('.ag-cs-ripple-host'));
 
     // 2. Statistics remain available without pricing UI.
@@ -4743,6 +4689,7 @@ test('periodic selector sparkle trigger mounts left of model selector, switches 
   const selectedCalls = [];
   const options = [
     { label: 'Gemini 4 Hydrogen (High)', value: 1525, disabled: false, modelId: 'gemini-4-hydrogen-high' },
+    { label: 'Gemini 4 Neon (Low)', value: 1531, disabled: false, modelId: 'gemini-4-neon-low' },
     { label: 'Gemini 4 Neon (High)', value: 1532, disabled: false, modelId: 'gemini-4-neon-high' },
     { label: 'Gemini 4 Argon (High)', value: 1417, disabled: false, modelId: 'gemini-4-argon-high' },
     { label: 'Claude Opus 5.5 (High)', value: 1402, disabled: false, modelId: 'claude-opus-5-5-high' },
@@ -4828,9 +4775,32 @@ test('periodic selector sparkle trigger mounts left of model selector, switches 
     const drawer2 = body.querySelector('.ag-cs-ps-drawer');
     const neonTile = drawer2.querySelector('[data-ps-symbol="Ne"]');
     assert.ok(neonTile, '10 Ne tile present');
+    // First click on multi-effort element pins it and keeps drawer open for effort selection
     neonTile.dispatch('click');
+    assert.equal(selectedCalls.length, 0, 'First click on multi-effort tile must not prematurely close drawer');
+    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, true, 'Drawer stays open to pick effort tier');
+    assert.equal(neonTile.classList.contains('is-pinned'), true, 'Clicked element tile is visually pinned');
+    const effortBtns = drawer2.querySelectorAll('.ag-cs-ps-effort-btn');
+    assert.ok(effortBtns.length >= 2, 'Effort buttons rendered in preview bar for pinned element');
+    // Moving across a dormant tile while pinned must not wipe out the pinned element effort buttons
+    const dormantTile = drawer2.querySelector('.ag-cs-ps-tile.is-dormant');
+    if (dormantTile) dormantTile.dispatch('mouseenter');
+    assert.ok(drawer2.querySelectorAll('.ag-cs-ps-effort-btn').length >= 2, 'Dormant hover preserves pinned effort buttons');
+    const highBtn = effortBtns.find((b) => /high/i.test(b.textContent)) || effortBtns[effortBtns.length - 1];
+    highBtn.dispatch('click');
     assert.equal(selectedCalls.length, 1);
     assert.equal(selectedCalls[0].modelId, 'gemini-4-neon-high');
+    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, false);
+
+    // Clicking an already-pinned element a second time commits preferred variant directly
+    trigger.dispatch('click');
+    const drawer3 = body.querySelector('.ag-cs-ps-drawer');
+    const neonTile2 = drawer3.querySelector('[data-ps-symbol="Ne"]');
+    neonTile2.dispatch('click');
+    assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, true);
+    neonTile2.dispatch('click');
+    assert.equal(selectedCalls.length, 2);
+    assert.equal(selectedCalls[1].modelId, 'gemini-4-neon-high');
     assert.equal(sandbox.window.__agClaudeStyle.getState().hasPeriodicSelector, false);
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);

@@ -93,8 +93,8 @@
   const hasOwn = Object.prototype.hasOwnProperty;
   const CJK_LATIN = /([\u3400-\u9fff])([A-Za-z])|([A-Za-z])([\u3400-\u9fff])/g;
 
-  // Never descend into opt-out plugin roots or effort pills controlled by our runtime.
-  const OPT_OUT = '[data-ag-no-i18n], [data-ag-cs-effort]';
+  // Never descend into opt-out plugin roots, usage-monitor widgets, or effort pills controlled by our runtime.
+  const OPT_OUT = '[data-ag-no-i18n], [data-ag-cs-effort], #ag-usage-monitor-capsule, #ag-usage-monitor-portal, [id^="ag-usage-monitor-"]';
   // Code / editing surfaces: text is untouched, but nested toolbar buttons (e.g. "Copy code") are UI.
   const HARD = [
     'script',

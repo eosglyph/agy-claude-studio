@@ -59,6 +59,36 @@
   const periodicCore = globalThis.__agCsPeriodicCore;
   const i18nCore = globalThis.__agCsI18nCore;
   const i18nLocales = globalThis.__agCsLocales;
+
+  function nodeContains(parent, child) {
+    if (!parent || !child) return false;
+    if (typeof parent.contains === 'function') return parent.contains(child);
+    let cur = child;
+    while (cur) {
+      if (cur === parent) return true;
+      cur = cur.parentElement || cur.parentNode || null;
+    }
+    return false;
+  }
+
+  function normalizePaletteId(val) {
+    return val === 'claude' ? 'claude' : val === 'host' ? 'host' : 'obsidian';
+  }
+
+  function getEffectivePalette() {
+    return normalizePaletteId(cfg.palette);
+  }
+
+  function getPaletteDisplayName(val, lang) {
+    const ui = uiText(lang);
+    return val === 'claude' ? 'Claude' : val === 'host' ? (ui.optHost || 'Host') : (ui.optObsidian || 'Obsidian');
+  }
+
+  function isUsageStatsEnabled() {
+    if (typeof cfg.usageStatsEnabled === 'boolean') return cfg.usageStatsEnabled;
+    if (typeof cfg.usageMonitorCompat === 'boolean') return !cfg.usageMonitorCompat;
+    return false;
+  }
   const domTranslator =
     i18nCore && i18nLocales && typeof i18nCore.createDomTranslator === 'function'
       ? i18nCore.createDomTranslator(i18nLocales.resolveLocaleBundle)
@@ -187,13 +217,39 @@
     ensureSettingsSection();
   }
 
+  function cleanupLegacyAuroraArtifacts() {
+    const html = document.documentElement;
+    if (html) {
+      html.removeAttribute('data-ag-custom-theme');
+      html.removeAttribute('data-aux-pane-maximized');
+      for (const oldAttr of [
+        'data-ag-cs-fx-glass',
+        'data-ag-cs-fx-scrollbar',
+        'data-ag-cs-fx-voice',
+        'data-ag-cs-fx-media',
+        'data-ag-cs-fx-glow',
+        'data-ag-cs-fx-terminal',
+      ]) {
+        html.removeAttribute(oldAttr);
+      }
+      if (html.style && typeof html.style.removeProperty === 'function') {
+        html.style.removeProperty('--antigravity-active-theme-id');
+      }
+    }
+    document
+      .querySelectorAll('style#ag-cs-aurora-theme-css, #ag-cs-theme-selector, #ag-cs-theme-dropdown')
+      .forEach((el) => el.remove());
+  }
+
   function applyRootAttrs() {
     const html = document.documentElement;
     if (!html) return;
-    const palette = cfg.palette === 'claude' ? 'claude' : cfg.palette === 'host' ? 'host' : 'obsidian';
+    const palette = getEffectivePalette();
     const lang = getLang();
+    const dark = isDarkTheme();
     html.setAttribute('data-ag-cs-style', '1');
     html.setAttribute('data-ag-cs-palette', palette);
+    html.setAttribute('data-ag-cs-glass', cfg.glassEffect === false ? 'off' : 'on');
     html.setAttribute('data-ag-cs-home', cfg.homeLayout === 'classic' ? 'classic' : cfg.homeLayout === 'off' ? 'off' : 'studio');
     html.setAttribute('data-ag-cs-composer', cfg.composerRestyle === false ? 'off' : 'on');
     html.setAttribute('data-ag-cs-logo-ink', cfg.logoInk === 'foreground' ? 'foreground' : 'accent');
@@ -205,6 +261,8 @@
     const isCjk = i18nCore && typeof i18nCore.isCjkLanguage === 'function' ? i18nCore.isCjkLanguage(lang) : isZh();
     if (isCjk) html.setAttribute('data-ag-cs-cjk', '1');
     else html.removeAttribute('data-ag-cs-cjk');
+
+    cleanupLegacyAuroraArtifacts();
 
     const prevLang = lastAppliedLang;
     if (lang !== prevLang) {
@@ -222,15 +280,18 @@
       }
     }
 
-    const dark = isDarkTheme();
     const themeKey = `${palette}|${dark ? 'd' : 'l'}`;
     if (themeKey !== lastThemeKey) {
+      const wasInitial = lastThemeKey === '';
       lastThemeKey = themeKey;
       if (rippleMount && typeof rippleMount.refreshTheme === 'function') {
         rippleMount.refreshTheme();
       }
       refreshOpenEffortPopover();
       refreshOpenPeriodicSelector();
+      if (!wasInitial) {
+        ensureSettingsSection();
+      }
     }
   }
 
@@ -2800,7 +2861,7 @@
   }
 
   function syncTurnBadges(data) {
-    if (cfg.turnBadges === false || !data || !Array.isArray(data.turnDetails) || data.turnDetails.length === 0) {
+    if (!isUsageStatsEnabled() || cfg.turnBadges === false || !data || !Array.isArray(data.turnDetails) || data.turnDetails.length === 0) {
       clearTurnBadges();
       return;
     }
@@ -3145,6 +3206,13 @@
     const inputBox = card?.closest?.('[data-testid="agent-input-box"]');
     const composerShell = card?.closest?.('#antigravity\\.agentSidePanelInputBox') || card?.parentElement;
     if (!inputBox || !card) return;
+    if (!isUsageStatsEnabled()) {
+      card
+        .querySelectorAll('.ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip')
+        .forEach((n) => n.remove());
+      if (composerShell) composerShell.removeAttribute('data-ag-cs-rim');
+      return;
+    }
     const d = data || createEmptyConvoData('', getKnownMaxContextForCard(card, data));
     const lang = getLang();
     const ui = uiText(lang);
@@ -3167,7 +3235,8 @@
           ev.stopPropagation();
           openContextPopover(topBar, resolveCardConvoData(card, d), 'breakdown');
         });
-        card.insertBefore(topBar, card.firstChild);
+        if (typeof card.insertBefore === 'function') card.insertBefore(topBar, card.firstChild);
+        else card.appendChild(topBar);
       }
       const ctxRemPctRound = Math.round(ring.contextRemainingPct);
       const isLowCtx = Boolean((d.calls > 0 || ring.usedTokens > 0) && ring.contextRemainingPct <= 20);
@@ -3351,25 +3420,41 @@
     return null;
   }
 
+  function stripEffortBadgeSuffix(text) {
+    return String(text || '')
+      .replace(/\s*[·•]\s*(?:\d+(?:\.\d+)?\s*[kKmM](?:\s*(?:ctx|context|tokens?))?|standard|extended)\s*$/i, '')
+      .trim();
+  }
+
+  function findModelEffortBadgeSpan(modelBtn, { preferTagged = true } = {}) {
+    if (!modelBtn) return null;
+    if (preferTagged) {
+      const tagged = modelBtn.querySelector('.ag-cs-effort-badge, [data-ag-cs-effort]');
+      if (tagged && tagged.childElementCount === 0) return tagged;
+    }
+    const spans = Array.from(modelBtn.querySelectorAll('span')).filter((s) => s.childElementCount === 0);
+    for (let i = spans.length - 1; i >= 0; i--) {
+      const txt = stripEffortBadgeSuffix(spans[i].textContent).toLowerCase();
+      if (/\b(max|xhigh|extra|high|med(?:ium)?|low|minimal|light|none|off)\b/.test(txt)) {
+        return spans[i];
+      }
+    }
+    return spans.length >= 2 ? spans[spans.length - 1] : null;
+  }
+
   function resolveModelEffortContext(modelBtn, badgeEl) {
     const readLiveBadgeEffort = (el) => {
       if (!el) return '';
-      const rawTxt = (el.textContent || '').trim().toLowerCase();
+      const rawTxt = stripEffortBadgeSuffix(el.textContent).toLowerCase();
       const m = rawTxt.match(/\b(extra|xhigh|high|med(?:ium)?|low|max)\b/);
       if (m) return m[1].startsWith('med') ? 'medium' : m[1];
       return (el.getAttribute('data-ag-cs-effort') || rawTxt).trim().toLowerCase();
     };
     let badgeEffort = readLiveBadgeEffort(badgeEl);
     if (!badgeEffort && modelBtn) {
-      const foundBadge = modelBtn.querySelector('.ag-cs-effort-badge, [data-ag-cs-effort]');
+      const foundBadge = findModelEffortBadgeSpan(modelBtn, { preferTagged: true });
       if (foundBadge) {
         badgeEffort = readLiveBadgeEffort(foundBadge);
-      } else {
-        const spans = modelBtn.querySelectorAll('span');
-        const sub = spans.length >= 2 ? spans[spans.length - 1] : null;
-        if (sub && sub.childElementCount === 0) {
-          badgeEffort = readLiveBadgeEffort(sub);
-        }
       }
     }
     const fiberProps = getModelFiberProps(modelBtn);
@@ -3387,18 +3472,14 @@
       const syncBadgeDom = () => {
         let targetBadge = badgeEl && badgeEl.isConnected ? badgeEl : null;
         if (!targetBadge && modelBtn) {
-          targetBadge = modelBtn.querySelector('.ag-cs-effort-badge, [data-ag-cs-effort]');
-          if (!targetBadge) {
-            const spans = modelBtn.querySelectorAll('span');
-            const sub = spans.length >= 2 ? spans[spans.length - 1] : null;
-            if (sub && sub.childElementCount === 0) targetBadge = sub;
-          }
+          targetBadge = findModelEffortBadgeSpan(modelBtn, { preferTagged: true });
         }
         let resolvedDisplay = effortDisplay;
         if (targetBadge) {
           if (!hasRealModelSetter) {
-            targetBadge.textContent = ' ' + effortDisplay;
-          } else if (effortId === 'xhigh' && /\bextra\b/i.test(targetBadge.textContent || '')) {
+            const ctxSuffix = (targetBadge.textContent || '').match(/(\s*[·•]\s*.+)$/)?.[1] || '';
+            targetBadge.textContent = ' ' + effortDisplay + ctxSuffix;
+          } else if (effortId === 'xhigh' && /\bextra\b/i.test(stripEffortBadgeSuffix(targetBadge.textContent))) {
             resolvedDisplay = 'Extra';
           }
           const badgeLevel = String(resolvedDisplay || '').trim().toLowerCase() === 'extra' ? 'extra' : effortId;
@@ -3520,6 +3601,12 @@
     let shownIdx = currentIdx;
     let lastAt = performance.now();
     let starAnimCache = null;
+    let lastStarRate = -1;
+    let lastEnergy = -1;
+    let lastRenderedIdx = -1;
+    let lastFillBg = '';
+    let lastValColor = '';
+    let dragMetrics = null;
 
     const particles = effortCore.CODEX_PARTICLES;
     const ticksHtml = steps
@@ -3568,6 +3655,8 @@
       const rate = motionReduced()
         ? Math.max(0.25, effortCore.codexSpeedFor(pct) / 2.6)
         : effortCore.codexSpeedFor(pct);
+      if (lastStarRate >= 0 && Math.abs(rate - lastStarRate) < 0.06) return;
+      lastStarRate = rate;
       if (!starAnimCache) {
         starAnimCache = starTrackEls.map((el) => {
           try {
@@ -3589,13 +3678,12 @@
       }
     };
 
-    const resolveKnobOffset = (pct) => {
-      const trackW = track ? track.clientWidth || 0 : 0;
+    const resolveKnobPx = (pct) => {
+      const trackW = dragMetrics ? dragMetrics.trackW : track ? track.clientWidth || 0 : 0;
       if (trackW > effortCore.CODEX_KNOB_SIZE) {
-        const px = effortCore.CODEX_KNOB_RADIUS + effortCore.codexClamp01(pct) * (trackW - effortCore.CODEX_KNOB_SIZE);
-        return `${px.toFixed(2)}px`;
+        return effortCore.CODEX_KNOB_RADIUS + effortCore.codexClamp01(pct) * (trackW - effortCore.CODEX_KNOB_SIZE);
       }
-      return effortCore.codexKnobOffsetOf(pct);
+      return -1;
     };
 
     const applyShown = (shownPct, displayIdx) => {
@@ -3603,75 +3691,108 @@
       const safeIdx = Math.max(0, Math.min(count - 1, displayIdx));
       const st = steps[safeIdx] || steps[0];
       const energy = effortCore.codexEnergyFor(clampedPct);
-      const knobOffset = resolveKnobOffset(clampedPct);
+      const knobPx = resolveKnobPx(clampedPct);
+      const knobOffset = knobPx >= 0 ? `${knobPx.toFixed(2)}px` : effortCore.codexKnobOffsetOf(clampedPct);
 
-      pop.setAttribute('data-energy', energy > 0 ? '1' : '0');
-      pop.style.setProperty('--ag-cs-codex-energy', String(energy));
+      const energyFlag = energy > 0 ? '1' : '0';
+      if (pop.getAttribute('data-energy') !== energyFlag) {
+        pop.setAttribute('data-energy', energyFlag);
+      }
+      if (energy !== lastEnergy) {
+        pop.style.setProperty('--ag-cs-codex-energy', energy.toFixed(3));
+      }
 
       if (fillEl) {
         fillEl.style.width = knobOffset;
-        fillEl.style.background = effortCore.codexFillBackgroundFor(clampedPct);
+        const nextFillBg = effortCore.codexFillBackgroundFor(clampedPct);
+        if (nextFillBg !== lastFillBg) {
+          fillEl.style.background = nextFillBg;
+          lastFillBg = nextFillBg;
+        }
       }
       if (energyEl) {
         energyEl.style.width = knobOffset;
       }
       if (starsEl) {
         starsEl.style.width = knobOffset;
-        starsEl.style.opacity = effortCore.codexStarLayerOpacityFor(clampedPct).toFixed(3);
+        if (energy > 0 || lastEnergy > 0) {
+          starsEl.style.opacity = effortCore.codexStarLayerOpacityFor(clampedPct).toFixed(3);
+        }
       }
       if (knobEl) {
-        knobEl.style.left = knobOffset;
+        if (knobPx >= 0) {
+          knobEl.style.left = '0px';
+          knobEl.style.transform = `translate3d(${knobPx.toFixed(2)}px, 0, 0)`;
+        } else {
+          knobEl.style.transform = '';
+          knobEl.style.left = knobOffset;
+        }
       }
 
-      const progress = effortCore.codexStarProgressFor(clampedPct, count);
-      const glow = 0.45 + 0.55 * progress;
-      for (let s = 0; s < starDotEls.length; s += 1) {
-        const dot = starDotEls[s];
-        const reveal = effortCore.codexParticleReveal(s, progress, starDotEls.length);
-        const bright = effortCore.codexStarBrightnessFor(s) * glow;
-        dot.style.setProperty('--ag-cs-codex-b', bright.toFixed(3));
-        dot.style.opacity = reveal.toFixed(3);
+      if (energy > 0 || lastEnergy > 0) {
+        const progress = effortCore.codexStarProgressFor(clampedPct, count);
+        const glow = 0.45 + 0.55 * progress;
+        for (let s = 0; s < starDotEls.length; s += 1) {
+          const dot = starDotEls[s];
+          const reveal = effortCore.codexParticleReveal(s, progress, starDotEls.length);
+          const bright = effortCore.codexStarBrightnessFor(s) * glow;
+          dot.style.setProperty('--ag-cs-codex-b', bright.toFixed(3));
+          dot.style.opacity = reveal.toFixed(3);
+        }
+        if (energy > 0) updateStarRates(clampedPct);
       }
-      updateStarRates(clampedPct);
+      lastEnergy = energy;
 
-      for (let t = 0; t < tickEls.length; t += 1) {
-        tickEls[t].setAttribute('data-on', t <= safeIdx ? '1' : '0');
+      if (safeIdx !== lastRenderedIdx) {
+        lastRenderedIdx = safeIdx;
+        for (let t = 0; t < tickEls.length; t += 1) {
+          tickEls[t].setAttribute('data-on', t <= safeIdx ? '1' : '0');
+        }
+        if (valEl && st && valEl.textContent !== st.display) {
+          valEl.textContent = st.display;
+        }
+        if (track && st) {
+          track.setAttribute('aria-valuenow', String(safeIdx));
+          track.setAttribute('aria-valuetext', st.display);
+        }
       }
       if (valEl && st) {
-        if (valEl.textContent !== st.display) valEl.textContent = st.display;
-        valEl.style.color = effortCore.codexValueColorFor(clampedPct, st);
-      }
-      if (track && st) {
-        track.setAttribute('aria-valuenow', String(safeIdx));
-        track.setAttribute('aria-valuetext', st.display);
+        const nextColor = effortCore.codexValueColorFor(clampedPct, st);
+        if (nextColor !== lastValColor) {
+          valEl.style.color = nextColor;
+          lastValColor = nextColor;
+        }
       }
     };
 
-    const runMotionLoop = () => {
-      cancelCodexMotionRaf();
-      const tick = (now) => {
-        if (!pop.isConnected || openEffortPop !== pop) {
-          codexMotionRaf = 0;
-          return;
-        }
-        const dt = Math.min(0.05, Math.max(0.001, (now - lastAt) / 1000));
-        lastAt = now;
-        effortCore.codexMotionStep(motion, dt);
-        shownIdx = dragging ? effortCore.codexIndexFromPct(motion.x, count) : snapTargetIdx;
-        applyShown(motion.x, shownIdx);
-        if (!effortCore.codexMotionSettled(motion) && !motionReduced()) {
-          codexMotionRaf = requestAnimationFrame(tick);
-        } else {
-          motion.x = motion.target;
-          motion.v = 0;
-          motion.a = 0;
-          shownIdx = snapTargetIdx;
-          applyShown(motion.target, snapTargetIdx);
-          codexMotionRaf = 0;
-        }
-      };
+    const tickMotion = (now) => {
+      if (!pop.isConnected || openEffortPop !== pop) {
+        codexMotionRaf = 0;
+        return;
+      }
+      const dt = Math.min(0.05, Math.max(0.001, (now - lastAt) / 1000));
+      lastAt = now;
+      effortCore.codexMotionStep(motion, dt);
+      shownIdx = dragging ? effortCore.codexIndexFromPct(motion.x, count) : snapTargetIdx;
+      applyShown(motion.x, shownIdx);
+      if (dragging || (!effortCore.codexMotionSettled(motion) && !motionReduced())) {
+        codexMotionRaf = requestAnimationFrame(tickMotion);
+      } else {
+        motion.x = motion.target;
+        motion.v = 0;
+        motion.a = 0;
+        shownIdx = snapTargetIdx;
+        applyShown(motion.target, snapTargetIdx);
+        codexMotionRaf = 0;
+      }
+    };
+
+    const ensureMotionLoop = () => {
+      // Never cancel an already-scheduled rAF frame during drag: doing so starves the spring
+      // integrator on high-polling-rate mice (125-1000Hz).
+      if (codexMotionRaf) return;
       lastAt = performance.now();
-      codexMotionRaf = requestAnimationFrame(tick);
+      codexMotionRaf = requestAnimationFrame(tickMotion);
     };
 
     const setTarget = (targetPct, nextIdx, commit) => {
@@ -3693,7 +3814,7 @@
         }
       }
 
-      const trackW = track ? track.clientWidth || 0 : 0;
+      const trackW = dragMetrics ? dragMetrics.trackW : track ? track.clientWidth || 0 : 0;
       if (motionReduced() || trackW <= 0 || typeof requestAnimationFrame !== 'function') {
         cancelCodexMotionRaf();
         motion.x = clampedTarget;
@@ -3702,9 +3823,11 @@
         shownIdx = boundedIdx;
         applyShown(clampedTarget, boundedIdx);
       } else {
-        shownIdx = boundedIdx;
-        applyShown(motion.x, boundedIdx);
-        runMotionLoop();
+        if (!dragging) {
+          shownIdx = boundedIdx;
+          applyShown(motion.x, boundedIdx);
+        }
+        ensureMotionLoop();
       }
     };
 
@@ -3712,11 +3835,18 @@
     applyShown(initPct, currentIdx);
 
     if (track) {
-      const pctFromClientX = (clientX) => {
+      const captureTrackMetrics = () => {
         const r = track.getBoundingClientRect();
         const trackW = track.clientWidth || r.width || 1;
         const zoomScale = trackW > 0 && r.width > 0 ? r.width / trackW : 1;
-        const localX = (clientX - r.left) / (zoomScale || 1);
+        dragMetrics = { left: r.left, trackW, zoomScale: zoomScale || 1 };
+      };
+      const pctFromClientX = (clientX) => {
+        const m = dragMetrics;
+        const left = m ? m.left : track.getBoundingClientRect().left;
+        const trackW = m ? m.trackW : track.clientWidth || track.getBoundingClientRect().width || 1;
+        const zoomScale = m ? m.zoomScale : (trackW > 0 && track.getBoundingClientRect().width > 0 ? track.getBoundingClientRect().width / trackW : 1);
+        const localX = (clientX - left) / (zoomScale || 1);
         const usable = Math.max(1, trackW - effortCore.CODEX_KNOB_SIZE);
         return effortCore.codexClamp01((localX - effortCore.CODEX_KNOB_RADIUS) / usable);
       };
@@ -3727,6 +3857,7 @@
         pointerActive = true;
         dragging = false;
         downClientX = ev.clientX;
+        captureTrackMetrics();
         try {
           track.setPointerCapture(ev.pointerId);
         } catch {}
@@ -3744,7 +3875,15 @@
         if (!dragging) return;
         const pct = pctFromClientX(ev.clientX);
         const idx = effortCore.codexIndexFromPct(pct, count);
-        setTarget(pct, idx, false);
+        snapTargetIdx = idx;
+        motion.target = pct;
+        if (motionReduced() || typeof requestAnimationFrame !== 'function') {
+          motion.x = pct;
+          shownIdx = idx;
+          applyShown(pct, idx);
+        } else {
+          ensureMotionLoop();
+        }
       });
 
       const finishPointer = (ev) => {
@@ -3754,6 +3893,7 @@
         track.classList.remove('is-dragging');
         const pct = pctFromClientX(ev.clientX);
         const idx = effortCore.codexIndexFromPct(pct, count);
+        dragMetrics = null;
         setTarget(effortCore.codexPctFromIndex(idx, count), idx, true);
       };
 
@@ -3844,10 +3984,14 @@
       const canvas = pop.querySelector('.ag-cs-effort-matrix');
       const tickEls = Array.from(pop.querySelectorAll('.ag-cs-effort-tick'));
 
+      let claudeDragRect = null;
+      let claudeDragTrackW = 0;
+      let claudeHasRendered = false;
+
       const positionKnob = (prog, instant = false) => {
         if (!knobEl) return;
         const applyCoords = () => {
-          const trackW = track ? (track.clientWidth || 0) : 0;
+          const trackW = claudeDragTrackW > 0 ? claudeDragTrackW : track ? (track.clientWidth || 0) : 0;
           const span = trackW > 16 ? trackW - 16 : 0;
           if (span > 0) {
             knobEl.style.left = '';
@@ -3909,31 +4053,37 @@
         currentIdx = Math.max(0, Math.min(count - 1, idx));
         const st = ctx.steps[currentIdx];
         const apex = currentIdx === count - 1;
-        const nextPct = effortCore.computeEffortTintPercent(count, currentIdx);
-        pop.style.setProperty('--ag-cs-effort-pct', (nextPct ?? 67) + '%');
-        pop.style.setProperty('--ag-cs-effort-step-tint', st.tint);
+        const stepChanged = !claudeHasRendered || currentIdx !== prevIdx;
+        claudeHasRendered = true;
+
         pop.style.setProperty('--ag-cs-effort-progress', currentProgress.toFixed(4));
-        if (apex) pop.setAttribute('data-effort-apex', '1');
-        else pop.removeAttribute('data-effort-apex');
-        animateValueSwap(prevIdx, currentIdx, st.display);
         positionKnob(currentProgress);
-        if (track) {
-          track.setAttribute('aria-valuenow', String(currentIdx));
-          track.setAttribute('aria-valuetext', st.display);
-        }
-        tickEls.forEach((tk, i) => {
-          if (i <= currentIdx) tk.classList.add('is-reached');
-          else tk.classList.remove('is-reached');
-        });
-        if (apex && !wasApex) {
-          matrixStartTime = performance.now();
-        }
-        paintEffortMatrixCanvas(canvas, st, apex, matrixStartTime, matrixState);
-        if (apex && !effortMatrixRaf && !motionReduced()) {
-          effortMatrixRaf = requestAnimationFrame(stepLoop);
-        } else if (!apex && effortMatrixRaf) {
-          cancelAnimationFrame(effortMatrixRaf);
-          effortMatrixRaf = 0;
+
+        if (stepChanged) {
+          const nextPct = effortCore.computeEffortTintPercent(count, currentIdx);
+          pop.style.setProperty('--ag-cs-effort-pct', (nextPct ?? 67) + '%');
+          pop.style.setProperty('--ag-cs-effort-step-tint', st.tint);
+          if (apex) pop.setAttribute('data-effort-apex', '1');
+          else pop.removeAttribute('data-effort-apex');
+          animateValueSwap(prevIdx, currentIdx, st.display);
+          if (track) {
+            track.setAttribute('aria-valuenow', String(currentIdx));
+            track.setAttribute('aria-valuetext', st.display);
+          }
+          tickEls.forEach((tk, i) => {
+            if (i <= currentIdx) tk.classList.add('is-reached');
+            else tk.classList.remove('is-reached');
+          });
+          if (apex && !wasApex) {
+            matrixStartTime = performance.now();
+          }
+          paintEffortMatrixCanvas(canvas, st, apex, matrixStartTime, matrixState);
+          if (apex && !effortMatrixRaf && !motionReduced()) {
+            effortMatrixRaf = requestAnimationFrame(stepLoop);
+          } else if (!apex && effortMatrixRaf) {
+            cancelAnimationFrame(effortMatrixRaf);
+            effortMatrixRaf = 0;
+          }
         }
         if (commit) {
           ctx.selectStep(st, (resolvedDisplay) => {
@@ -3968,15 +4118,27 @@
         let dragging = false;
         let downClientX = 0;
         let lastIdx = currentIdx;
+        let pendingMoveX = null;
+        let claudeDragRaf = 0;
 
         const resolvePointer = (clientX, applyDamping) => {
-          const r = track.getBoundingClientRect();
+          const r = claudeDragRect || track.getBoundingClientRect();
           const span = Math.max(1, r.width - 16);
           const rawX = Math.max(0, Math.min(span, clientX - r.left - 8));
           const visualX = applyDamping ? effortCore.dampTravel(rawX, span, count) : rawX;
           const prog = visualX / span;
           const nearest = effortCore.nearestStepIndex(rawX, span, count);
           return { prog, nearest };
+        };
+
+        const flushDragMove = () => {
+          claudeDragRaf = 0;
+          if (!pointerActive || !dragging || pendingMoveX === null) return;
+          const x = pendingMoveX;
+          pendingMoveX = null;
+          const { prog, nearest } = resolvePointer(x, true);
+          lastIdx = nearest;
+          updateVisual(prog, nearest, false);
         };
 
         track.addEventListener('pointerdown', (ev) => {
@@ -3986,6 +4148,8 @@
           dragging = false;
           downClientX = ev.clientX;
           lastIdx = currentIdx;
+          claudeDragRect = track.getBoundingClientRect();
+          claudeDragTrackW = track.clientWidth || claudeDragRect.width || 0;
           try {
             track.setPointerCapture(ev.pointerId);
           } catch {}
@@ -4001,19 +4165,30 @@
             knobEl?.setAttribute('data-dragging', '1');
           }
           if (!dragging) return;
-          const { prog, nearest } = resolvePointer(ev.clientX, true);
-          lastIdx = nearest;
-          updateVisual(prog, nearest, false);
+          pendingMoveX = ev.clientX;
+          if (typeof requestAnimationFrame === 'function') {
+            if (!claudeDragRaf) claudeDragRaf = requestAnimationFrame(flushDragMove);
+          } else {
+            flushDragMove();
+          }
         });
         const finishDrag = (ev) => {
           if (!pointerActive) return;
           pointerActive = false;
+          if (claudeDragRaf && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(claudeDragRaf);
+            claudeDragRaf = 0;
+          }
+          const hadPendingMove = pendingMoveX !== null;
+          pendingMoveX = null;
           const wasDragging = dragging;
           dragging = false;
           track.classList.remove('is-dragging');
           knobEl?.removeAttribute('data-dragging');
           const { nearest } = resolvePointer(ev.clientX, false);
-          const finalIdx = wasDragging ? lastIdx : nearest;
+          claudeDragRect = null;
+          claudeDragTrackW = 0;
+          const finalIdx = wasDragging && !hadPendingMove ? lastIdx : nearest;
           lastPointerCommitAt = performance.now();
           updateVisual(finalIdx / maxIdx, finalIdx, true);
         };
@@ -4474,12 +4649,21 @@
         grouped.tiles.find((t) => t.isLaunched) ||
         null;
 
+      const tileCellsBySymbol = new Map();
+      const syncPinnedTileVisuals = () => {
+        for (const [sym, el] of tileCellsBySymbol.entries()) {
+          if (psPinnedSymbol && sym === psPinnedSymbol) el.classList.add('is-pinned');
+          else el.classList.remove('is-pinned');
+        }
+      };
+
       for (const tile of grouped.tiles) {
         const cls = ['ag-cs-ps-tile'];
         if (tile.isLaunched) {
           cls.push('is-launched', `ag-cs-ps-theme-${tile.theme || 'hydrogen'}`);
           if (tile.isHero) cls.push('is-neon');
           if (tile.isSelected) cls.push('is-selected');
+          if (psPinnedSymbol && psPinnedSymbol === tile.symbol) cls.push('is-pinned');
           if (tile.isPreviewOnly) cls.push('is-preview-only');
         } else {
           cls.push('is-dormant');
@@ -4495,6 +4679,7 @@
         if (tile.isLaunched) {
           cell.type = 'button';
           cell.setAttribute('data-ps-symbol', tile.symbol);
+          tileCellsBySymbol.set(tile.symbol, cell);
           if (tile.num !== '' && tile.num !== undefined) {
             cell.setAttribute('data-atomic-number', String(tile.num));
           }
@@ -4527,6 +4712,9 @@
 
         if (!tile.isRange) {
           cell.addEventListener('mouseenter', () => {
+            // When an element is pinned for effort selection, moving cursor down across dormant tiles
+            // toward the bottom effort buttons must not wipe out the pinned element's preview bar.
+            if (psPinnedSymbol && !tile.isLaunched) return;
             renderPeriodicPreviewBar(previewEl, tile, fiberProps, curEffortId, ui);
           });
         }
@@ -4537,6 +4725,16 @@
           cell.addEventListener('click', (ev) => {
             ev.stopPropagation();
             if (tile.isAvailableInHost && tile.family) {
+              const variants = Array.isArray(tile.family.variants) ? tile.family.variants : [];
+              // First click on a multi-effort element pins it so the user can choose an effort tier
+              // without closing the drawer; clicking the already-pinned element (or a single-variant
+              // element) commits immediately.
+              if (variants.length > 1 && psPinnedSymbol !== tile.symbol) {
+                psPinnedSymbol = tile.symbol;
+                syncPinnedTileVisuals();
+                renderPeriodicPreviewBar(previewEl, tile, fiberProps, curEffortId, ui);
+                return;
+              }
               const preferred = periodicCore.pickPreferredVariant(tile.family, curEffortId);
               if (preferred?.option) {
                 commitPeriodicModelOption(fiberProps, preferred.option);
@@ -4544,7 +4742,17 @@
               }
             }
             psPinnedSymbol = tile.symbol;
+            syncPinnedTileVisuals();
             renderPeriodicPreviewBar(previewEl, tile, fiberProps, curEffortId, ui);
+          });
+          cell.addEventListener('dblclick', (ev) => {
+            ev.stopPropagation();
+            if (tile.isAvailableInHost && tile.family) {
+              const preferred = periodicCore.pickPreferredVariant(tile.family, curEffortId);
+              if (preferred?.option) {
+                commitPeriodicModelOption(fiberProps, preferred.option);
+              }
+            }
           });
         }
         grid.appendChild(cell);
@@ -5142,6 +5350,366 @@
     }
   }
 
+  const UM_CAPSULE_ID = 'ag-usage-monitor-capsule';
+  const UM_SPLIT_STYLE_ID = 'ag-cs-um-split-css';
+  const UM_CTX_PROXY_CLS = 'ag-cs-um-ctx-proxy';
+  const UM_RING_R = 5.2;
+  const UM_RING_CIRC = +(2 * Math.PI * UM_RING_R).toFixed(2);
+  function buildUmSplitCss(footerWidth) {
+    const narrow = footerWidth > 0 && footerWidth < 560;
+    const ultraNarrow = footerWidth > 0 && footerWidth < 460;
+    const rules = [
+      // Counteract usage-monitor's false-positive ring-only collapse when its display:contents parent reports width 0
+      ultraNarrow
+        ? ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-cap-slot[data-vis-rank="1"]:not([hidden]):not([data-metric="context"]) { display: inline-flex !important; }'
+        : ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-cap-slot:not([hidden]):not([data-metric="context"]) { display: inline-flex !important; }',
+      ultraNarrow
+        ? ''
+        : ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-sep:not([hidden]) { display: inline-block !important; }',
+      narrow
+        ? ''
+        : ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-multi-label { display: inline-block !important; }',
+      narrow
+        ? ''
+        : ':host(.wm-capsule-host[data-dock="composer"][data-modern-ui="true"][data-layout]) .wm-multi-label[data-od-active="1"] { display: inline-flex !important; }',
+      ':host(.wm-capsule-host[data-dock="composer"][data-layout="ring-only"]) .wm-capsule-btn { padding: 0 8px !important; }',
+      // Always hide context segment & its adjacent separator inside the footer capsule (mirrored on far right)
+      ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-capsule-btn > [data-metric="context"], .wm-capsule-btn > [data-metric="context"] { display: none !important; }',
+      ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-capsule-btn > .wm-sep:not([hidden]):has(+ [data-metric="context"]), .wm-capsule-btn > .wm-sep:has(+ [data-metric="context"]) { display: none !important; }',
+      ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-capsule-btn > [data-metric="context"][data-vis-rank="1"] + .wm-sep:not([hidden]), .wm-capsule-btn > [data-metric="context"][data-vis-rank="1"] + .wm-sep { display: none !important; }',
+      '.wm-capsule-btn:not(:has(> .wm-cap-slot:not([hidden]):not([data-metric="context"]))) { display: none !important; }',
+    ];
+    return rules.filter(Boolean).join('\n');
+  }
+  const UM_TONES = ['tone-good', 'tone-info', 'tone-warn', 'tone-danger', 'tone-muted'];
+
+  let umShadowObserver = null;
+  let umObservedRoot = null;
+  let umObservedFooter = null;
+  let umSplitSyncing = false;
+
+  function removeUmSplitStyle(shadowRoot) {
+    if (!shadowRoot) return;
+    try {
+      const el =
+        typeof shadowRoot.getElementById === 'function'
+          ? shadowRoot.getElementById(UM_SPLIT_STYLE_ID)
+          : shadowRoot.querySelector?.('#' + UM_SPLIT_STYLE_ID);
+      if (el) el.remove();
+    } catch {}
+  }
+
+  function cleanupUsageMonitorFooterSplit() {
+    if (umShadowObserver) {
+      try {
+        umShadowObserver.disconnect();
+      } catch {}
+      umShadowObserver = null;
+    }
+    if (umObservedRoot) {
+      removeUmSplitStyle(umObservedRoot);
+      umObservedRoot = null;
+    }
+    umObservedFooter = null;
+    const cap = document.getElementById(UM_CAPSULE_ID);
+    if (cap && cap.shadowRoot) removeUmSplitStyle(cap.shadowRoot);
+    document.querySelectorAll('.' + UM_CTX_PROXY_CLS + ', .ag-cs-um-multi-proxy').forEach((el) => el.remove());
+  }
+
+  function createUmCtxProxyButton(umCap) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = UM_CTX_PROXY_CLS;
+    btn.setAttribute('data-ag-no-i18n', '');
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg =
+      typeof document.createElementNS === 'function'
+        ? document.createElementNS(NS, 'svg')
+        : document.createElement('svg');
+    svg.setAttribute('viewBox', '0 0 14 14');
+    svg.setAttribute('aria-hidden', 'true');
+    const mkCircle = (cls) => {
+      const c =
+        typeof document.createElementNS === 'function'
+          ? document.createElementNS(NS, 'circle')
+          : document.createElement('circle');
+      c.setAttribute('cx', '7');
+      c.setAttribute('cy', '7');
+      c.setAttribute('r', String(UM_RING_R));
+      c.setAttribute('class', cls);
+      return c;
+    };
+    const track = mkCircle('ag-cs-um-ring-track');
+    const fill = mkCircle('ag-cs-um-ring-fill');
+    fill.setAttribute('stroke-dasharray', String(UM_RING_CIRC));
+    fill.setAttribute('stroke-dashoffset', String(UM_RING_CIRC));
+    svg.appendChild(track);
+    svg.appendChild(fill);
+    const label = document.createElement('span');
+    label.className = 'ag-cs-um-ctx-label';
+    btn.appendChild(svg);
+    btn.appendChild(label);
+    btn._agCsUmFill = fill;
+    btn._agCsUmLabel = label;
+
+    const getSourceBtn = () => {
+      const liveCap = umCap && umCap.isConnected ? umCap : document.getElementById(UM_CAPSULE_ID);
+      return liveCap?.shadowRoot?.querySelector?.('.wm-capsule-btn') || null;
+    };
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const srcBtn = getSourceBtn();
+      if (srcBtn && typeof srcBtn.click === 'function') srcBtn.click();
+    });
+    btn.addEventListener('mouseenter', () => {
+      const srcBtn = getSourceBtn();
+      if (srcBtn && typeof srcBtn.dispatchEvent === 'function' && typeof MouseEvent === 'function') {
+        srcBtn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+      }
+    });
+    btn.addEventListener('mouseleave', () => {
+      const srcBtn = getSourceBtn();
+      if (srcBtn && typeof srcBtn.dispatchEvent === 'function' && typeof MouseEvent === 'function') {
+        srcBtn.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
+      }
+    });
+    return btn;
+  }
+
+  function syncUsageMonitorFooterSplit(footer) {
+    if (umSplitSyncing) return false;
+    umSplitSyncing = true;
+    try {
+      if (cfg.composerRestyle === false || !footer) {
+        if (footer) footer.querySelectorAll('.' + UM_CTX_PROXY_CLS).forEach((el) => el.remove());
+        return false;
+      }
+      const umCap = footer.querySelector('#' + UM_CAPSULE_ID);
+      if (!umCap || !umCap.shadowRoot) {
+        footer.querySelectorAll('.' + UM_CTX_PROXY_CLS).forEach((el) => el.remove());
+        return false;
+      }
+      const sr = umCap.shadowRoot;
+      // Attach Shadow DOM observer BEFORE checking ctxSlot visibility so cold-start capsules
+      // that initially render hidden (before telemetry loads) still trigger footer split immediately.
+      if (umObservedRoot !== sr || umObservedFooter !== footer) {
+        if (umShadowObserver) {
+          try {
+            umShadowObserver.disconnect();
+          } catch {}
+          umShadowObserver = null;
+        }
+        if (umObservedRoot && umObservedRoot !== sr) removeUmSplitStyle(umObservedRoot);
+        umObservedRoot = sr;
+        umObservedFooter = footer;
+        if (typeof MutationObserver === 'function') {
+          umShadowObserver = new MutationObserver((mutations) => {
+            if (destroyed || umSplitSyncing) return;
+            const onlyOwnStyle = mutations.every(
+              (m) =>
+                m.target?.id === UM_SPLIT_STYLE_ID ||
+                (m.addedNodes?.length === 1 && m.addedNodes[0]?.id === UM_SPLIT_STYLE_ID) ||
+                (m.removedNodes?.length === 1 && m.removedNodes[0]?.id === UM_SPLIT_STYLE_ID)
+            );
+            if (onlyOwnStyle) return;
+            if (umObservedFooter && umObservedFooter.isConnected) {
+              syncUsageMonitorFooterSplit(umObservedFooter);
+            } else {
+              cleanupUsageMonitorFooterSplit();
+            }
+          });
+          umShadowObserver.observe(sr, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['class', 'hidden', 'data-od-value', 'aria-label', 'stroke-dashoffset', 'stroke-dasharray', 'data-vis-rank'],
+          });
+        }
+      }
+
+      const ctxSlot = sr.querySelector('.wm-capsule-btn [data-metric="context"]');
+      const isVisible = Boolean(ctxSlot && !ctxSlot.hidden && !ctxSlot.hasAttribute('hidden'));
+      if (!isVisible) {
+        removeUmSplitStyle(sr);
+        footer.querySelectorAll('.' + UM_CTX_PROXY_CLS).forEach((el) => el.remove());
+        return true;
+      }
+
+      // Inject Shadow DOM CSS hiding the context segment (and its adjacent divider) inside the footer capsule,
+      // while preventing false-positive ring-only collapse when display:contents parent reports 0px width.
+      const splitCss = buildUmSplitCss(Number(footer.clientWidth) || 0);
+      let styleEl =
+        typeof sr.getElementById === 'function'
+          ? sr.getElementById(UM_SPLIT_STYLE_ID)
+          : sr.querySelector?.('#' + UM_SPLIT_STYLE_ID);
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = UM_SPLIT_STYLE_ID;
+        styleEl.textContent = splitCss;
+        sr.appendChild(styleEl);
+      } else if (styleEl.textContent !== splitCss) {
+        styleEl.textContent = splitCss;
+      }
+
+      // Read live percentage, SVG ring progress, and tone from usage-monitor's shadow DOM
+      const pctNode = ctxSlot.querySelector('.wm-ctx-pct, [data-od-value], .wm-slot-text');
+      const rawPctText = String(
+        (pctNode && (pctNode.getAttribute('data-od-value') || pctNode.getAttribute('aria-label'))) ||
+          (pctNode && pctNode.textContent) ||
+          ctxSlot.textContent ||
+          ''
+      )
+        .replace(/\s+/g, '')
+        .trim();
+      const numMatch = rawPctText.match(/(\d+(?:\.\d+)?)/);
+      const pctNum = numMatch ? Math.max(0, Math.min(100, parseFloat(numMatch[1]))) : 0;
+      const displayLabel = numMatch ? `${Math.round(pctNum)}%` : rawPctText || '—';
+
+      const srcFill = ctxSlot.querySelector('.wm-ring-fill');
+      const dashArray = (srcFill && srcFill.getAttribute('stroke-dasharray')) || String(UM_RING_CIRC);
+      const parsedCirc = parseFloat(dashArray) || UM_RING_CIRC;
+      const rawOffset = srcFill && srcFill.getAttribute('stroke-dashoffset');
+      const dashOffset =
+        rawOffset !== null && rawOffset !== ''
+          ? rawOffset
+          : String(+(parsedCirc * (1 - pctNum / 100)).toFixed(2));
+
+      const activeTone = UM_TONES.find((t) => ctxSlot.classList && ctxSlot.classList.contains(t)) || '';
+
+      let proxyBtn = footer.querySelector('.' + UM_CTX_PROXY_CLS);
+      if (!proxyBtn) {
+        proxyBtn = createUmCtxProxyButton(umCap);
+        footer.appendChild(proxyBtn);
+      }
+
+      const fillEl = proxyBtn._agCsUmFill || proxyBtn.querySelector('.ag-cs-um-ring-fill');
+      const labelEl = proxyBtn._agCsUmLabel || proxyBtn.querySelector('.ag-cs-um-ctx-label');
+      if (fillEl) {
+        if (fillEl.getAttribute('stroke-dasharray') !== dashArray) fillEl.setAttribute('stroke-dasharray', dashArray);
+        if (fillEl.getAttribute('stroke-dashoffset') !== dashOffset) fillEl.setAttribute('stroke-dashoffset', dashOffset);
+      }
+      if (labelEl && labelEl.textContent !== displayLabel) {
+        labelEl.textContent = displayLabel;
+      }
+      for (const t of UM_TONES) {
+        proxyBtn.classList.toggle(t, t === activeTone);
+      }
+      const srcBtn = sr.querySelector('.wm-capsule-btn');
+      const tip = ctxSlot.getAttribute('title') || srcBtn?.getAttribute('title') || `Context ${displayLabel}`;
+      if (proxyBtn.getAttribute('title') !== tip) proxyBtn.setAttribute('title', tip);
+      if (proxyBtn.getAttribute('aria-label') !== tip) proxyBtn.setAttribute('aria-label', tip);
+      return true;
+    } finally {
+      umSplitSyncing = false;
+    }
+  }
+
+  const UM_SIDECAR_TARGET = 'usage-monitor/panel/';
+  const UM_SIDECAR_TAB_ID = 'sidecar__usage-monitor/panel__/';
+  let lastPinnedUmConvoKey = null;
+  let lastPinUmEnabled = false;
+
+  function findSidecarLinkBridge() {
+    try {
+      const rootEl = document.getElementById('root') || document.body?.firstElementChild;
+      if (!rootEl) return null;
+      const fk = Object.keys(rootEl).find((k) => k.startsWith('__reactContainer') || k.startsWith('__reactFiber'));
+      const start = fk ? rootEl[fk]?.current || rootEl[fk] : null;
+      if (!start) return null;
+      const queue = [start];
+      let visited = 0;
+      while (queue.length && visited < 6000) {
+        const f = queue.shift();
+        visited++;
+        const v = f?.memoizedProps?.value;
+        if (v && typeof v.onSidecarLinkClick === 'function' && typeof v.resolveSidecarLink === 'function') {
+          return v;
+        }
+        if (f?.child) queue.push(f.child);
+        if (f?.sibling) queue.push(f.sibling);
+      }
+    } catch {}
+    return null;
+  }
+
+  function findUsageMonitorTabButton(strip) {
+    if (!strip) return null;
+    for (const btn of strip.querySelectorAll('button')) {
+      try {
+        const fk = Object.keys(btn).find((k) => k.startsWith('__reactFiber'));
+        let f = fk ? btn[fk] : null;
+        for (let i = 0; i < 6 && f; i++, f = f.return) {
+          const tab = f?.memoizedProps?.tab;
+          if (tab && (tab.id === UM_SIDECAR_TAB_ID || tab.content?.sidecarView?.sidecarId === 'usage-monitor/panel')) {
+            return btn;
+          }
+        }
+      } catch {}
+      const label = (btn.textContent || '').trim();
+      const aria = btn.getAttribute('aria-label') || '';
+      if (!aria && /^(用量监控|用量監控|Usage Monitor|使用量モニター)$/i.test(label)) {
+        return btn;
+      }
+    }
+    return null;
+  }
+
+  function openUsageMonitorPane({ forceSwitch = true } = {}) {
+    const auxPane = document.querySelector('[data-aux-pane-open]');
+    const strip = document.querySelector('[data-side-panel-strip]');
+    const isAuxOpen = auxPane ? auxPane.getAttribute('data-aux-pane-open') === 'true' : Boolean(strip);
+    const activeTabId = strip?.getAttribute('data-active-tab-id') || '';
+
+    if (isAuxOpen && activeTabId === UM_SIDECAR_TAB_ID) {
+      return { ok: true, status: 'already_open' };
+    }
+
+    const existingTab = findUsageMonitorTabButton(strip);
+    if (existingTab) {
+      if (!isAuxOpen) {
+        const toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+        if (toggleBtn && typeof toggleBtn.click === 'function') toggleBtn.click();
+      }
+      if (forceSwitch && activeTabId !== UM_SIDECAR_TAB_ID) {
+        existingTab.click();
+      }
+      return { ok: true, status: 'switched' };
+    }
+
+    const bridge = findSidecarLinkBridge();
+    if (bridge) {
+      let resolved = null;
+      try {
+        resolved = bridge.resolveSidecarLink(UM_SIDECAR_TARGET) || bridge.resolveSidecarLink('usage-monitor/panel');
+      } catch {}
+      if (resolved) {
+        try {
+          bridge.onSidecarLinkClick(UM_SIDECAR_TARGET);
+          return { ok: true, status: 'opened' };
+        } catch {}
+      }
+    }
+    return { ok: false, status: 'not_found' };
+  }
+
+  function syncPinUsageMonitorPane(convoKey) {
+    const enabled = cfg.pinUsageMonitorPane === true;
+    if (!enabled) {
+      lastPinUmEnabled = false;
+      lastPinnedUmConvoKey = null;
+      return;
+    }
+    const key = String(convoKey || '');
+    if (!key) return;
+    if (lastPinUmEnabled && lastPinnedUmConvoKey === key) return;
+    const res = openUsageMonitorPane({ forceSwitch: true });
+    if (res.ok) {
+      lastPinUmEnabled = true;
+      lastPinnedUmConvoKey = key;
+    }
+  }
+
   function syncComposers() {
     const cards = Array.from(document.querySelectorAll('[data-testid="agent-input-box"] .surface-composer-card'));
     const lang = getLang();
@@ -5158,6 +5726,7 @@
     if (!primaryCard && cards.length > 0) primaryCard = cards[0];
 
     let activeInfoForCrab = null;
+    let hasUmFooterSplit = false;
 
     for (const card of cards) {
       const inputBox = card.closest('[data-testid="agent-input-box"]');
@@ -5181,10 +5750,15 @@
       // 2. Effort level accent badge inside [data-testid="model-selector-trigger"]
       const modelBtn = card.querySelector('[data-testid="model-selector-trigger"]');
       if (modelBtn) {
-        const spans = modelBtn.querySelectorAll('span');
-        const sub = spans.length >= 2 ? spans[spans.length - 1] : null;
+        const sub = findModelEffortBadgeSpan(modelBtn, { preferTagged: false });
+        for (const el of modelBtn.querySelectorAll('.ag-cs-effort-badge, [data-ag-cs-effort]')) {
+          if (el !== sub) {
+            el.removeAttribute('data-ag-cs-effort');
+            el.classList.remove('ag-cs-effort-badge');
+          }
+        }
         if (sub && sub.childElementCount === 0) {
-          const txt = (sub.textContent || '').trim().toLowerCase();
+          const txt = stripEffortBadgeSuffix(sub.textContent).toLowerCase();
           let level = '';
           if (/\bmax\b/.test(txt)) level = 'max';
           else if (/\bxhigh\b/.test(txt)) level = 'xhigh';
@@ -5205,14 +5779,35 @@
       // 3. Inline stats, remaining-usage ring, turn badges & surround HUD (both new conversations & active chats)
       const footer = card.querySelector('.agy-composer-footer');
       syncPeriodicTrigger(card, footer, modelBtn);
+      if (syncUsageMonitorFooterSplit(footer)) hasUmFooterSplit = true;
       const isHomeCard = Boolean(card.closest('.agy-home') && !card.closest('[data-testid="conversation-view"]'));
       const cascadeId = isHomeCard ? '' : resolveCascadeId(inputBox);
       const inConvo = Boolean(cascadeId || card.closest('[data-testid="conversation-view"]'));
+      if (card === primaryCard) {
+        const paneKey = inConvo ? cascadeId || (typeof location !== 'undefined' ? location.pathname : 'convo') : '';
+        syncPinUsageMonitorPane(paneKey);
+      }
+      const hudSuppressed = !isUsageStatsEnabled();
 
-      if (!footer || cfg.inlineStats === false || cfg.composerRestyle === false) {
+      if (hudSuppressed || !footer || cfg.composerRestyle === false) {
         card
           .querySelectorAll('.ag-cs-inline-stats, .ag-cs-context-ring, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip')
           .forEach((n) => n.remove());
+        const composerShell = card.closest?.('#antigravity\\.agentSidePanelInputBox') || card.parentElement;
+        if (composerShell) composerShell.removeAttribute('data-ag-cs-rim');
+        if (hudSuppressed) {
+          if (card === primaryCard) clearTurnBadges();
+          if (openPopover) closeContextPopover();
+          const cachedForCrab = inConvo && cascadeId ? activeTrajCache.get(cascadeId)?.data || null : null;
+          if (card === primaryCard) activeInfoForCrab = cachedForCrab;
+          if (inConvo && cascadeId && card === primaryCard) {
+            fetchActiveConvo(cascadeId, false, card).then((fresh) => {
+              if (!destroyed && fresh && card.isConnected) {
+                syncCrab(primaryCard, fresh);
+              }
+            });
+          }
+        }
         continue;
       }
 
@@ -5265,15 +5860,20 @@
       if (card === primaryCard) syncTurnBadges(cached);
     }
 
+    if (!hasUmFooterSplit) cleanupUsageMonitorFooterSplit();
     syncCrab(primaryCard, activeInfoForCrab);
     syncSmoothCaret(false);
   }
 
   function updateFooterWidgets(card, footer, data) {
-    const lang = getLang();
-    const ui = uiText(lang);
     const d = data || createEmptyConvoData('', getKnownMaxContextForCard(card, data));
     card._agCsLastData = d;
+    if (cfg.inlineStats === false) {
+      footer.querySelectorAll('.ag-cs-inline-stats, .ag-cs-context-ring').forEach((n) => n.remove());
+      return;
+    }
+    const lang = getLang();
+    const ui = uiText(lang);
     let statsBtn = footer.querySelector('.ag-cs-inline-stats');
     let ringBtn = footer.querySelector('.ag-cs-context-ring');
 
@@ -5379,396 +5979,12 @@
     }
   }
 
-  // ── Settings Panel Integration ─────────────────────────────────────────
+  // ── Legacy Settings Dialog Cleanup (settings now live in right Aux Pane) ──
   const SETTINGS_SEC_ID = 'ag-cs-settings-sec';
 
   function ensureSettingsSection() {
-    const lang = getLang();
-    const ui = uiText(lang);
-    const targetTitles = ['Appearance', '外观', '外觀', '外観'];
-    let panel = null;
-    for (const h2 of document.querySelectorAll('[role="dialog"] h2')) {
-      if (targetTitles.includes((h2.textContent || '').trim())) {
-        panel = h2.closest('div.p-6') || h2.parentElement?.parentElement;
-        if (panel) break;
-      }
-    }
-    if (!panel) return;
-    const syncCondDims = (root) => {
-      const curStyle = effortCore.normalizeEffortStyle(cfg.effortSliderStyle);
-      root.querySelectorAll('[data-ag-cs-cond]').forEach((row) => {
-        const req = row.getAttribute('data-ag-cs-cond');
-        if (req && req !== curStyle) row.setAttribute('data-ag-cs-dim', '1');
-        else row.removeAttribute('data-ag-cs-dim');
-      });
-    };
-    let wasHudOpen = false;
-    const existing = document.getElementById(SETTINGS_SEC_ID);
-    if (existing) {
-      if (panel.querySelector('#' + SETTINGS_SEC_ID) === existing && existing.getAttribute('data-ag-cs-lang') === lang) {
-        existing.querySelectorAll('button[data-ag-cs-key]').forEach((btn) => {
-          const k = btn.getAttribute('data-ag-cs-key');
-          const v = btn.getAttribute('data-ag-cs-val');
-          const curVal = k === 'language' ? lang : cfg[k];
-          const on = JSON.stringify(curVal) === v;
-          if (btn.getAttribute('aria-pressed') !== String(on)) {
-            btn.setAttribute('aria-pressed', String(on));
-            btn.toggleAttribute('data-pressed', on);
-          }
-        });
-        syncCondDims(existing);
-        return;
-      }
-      const prevDetails = existing.querySelector('.ag-cs-settings-details');
-      wasHudOpen = Boolean(prevDetails && (prevDetails.open || prevDetails.hasAttribute('open')));
-      existing.remove();
-    }
-    const sections = Array.from(panel.querySelectorAll('div.space-y-2')).filter(
-      (s) => !s.id.startsWith('ag-cs-') && !(s.parentElement && s.parentElement.closest('div.space-y-2'))
-    );
-    const anchor = sections[sections.length - 1];
-    if (!anchor || !anchor.parentElement) return;
-
-    const BTN =
-      'inline-flex items-center justify-center transition-colors text-secondary-foreground outline-none cursor-pointer border-none shrink-0 select-none h-full hover:text-foreground data-[pressed]:bg-secondary data-[pressed]:text-foreground text-sm px-2 rounded-md gap-1.5';
-
-    const sec = document.createElement('div');
-    sec.id = SETTINGS_SEC_ID;
-    sec.className = 'space-y-2';
-    sec.setAttribute('data-ag-no-i18n', '');
-    sec.setAttribute('data-ag-cs-lang', lang);
-
-    const langOpts = (
-      i18nCore?.LANG_OPTIONS || [
-        { id: 'zh-CN', label: '简体中文' },
-        { id: 'zh-TW', label: '繁體中文' },
-        { id: 'yue', label: '粵語' },
-        { id: 'en', label: 'English' },
-        { id: 'ja', label: '日本語' },
-      ]
-    ).map((o) => [o.id, o.label]);
-
-    const rowDefs = {
-      language: {
-        key: 'language',
-        title: ui.setLanguageTitle || 'Interface Language',
-        desc: ui.setLanguageDesc || 'Switch display language for the entire Antigravity UI and plugin panels.',
-        opts: langOpts,
-      },
-      homeLayout: {
-        key: 'homeLayout',
-        title: ui.setHomeLayoutTitle || 'Home Layout',
-        desc: ui.setHomeLayoutDesc || 'Switch new-conversation home layout.',
-        opts: [
-          ['studio', ui.optStudio || 'Studio'],
-          ['classic', ui.optClassic || 'Classic'],
-          ['off', ui.optNativeOff || 'Off'],
-        ],
-      },
-      palette: {
-        key: 'palette',
-        title: ui.setPaletteTitle || 'Color Palette',
-        desc: ui.setPaletteDesc || 'Pick Studio palette or follow host.',
-        opts: [
-          ['obsidian', ui.optObsidian || 'Obsidian'],
-          ['claude', 'Claude'],
-          ['host', ui.optHost || 'Host'],
-        ],
-      },
-      logoInk: {
-        key: 'logoInk',
-        title: ui.setLogoInkTitle || 'Logo Color',
-        desc: ui.setLogoInkDesc || 'Tint of the Antigravity greeting mark.',
-        opts: [
-          ['accent', ui.optAccent || 'Accent'],
-          ['foreground', ui.optForeground || 'Ink'],
-        ],
-      },
-      sidebarRestyle: {
-        key: 'sidebarRestyle',
-        title: ui.setSidebarTitle || 'Sidebar Restyle',
-        desc: ui.setSidebarDesc || 'Apply Claude-style row height and hover plates to sidebar.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      composerRestyle: {
-        key: 'composerRestyle',
-        title: ui.setComposerTitle || 'Composer Restyle',
-        desc: ui.setComposerDesc || 'Minimalist rounded input box + canvas footer.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      effortSliderStyle: {
-        key: 'effortSliderStyle',
-        title: ui.setEffortStyleTitle || 'Thinking Effort Slider Style',
-        desc: ui.setEffortStyleDesc || 'Style of the interactive effort slider popover (Claude Code or ChatGPT Codex).',
-        opts: [
-          ['claude', 'Claude Code'],
-          ['chatgpt', 'ChatGPT Codex'],
-        ],
-      },
-      effortAccent: {
-        key: 'effortAccent',
-        subRow: true,
-        condStyle: 'claude',
-        badge: ui.badgeClaude || 'Claude Code',
-        title: ui.setEffortAccentTitle || 'Claude Effort Color Accent',
-        desc: ui.setEffortAccentDesc || 'Use blue-violet effort tint ramp on Claude slider & pixel matrix.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      smoothCaret: {
-        key: 'smoothCaret',
-        title: ui.setSmoothCaretTitle || 'Smooth Typing Caret',
-        desc: ui.setSmoothCaretDesc || 'Enable smooth gliding caret interpolation in composer input.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      mascot: {
-        key: 'mascot',
-        title: ui.setMascotTitle || 'Pixel Crab Mascot',
-        desc: ui.setMascotDesc || 'Show interactive Clawd pixel crab on composer.',
-        opts: [
-          ['crab', ui.onLabel || 'On'],
-          ['off', ui.offLabel || 'Off'],
-        ],
-      },
-      homeRipple: {
-        key: 'homeRipple',
-        title: ui.setRippleTitle || 'Home Matrix Ripple',
-        desc: ui.setRippleDesc || 'Interactive character matrix ripple field on home view.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      periodicSelector: {
-        key: 'periodicSelector',
-        title: ui.setPeriodicTitle || 'Gemini 4 Periodic Model Selector',
-        desc: ui.setPeriodicDesc || 'Add a Gemini sparkle icon left of the model name to open the Periodic Table model selector.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      inlineStats: {
-        key: 'inlineStats',
-        title: ui.setInlineStatsTitle || 'Inline Stats & Remaining Ring',
-        desc: ui.setInlineStatsDesc || 'Show inline session stats & remaining capacity ring.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      ringMode: {
-        key: 'ringMode',
-        title: ui.setRingModeTitle || 'Bottom-Right Ring Mode',
-        desc: ui.setRingModeDesc || 'Display Context Remaining % or Model Quota Remaining %.',
-        opts: [
-          ['context', ui.optRingContext || 'Context Rem %'],
-          ['quota', ui.optRingQuota || 'Quota Rem %'],
-        ],
-      },
-      turnBadges: {
-        key: 'turnBadges',
-        title: ui.setTurnBadgesTitle || 'Per-Turn Token Badges',
-        desc: ui.setTurnBadgesDesc || 'Render per-turn token telemetry badges in conversation.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      hudTopBar: {
-        key: 'hudTopBar',
-        title: ui.setHudTopBarTitle || 'Composer Top HUD Bar',
-        desc: ui.setHudTopBarDesc || 'Show context progress bar above composer.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      hudBottomBar: {
-        key: 'hudBottomBar',
-        title: ui.setHudBottomBarTitle || 'Composer Bottom HUD Bar',
-        desc: ui.setHudBottomBarDesc || 'Show detailed HUD telemetry bar below composer.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      hudRimProgress: {
-        key: 'hudRimProgress',
-        title: ui.setHudRimTitle || 'Composer Rim Progress',
-        desc: ui.setHudRimDesc || 'Render context usage rim progress around composer.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      hudFooterChip: {
-        key: 'hudFooterChip',
-        title: ui.setHudChipTitle || 'Footer Remaining Chip',
-        desc: ui.setHudChipDesc || 'Show remaining context/quota chip in composer footer.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-      hudCompact: {
-        key: 'hudCompact',
-        title: ui.setHudCompactTitle || 'Compact HUD Mode',
-        desc: ui.setHudCompactDesc || 'Use compact padding and condensed typography for Token HUD.',
-        opts: [
-          [true, ui.onLabel || 'On'],
-          [false, ui.offLabel || 'Off'],
-        ],
-      },
-    };
-
-    const groups = [
-      {
-        id: 'appearance',
-        title: ui.grpAppearance || 'Appearance & Layout',
-        keys: ['language', 'homeLayout', 'palette', 'logoInk', 'sidebarRestyle', 'composerRestyle'],
-      },
-      {
-        id: 'interaction',
-        title: ui.grpInteraction || 'Slider, Caret & Mascot',
-        keys: ['periodicSelector', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
-      },
-      {
-        id: 'telemetry',
-        title: ui.grpTelemetry || 'Usage Ring & HUD',
-        keys: ['inlineStats', 'ringMode', 'turnBadges'],
-        hudKeys: ['hudTopBar', 'hudBottomBar', 'hudRimProgress', 'hudFooterChip', 'hudCompact'],
-      },
-    ];
-
-    const mkEl = (tag, cls) => {
-      const el = document.createElement(tag);
-      if (cls) el.className = cls;
-      return el;
-    };
-
-    const buildRow = (r) => {
-      const row = mkEl('div', 'w-full');
-      row.setAttribute('data-ag-cs-row', r.key);
-      if (r.subRow) row.setAttribute('data-ag-cs-subrow', '1');
-      if (r.condStyle) {
-        row.setAttribute('data-ag-cs-cond', r.condStyle);
-        const curStyle = effortCore.normalizeEffortStyle(cfg.effortSliderStyle);
-        if (curStyle !== r.condStyle) row.setAttribute('data-ag-cs-dim', '1');
-      }
-      const inner = mkEl('div', 'py-2 px-3 w-full bg-transparent flex justify-between gap-4 items-center');
-      const textCol = mkEl('div', 'flex-1 flex flex-col gap-0.5');
-      const titleLine = mkEl('div', 'ag-cs-settings-title-line');
-      const tSpan = mkEl('span', 'text-sm');
-      tSpan.setAttribute('data-k', 't');
-      tSpan.textContent = r.title;
-      titleLine.appendChild(tSpan);
-      if (r.badge) {
-        const badgeSpan = mkEl('span', 'ag-cs-settings-hint-pill');
-        badgeSpan.textContent = r.badge;
-        titleLine.appendChild(badgeSpan);
-      }
-      const dSpan = mkEl('span', 'text-xs text-muted-foreground whitespace-pre-wrap');
-      dSpan.setAttribute('data-k', 'd');
-      dSpan.textContent = r.desc;
-      textCol.appendChild(titleLine);
-      textCol.appendChild(dSpan);
-
-      const ctlWrap = mkEl('div', 'shrink-0');
-      const group = mkEl('div', 'inline-flex items-center rounded-lg border border-border bg-secondary/20 p-0.5 gap-0.5 select-none min-h-8');
-      group.setAttribute('role', 'group');
-      const curVal = r.key === 'language' ? lang : cfg[r.key];
-      for (const [val, lbl] of r.opts) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = BTN;
-        b.textContent = lbl;
-        b.setAttribute('data-ag-cs-key', r.key);
-        b.setAttribute('data-ag-cs-val', JSON.stringify(val));
-        const on = curVal === val;
-        b.setAttribute('aria-pressed', String(on));
-        if (on) b.setAttribute('data-pressed', '');
-        b.addEventListener('click', () => {
-          for (const sib of group.children) {
-            sib.setAttribute('aria-pressed', String(sib === b));
-            sib.toggleAttribute('data-pressed', sib === b);
-          }
-          saveSetting(r.key, val);
-          syncCondDims(sec);
-          if (r.key === 'effortSliderStyle' || r.key === 'effortAccent') {
-            refreshOpenEffortPopover();
-          }
-        });
-        group.appendChild(b);
-      }
-      ctlWrap.appendChild(group);
-      inner.appendChild(textCol);
-      inner.appendChild(ctlWrap);
-      row.appendChild(inner);
-      return row;
-    };
-
-    const headWrap = mkEl('div', 'flex flex-col gap-1');
-    const headRow = mkEl('div', 'flex items-center justify-between');
-    const headTitleWrap = mkEl('div', 'flex items-center gap-1.5');
-    const h3 = mkEl('h3', 'm-0 text-sm font-medium');
-    h3.textContent = 'AGY Claude Style (agy-claude-style)';
-    headTitleWrap.appendChild(h3);
-    headRow.appendChild(headTitleWrap);
-    headWrap.appendChild(headRow);
-    sec.appendChild(headWrap);
-
-    const groupsWrap = mkEl('div', 'ag-cs-settings-groups');
-    for (const grp of groups) {
-      const grpEl = mkEl('div', 'ag-cs-settings-group');
-      grpEl.setAttribute('data-ag-cs-group', grp.id);
-      const subHead = mkEl('div', 'ag-cs-settings-subhead');
-      subHead.textContent = grp.title;
-      grpEl.appendChild(subHead);
-
-      const list = mkEl('div', 'bg-transparent rounded-xl border border-border overflow-hidden divide-y divide-border');
-      for (const k of grp.keys) {
-        if (rowDefs[k]) list.appendChild(buildRow(rowDefs[k]));
-      }
-      if (Array.isArray(grp.hudKeys) && grp.hudKeys.length > 0) {
-        const details = mkEl('details', 'ag-cs-settings-details');
-        const anyHudActive = grp.hudKeys.some((hk) => cfg[hk] === true);
-        if (wasHudOpen || anyHudActive) {
-          details.open = true;
-          details.setAttribute('open', '');
-        }
-        const summary = mkEl('summary', 'ag-cs-settings-summary');
-        const sumLabel = mkEl('span', 'ag-cs-settings-summary-label');
-        sumLabel.textContent = ui.hudSummaryLabel || 'Composer Surround HUD (Optional)';
-        const sumMeta = mkEl('span', 'ag-cs-settings-summary-meta');
-        sumMeta.textContent = typeof ui.hudSummaryMeta === 'function' ? ui.hudSummaryMeta(grp.hudKeys.length) : `${grp.hudKeys.length} options`;
-        summary.appendChild(sumLabel);
-        summary.appendChild(sumMeta);
-        details.appendChild(summary);
-
-        const bodyWrap = mkEl('div', 'ag-cs-settings-details-body divide-y divide-border');
-        for (const hk of grp.hudKeys) {
-          if (rowDefs[hk]) bodyWrap.appendChild(buildRow(rowDefs[hk]));
-        }
-        details.appendChild(bodyWrap);
-        list.appendChild(details);
-      }
-      grpEl.appendChild(list);
-      groupsWrap.appendChild(grpEl);
-    }
-    sec.appendChild(groupsWrap);
-    anchor.parentElement.appendChild(sec);
+    const legacy = document.getElementById(SETTINGS_SEC_ID);
+    if (legacy) legacy.remove();
   }
 
   // ── Main Synchronization Loop & Global Event Handlers ──────────────────
@@ -5794,7 +6010,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #' +
+        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-style-css'
       )
@@ -5864,10 +6080,10 @@
       ev.preventDefault();
       return;
     }
-    if (openPopover && !openPopover.contains(ev.target) && (!openPopoverAnchor || !openPopoverAnchor.contains(ev.target))) {
+    if (openPopover && !nodeContains(openPopover, ev.target) && (!openPopoverAnchor || !nodeContains(openPopoverAnchor, ev.target))) {
       closeContextPopover();
     }
-    if (openEffortPop && !openEffortPop.contains(ev.target) && (!openEffortAnchor || !openEffortAnchor.contains(ev.target))) {
+    if (openEffortPop && !nodeContains(openEffortPop, ev.target) && (!openEffortAnchor || !nodeContains(openEffortAnchor, ev.target))) {
       closeEffortPopover();
     }
     if (crabState.root) {
@@ -6057,6 +6273,9 @@
         openEffortPop._syncEffortKnob(true);
       }
     }
+    if (umObservedFooter && umObservedFooter.isConnected) {
+      syncUsageMonitorFooterSplit(umObservedFooter);
+    }
   }
 
   function isIgnorableMutation(m) {
@@ -6241,7 +6460,9 @@
       openEffortPopover(b, m);
     },
     openContextPopover(anchorEl, tab) {
-      const cands = Array.from(document.querySelectorAll('.ag-cs-context-ring, .ag-cs-inline-stats'));
+      const cands = Array.from(
+        document.querySelectorAll('.ag-cs-context-ring, .ag-cs-inline-stats, .ag-cs-hud-footer-chip, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar')
+      );
       const a =
         anchorEl ||
         cands.find((el) => {
@@ -6254,6 +6475,9 @@
       const cid = resolveCascadeId(ib);
       const data = (cid && activeTrajCache.get(cid)?.data) || card?._agCsLastData || null;
       if (a) openContextPopover(a, data, tab || 'breakdown');
+    },
+    openUsageMonitorPane(opts) {
+      return openUsageMonitorPane(opts);
     },
     getState() {
       return {
@@ -6279,6 +6503,8 @@
         unmountRipple,
         unmountPanelSeat,
         unmountCrab,
+        cleanupUsageMonitorFooterSplit,
+        cleanupLegacyAuroraArtifacts,
         restoreGreetings,
         () => domTranslator && typeof domTranslator.destroy === 'function' && domTranslator.destroy(),
       ]) {
@@ -6302,7 +6528,8 @@
       });
       document
         .querySelectorAll(
-          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #' + SETTINGS_SEC_ID
+          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #' +
+            SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());
       const html = document.documentElement;
@@ -6310,6 +6537,7 @@
         for (const attr of [
           'data-ag-cs-style',
           'data-ag-cs-palette',
+          'data-ag-cs-glass',
           'data-ag-cs-home',
           'data-ag-cs-composer',
           'data-ag-cs-logo-ink',
