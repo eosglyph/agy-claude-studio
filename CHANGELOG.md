@@ -2,9 +2,9 @@
 
 All notable changes to **Claude Studio (`agy-claude-studio`)** and its upstream base **AGY Claude Style (`0DNANCY/agy-claude-style`)** are documented in this file.
 
-## [v2.1.0 — Claude Studio Edition] - 2026-11-22
+## [v2.1.0] - 2026-11-22
 
-基于上游 `0DNANCY/agy-claude-style v2.1.0` 独立演进并重塑为 **Claude Studio (`eosglyph/agy-claude-studio`)**：
+**Claude Studio Edition** — 基于上游 `0DNANCY/agy-claude-style v2.1.0` 独立演进并重塑为 **Claude Studio (`eosglyph/agy-claude-studio`)**：
 
 - **原生 Antigravity 插件与右侧 Studio 辅助栏**：新增 `plugin.json`、`mcp_config.json`、`plugin/mcp-host.js`、`lifecycle.js`、`watcher-core.js` 及 `sidecars/studio/`，支持 0 后台残留托管、PID 复用安全校验与旧版 `agy-claude-style` 配置自动迁移。
 - **Gemini 4 元素周期表模型选择器**：新增 `periodic-core.js`，在模型选择区提供元素周期表样式快选卡片。
@@ -13,7 +13,7 @@ All notable changes to **Claude Studio (`agy-claude-studio`)** and its upstream 
 
 ---
 
-## [v2.1.0] (Upstream) - 2026-11-22
+## [v2.1.0 (Upstream)] - 2026-11-22
 
 `v2.1.0` 新增 **Swarm 蜂群侧栏（`/swarm` 面板）与 Plan / Orchestrator 模式完整 5 语言本地化**（#15），并修复了长对话虚拟列表及模型思考阶段输出下方轮次 HUD（`#T` 徽章）可能出现历史或残缺虚假信息的问题。
 
