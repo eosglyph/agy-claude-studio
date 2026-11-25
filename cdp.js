@@ -87,23 +87,21 @@ const DEFAULT_CONFIG = {
   composerRestyle: true,
   mascot: 'crab',
   logoInk: 'accent',
-  pinUsageMonitorPane: true,
-  usageStatsEnabled: false,
+  pinRightPane: 'studio',
+  usageStatsEnabled: true,
   inlineStats: true,
   ringMode: 'context',
   turnBadges: true,
   hudTopBar: true,
-  hudBottomBar: true,
-  hudRimProgress: true,
-  hudFooterChip: true,
-  hudCompact: true,
+  hudBottomBar: false,
+  hudRimProgress: false,
   effortSliderStyle: 'chatgpt',
   effortAccent: true,
   smoothCaret: true,
   sidebarRestyle: true,
   sidebarCompact: true,
   placeholderStyle: 'studio',
-  compactPreset: 'empty',
+  compactPreset: 'clean',
   compactCustomText: '',
   periodicSelector: true,
   orchestratorSwitch: true,
@@ -124,7 +122,7 @@ const CONFIG_VALIDATORS = {
   composerRestyle: 'boolean',
   mascot: ['crab', 'off'],
   logoInk: ['accent', 'foreground'],
-  pinUsageMonitorPane: 'boolean',
+  pinRightPane: ['off', 'usage-monitor', 'studio'],
   usageStatsEnabled: 'boolean',
   inlineStats: 'boolean',
   ringMode: ['context', 'quota'],
@@ -132,8 +130,6 @@ const CONFIG_VALIDATORS = {
   hudTopBar: 'boolean',
   hudBottomBar: 'boolean',
   hudRimProgress: 'boolean',
-  hudFooterChip: 'boolean',
-  hudCompact: 'boolean',
   effortSliderStyle: ['claude', 'chatgpt'],
   effortAccent: 'boolean',
   smoothCaret: 'boolean',
@@ -211,6 +207,12 @@ function sanitizeConfig(raw) {
       out[key] = raw[key];
     }
   }
+  if (raw.pinRightPane === undefined && typeof raw.pinUsageMonitorPane === 'boolean') {
+    out.pinRightPane = raw.pinUsageMonitorPane ? 'usage-monitor' : 'off';
+  }
+  if (!CONFIG_VALIDATORS.pinRightPane.includes(out.pinRightPane)) {
+    out.pinRightPane = DEFAULT_CONFIG.pinRightPane;
+  }
   if (raw.usageStatsEnabled === undefined && typeof raw.usageMonitorCompat === 'boolean') {
     out.usageStatsEnabled = !raw.usageMonitorCompat;
   }
@@ -221,7 +223,7 @@ function sanitizeConfig(raw) {
   }
   out.i18nIgnoreSelectors = sanitizeSelectorList(out.i18nIgnoreSelectors);
   if (!CONFIG_VALIDATORS.compactPreset.includes(out.compactPreset)) {
-    out.compactPreset = 'empty';
+    out.compactPreset = DEFAULT_CONFIG.compactPreset;
   }
   out.compactCustomText =
     typeof out.compactCustomText === 'string' ? out.compactCustomText.replace(/\0/g, '').slice(0, 600) : '';

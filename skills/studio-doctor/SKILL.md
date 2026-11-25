@@ -27,6 +27,6 @@ description: >-
 ## 场景 B：自然语言快捷改配置
 
 当用户说类似「换成黑曜石主题」「把 `/compact` 预设改成保留接口文档和报错堆栈」「关掉像素螃蟹」时：
-1. 对照插件目录 `cdp.js` 中的 `DEFAULT_CONFIG` 与 `CONFIG_VALIDATORS` 确认合法键名与取值（如 `palette`、`glassEffect`、`language`、`pluginPageTranslate`、`orchestratorSwitch`、`periodicSelector`、`compactPreset`、`compactCustomText`、`mascot`、`smoothCaret`、`homeRipple`、`usageStatsEnabled` 等）。
+1. 对照插件目录 `cdp.js` 中的 `DEFAULT_CONFIG` 与 `CONFIG_VALIDATORS` 确认合法键名与取值（如 `palette`、`glassEffect`、`language`、`pluginPageTranslate`、`pinRightPane`、`orchestratorSwitch`、`periodicSelector`、`compactPreset`、`compactCustomText`、`mascot`、`smoothCaret`、`homeRipple`、`usageStatsEnabled` 等）。
 2. 通过 `cdp.js` 的 `updateConfigSetting` 安全写入 `config.json`。
 3. 运行 `node inject.js` 立即热生效，并告知用户已生效（随时可撤销）。

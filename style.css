@@ -1529,6 +1529,19 @@ html[data-ag-cs-style] [data-ag-cs-effort]:hover {
   background: color-mix(in srgb, currentColor 16%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
 }
+html[data-ag-cs-style] [data-testid="model-selector-trigger"]:disabled [data-ag-cs-effort],
+html[data-ag-cs-style] [data-testid="model-selector-trigger"][aria-disabled="true"] [data-ag-cs-effort] {
+  cursor: not-allowed !important;
+  opacity: 0.65 !important;
+  filter: saturate(0.35);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+html[data-ag-cs-style] [data-testid="model-selector-trigger"]:disabled [data-ag-cs-effort]:hover,
+html[data-ag-cs-style] [data-testid="model-selector-trigger"][aria-disabled="true"] [data-ag-cs-effort]:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+}
 html[data-ag-cs-style] [data-ag-cs-effort="low"] { color: var(--ag-cs-effort-low) !important; }
 html[data-ag-cs-style] [data-ag-cs-effort="medium"] { color: var(--ag-cs-effort-med) !important; }
 html[data-ag-cs-style] [data-ag-cs-effort="high"] { color: var(--ag-cs-effort-high) !important; }
@@ -1587,7 +1600,6 @@ html[data-ag-cs-composer="off"] .agy-composer-footer > .ag-cs-inline-stats {
   max-width: 220px;
   margin-left: 4px;
 }
-html[data-ag-cs-composer="off"] .agy-composer-footer > .ag-cs-hud-footer-chip,
 html[data-ag-cs-composer="off"] .agy-composer-footer > .ag-cs-context-ring {
   order: 1;
   margin-left: 2px;
@@ -2640,24 +2652,6 @@ html[data-ag-cs-style] #ag-cs-settings-sec [data-ag-cs-row="palette"] [role="gro
   color: #f87171;
   font-weight: 600;
 }
-.ag-cs-hud-footer-chip {
-  order: 5;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--ag-cs-chip-color, #257de0) 40%, transparent);
-  background: color-mix(in srgb, var(--ag-cs-chip-color, #257de0) 12%, transparent);
-  color: var(--ag-cs-chip-color, #257de0);
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  flex-shrink: 0;
-  cursor: pointer;
-}
 .ag-cs-hud-rim-progress {
   position: absolute;
   left: 14px;
@@ -2678,34 +2672,6 @@ html[data-ag-cs-style] #ag-cs-settings-sec [data-ag-cs-row="palette"] [role="gro
 }
 [data-ag-cs-rim="1"] {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--ag-cs-rim-color, #257de0) 42%, transparent) !important;
-}
-html[data-ag-cs-hud-compact="on"] .ag-cs-turn-bar {
-  padding: 2px 6px;
-  font-size: 10.5px;
-  gap: 4px;
-}
-html[data-ag-cs-hud-compact="on"] .ag-cs-hud-top-bar {
-  padding: 3px 8px;
-  gap: 3px;
-}
-html[data-ag-cs-hud-compact="on"] .ag-cs-hud-top-row {
-  font-size: 10px;
-  gap: 5px;
-}
-html[data-ag-cs-hud-compact="on"] .ag-cs-hud-bottom-bar {
-  padding: 3px 8px;
-  font-size: 10px;
-  gap: 2px 6px;
-}
-html[data-ag-cs-hud-compact="on"] .ag-cs-hud-footer-chip {
-  height: 19px;
-  padding: 0 6px;
-  font-size: 10px;
-}
-html[data-ag-cs-hud-compact="on"] .ag-cs-context-ring {
-  height: 22px;
-  padding: 0 5px;
-  font-size: 10.5px;
 }
 
 /* ── 11. Interactive Thinking Effort Slider Popover (.ag-cs-effort-popover) ── */
@@ -4185,11 +4151,11 @@ html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .agy-user-bubble 
     0 4px 16px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
-html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="send-button"]:not(:disabled) {
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="off"] [data-testid="send-button"]:not(:disabled) {
   box-shadow: 0 4px 12px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 36%, transparent) !important;
   transition: transform 120ms ease, box-shadow 140ms ease !important;
 }
-html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="send-button"]:not(:disabled):hover {
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="off"] [data-testid="send-button"]:not(:disabled):hover {
   transform: translateY(-0.5px);
   box-shadow: 0 6px 16px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 44%, transparent) !important;
 }

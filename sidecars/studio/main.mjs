@@ -493,7 +493,7 @@ function findExtractedStudioRoot(extractDir) {
   return null;
 }
 
-const ARCHIVE_SKIP_TOP_NAMES = new Set(['.git', '.github', '.gitignore', 'node_modules', 'dist', 'release']);
+const ARCHIVE_SKIP_TOP_NAMES = new Set(['.git', '.github', '.gitignore', 'node_modules', 'dist', 'release', 'releases']);
 
 async function performArchiveSelfUpdate({
   pluginDir,
@@ -756,7 +756,28 @@ function resolveScriptsDir() {
   return scriptsCore.resolveScriptsDataDir(process.env, cdp.PLUGIN_DATA_DIR || null);
 }
 
-function getScriptsApi({ dataDir = resolveScriptsDir() } = {}) {
+function ensureDefaultStarterScripts(dataDir, pluginRootDir = PLUGIN_ROOT_DIR) {
+  const filePath = scriptsCore.getScriptsFilePath(dataDir);
+  if (existsSync(filePath)) return;
+  const changelogScript = join(pluginRootDir, 'scripts', 'fetch-agy-changelog.mjs');
+  if (!existsSync(changelogScript)) return;
+  try {
+    scriptsCore.writeScriptsConfig(dataDir, [
+      {
+        id: 'agy_changelog_ver',
+        name: 'Antigravity 更新日志 (ver)',
+        command: 'node',
+        scriptPath: changelogScript,
+        args: [],
+        cwd: pluginRootDir,
+        timeoutSec: 45,
+      },
+    ]);
+  } catch {}
+}
+
+function getScriptsApi({ dataDir = resolveScriptsDir(), pluginRootDir = PLUGIN_ROOT_DIR, seedDefaults = true } = {}) {
+  if (seedDefaults) ensureDefaultStarterScripts(dataDir, pluginRootDir);
   const scripts = scriptsCore.readScriptsConfig(dataDir);
   return { ok: true, scripts };
 }
@@ -905,6 +926,33 @@ function parseJsonSafe(raw) {
 }
 
 const BOOKKEEPING_TOOLS = new Set(['update_steps', 'update_focus']);
+const IGNORED_ACTIVITY_STEP_TYPES = new Set([
+  'CORTEX_STEP_TYPE_EPHEMERAL_MESSAGE',
+  'CORTEX_STEP_TYPE_CHECKPOINT',
+  'CORTEX_STEP_TYPE_CONVERSATION_HISTORY',
+  'CORTEX_STEP_TYPE_SYSTEM_MESSAGE',
+  'CORTEX_STEP_TYPE_KNOWLEDGE_ARTIFACTS',
+  'CORTEX_STEP_TYPE_USER_INPUT',
+]);
+
+function extractLiveTextSnippet(rawText, { preferTail = false, maxLen = 72 } = {}) {
+  if (!rawText || typeof rawText !== 'string') return '';
+  const cleanLine = (line) =>
+    String(line || '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/^[#>*\-\d.\s]+/, '')
+      .replace(/[*_`~]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const lines = rawText
+    .split(/\r?\n/)
+    .map(cleanLine)
+    .filter((l) => l.length > 0);
+  if (!lines.length) return '';
+  const picked = preferTail ? lines[lines.length - 1] : lines[0];
+  return picked.slice(0, maxLen);
+}
 
 function extractSingleStepActivity(step) {
   if (!step || typeof step !== 'object') return null;
@@ -914,8 +962,11 @@ function extractSingleStepActivity(step) {
   const toolCall = step.metadata?.toolCall || step.generic?.toolCall || null;
   const toolName = String(toolCall?.name || '').trim().toLowerCase();
   const toolArgs = parseJsonSafe(toolCall?.argumentsJson) || {};
-  const toolSummary = String(step.metadata?.toolSummary || toolArgs.toolSummary || '').trim();
+  const toolSummary = String(
+    step.metadata?.toolSummary || step.runCommand?.toolSummary || toolArgs.toolSummary || ''
+  ).trim();
   const startedAt = step.metadata?.createdAt || null;
+  const isIgnored = IGNORED_ACTIVITY_STEP_TYPES.has(type) || BOOKKEEPING_TOOLS.has(toolName);
 
   let kind = 'running';
   let detail = toolSummary;
@@ -925,11 +976,21 @@ function extractSingleStepActivity(step) {
     kind = 'waiting';
   } else if (type === 'CORTEX_STEP_TYPE_PLANNER_RESPONSE') {
     const pr = step.plannerResponse || {};
-    const hasResp = Boolean(pr.modifiedResponse || pr.response);
-    const hasThink = Boolean(pr.thinking);
-    kind = hasResp && !hasThink ? 'responding' : hasResp && status === 'CORTEX_STEP_STATUS_DONE' ? 'responding' : 'thinking';
-    if (hasResp && hasThink && status === 'CORTEX_STEP_STATUS_GENERATING') {
+    const respText = String(pr.modifiedResponse || pr.response || '').trim();
+    const thinkText = String(pr.thinking || '').trim();
+    const hasResp = Boolean(respText);
+    const hasThink = Boolean(thinkText);
+    if (hasResp) {
       kind = 'responding';
+      detail = extractLiveTextSnippet(respText, { preferTail: false });
+    } else if (hasThink) {
+      kind = 'thinking';
+      detail = extractLiveTextSnippet(thinkText, { preferTail: true });
+    } else if (status === 'CORTEX_STEP_STATUS_PENDING') {
+      kind = 'waiting_ttft';
+    } else {
+      // Model is actively generating hidden/encrypted thinking or tool-call JSON
+      kind = 'thinking';
     }
   } else if (type === 'CORTEX_STEP_TYPE_VIEW_FILE' || toolName === 'read_file' || toolName === 'view_file') {
     kind = 'reading_file';
@@ -960,7 +1021,16 @@ function extractSingleStepActivity(step) {
         ''
     );
     if (file) detail = file;
-  } else if (type === 'CORTEX_STEP_TYPE_RUN_COMMAND' || toolName === 'run_command' || toolName === 'command_status') {
+  } else if (type === 'CORTEX_STEP_TYPE_COMMAND_STATUS' || toolName === 'command_status') {
+    kind = 'waiting_command';
+    isToolStep = true;
+    if (!detail) {
+      const cmdLine = String(step.commandStatus?.commandLine || step.runCommand?.commandLine || toolArgs.CommandId || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (cmdLine) detail = cmdLine.slice(0, 44);
+    }
+  } else if (type === 'CORTEX_STEP_TYPE_RUN_COMMAND' || toolName === 'run_command') {
     kind = 'running_command';
     isToolStep = true;
     if (!detail) {
@@ -1017,6 +1087,7 @@ function extractSingleStepActivity(step) {
     startedAt,
     isToolStep,
     isBookkeeping: BOOKKEEPING_TOOLS.has(toolName),
+    isIgnored,
   };
 }
 
@@ -1029,26 +1100,80 @@ function classifyLiveStepActivity(steps) {
     'CORTEX_STEP_STATUS_PENDING',
   ]);
 
+  const parsed = steps.map((s) => (s ? extractSingleStepActivity(s) : null));
   let targetIdx = -1;
+  // 1. Prefer an active meaningful step (skipping bookkeeping / ephemeral / system steps)
   for (let i = steps.length - 1; i >= 0; i -= 1) {
-    const s = steps[i];
-    if (s && ACTIVE_STATUSES.has(String(s.status || ''))) {
+    const info = parsed[i];
+    if (info && !info.isIgnored && ACTIVE_STATUSES.has(info.status)) {
       targetIdx = i;
       break;
     }
   }
-  if (targetIdx < 0) {
-    for (let i = steps.length - 1; i >= 0; i -= 1) {
-      if (steps[i]) {
-        targetIdx = i;
-        break;
+  const findLatestTurnFocus = (beforeIdx) => {
+    for (let i = Math.min(beforeIdx, steps.length) - 1; i >= 0; i -= 1) {
+      const st = steps[i];
+      if (!st) continue;
+      const tp = String(st.type || '').toUpperCase();
+      if (tp === 'CORTEX_STEP_TYPE_USER_INPUT') break;
+      const tc = st.metadata?.toolCall || st.generic?.toolCall || null;
+      if (String(tc?.name || '').toLowerCase() === 'update_focus') {
+        const args = parseJsonSafe(tc?.argumentsJson) || {};
+        const f = String(args.focus || '').trim();
+        if (f) return f.slice(0, 72);
       }
     }
-  }
-  if (targetIdx < 0) return null;
+    return '';
+  };
 
-  const targetInfo = extractSingleStepActivity(steps[targetIdx]);
+  const hasCompletedToolInTurn = (beforeIdx) => {
+    for (let i = beforeIdx - 1; i >= 0; i -= 1) {
+      const tp = String(steps[i]?.type || '').toUpperCase();
+      if (tp === 'CORTEX_STEP_TYPE_USER_INPUT') return false;
+      const info = parsed[i];
+      if (!info || info.isIgnored) continue;
+      if (info.isToolStep) return true;
+      if (tp === 'CORTEX_STEP_TYPE_PLANNER_RESPONSE') return false;
+    }
+    return false;
+  };
+
+  // 2. Otherwise the turn is still running between steps:
+  // right after USER_INPUT -> waiting_ttft; after completed tools -> thinking (with active focus if any).
+  if (targetIdx < 0) {
+    const lastStep = [...steps].reverse().find(Boolean) || null;
+    const lastTs = lastStep?.metadata?.completedAt || lastStep?.metadata?.createdAt || null;
+    const postTool = hasCompletedToolInTurn(steps.length);
+    return {
+      kind: postTool ? 'thinking' : 'waiting_ttft',
+      detail: postTool ? findLatestTurnFocus(steps.length) : '',
+      toolName: '',
+      status: 'CORTEX_STEP_STATUS_RUNNING',
+      waiting: false,
+      startedAt: lastTs,
+      batch: null,
+    };
+  }
+
+  const targetInfo = parsed[targetIdx];
   if (!targetInfo) return null;
+
+  // Enrich active thinking (when hidden thoughts/tool-call JSON produce no visible thinking snippet)
+  // with the current turn's live update_focus label instead of leaving stale tool paths.
+  if (targetInfo.kind === 'thinking' && !targetInfo.detail) {
+    const focusText = findLatestTurnFocus(targetIdx);
+    if (focusText) {
+      return {
+        kind: 'thinking',
+        detail: focusText,
+        toolName: targetInfo.toolName,
+        status: targetInfo.status,
+        waiting: false,
+        startedAt: targetInfo.startedAt,
+        batch: null,
+      };
+    }
+  }
 
   // Detect parallel tool call batch within the current turn (after the latest PLANNER_RESPONSE)
   let batch = null;
@@ -1218,7 +1343,7 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
           isRunningItem && stepCount > 0
             ? callLanguageServer(
                 'GetCascadeTrajectorySteps',
-                { cascadeId: item.id, stepOffset: Math.max(0, stepCount - 12) },
+                { cascadeId: item.id, stepOffset: Math.max(0, stepCount - 16) },
                 { env, fetchFn, timeoutMs: 2500 }
               )
             : Promise.resolve({ ok: false });

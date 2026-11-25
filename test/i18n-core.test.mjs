@@ -542,3 +542,41 @@ test('Swarm sidecar translator translates chrome, <select><option>, dynamic rule
     globalThis.MutationObserver = prevMO;
   }
 });
+
+test('Antigravity Settings sentence-case notifications, sounds, overages, and dynamic plan strings translate cleanly', () => {
+  const { doc, html, body, makeEl, NodeFilter, MutationObserver } = createMiniDom();
+  const prevNF = globalThis.NodeFilter;
+  const prevMO = globalThis.MutationObserver;
+  globalThis.NodeFilter = NodeFilter;
+  globalThis.MutationObserver = MutationObserver;
+  try {
+    const n1 = makeEl('div');
+    n1.append('Enable notifications for agent');
+    const n2 = makeEl('div');
+    n2.append('Enable sounds for agent');
+    const n3 = makeEl('div');
+    n3.append('Enable AI credit overages');
+    const n4 = makeEl('div');
+    n4.append('Your plan: Google AI Pro');
+    const n5 = makeEl('div');
+    n5.append('Your plan: Google AI Ultra');
+    body.append(n1, n2, n3, n4, n5);
+
+    const translator = i18nCore.createDomTranslator(i18nLocales.resolveLocaleBundle);
+    translator.setLanguage('zh-CN', doc);
+    assert.equal(n1.textContent, '启用智能体通知');
+    assert.equal(n2.textContent, '启用智能体提示音');
+    assert.equal(n3.textContent, '允许 AI 额度超额');
+    assert.equal(n4.textContent, '你的套餐：Google AI Pro');
+    assert.equal(n5.textContent, '你的套餐：Google AI Ultra');
+
+    translator.setLanguage('en', doc);
+    assert.equal(html.getAttribute('lang'), 'en');
+    assert.equal(n1.textContent, 'Enable notifications for agent');
+    assert.equal(n4.textContent, 'Your plan: Google AI Pro');
+    translator.destroy();
+  } finally {
+    globalThis.NodeFilter = prevNF;
+    globalThis.MutationObserver = prevMO;
+  }
+});

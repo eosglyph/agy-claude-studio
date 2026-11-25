@@ -442,6 +442,12 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, language: 'zh-CN' });
     assert.ok(activeEffortPop.innerHTML.includes('推理等级'));
 
+    // When model selector is locked during a running turn, effort popover closes and refuses to open
+    modelBtn.disabled = true;
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
+    assert.equal(body.querySelector('.ag-cs-effort-popover'), null, 'Effort popover must stay closed when model selector is disabled');
+    modelBtn.disabled = false;
+
     // Refreshing palette externally updates palette attribute immediately
     doc.hidden = true;
     sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'claude' });
@@ -1404,7 +1410,7 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
 
   try {
     const res = vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota', hudFooterChip: true, hudTopBar: true }),
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, ringMode: 'quota', hudTopBar: true }),
       sandbox
     );
     assert.equal(res.status, 'ok');
@@ -1417,7 +1423,7 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
     const topBar = card.querySelector('.ag-cs-hud-top-bar');
     assert.ok(statsBtn, 'Expected inline tokens info on new conversation home view');
     assert.ok(ringBtn, 'Expected bottom-right ring on new conversation home view');
-    assert.ok(chip, 'Expected optional footer chip when enabled on new conversation');
+    assert.equal(chip, null, 'Removed footer quota chip must not be mounted');
     assert.ok(topBar, 'Expected optional top HUD bar when enabled on new conversation');
     assert.equal(statsBtn.textContent, '0 轮 0 步 · 0 tok · 0% 缓存');
     assert.equal(ringBtn.getAttribute('data-ring-mode'), 'quota');
@@ -3978,9 +3984,9 @@ test('hudBottomBar triggers quota fetch in context mode, low-context triggers /c
     assert.equal(activeEd.textContent, '/compact');
     assert.equal(otherEd.textContent, 'untouched other composer');
 
-    // 5. 3-way loadSettings merge keeps local UI preference (hudCompact=true) when external config changes only palette
+    // 5. 3-way loadSettings merge keeps local UI preference (hudRimProgress=true) when external config changes only palette
     const savedMap = JSON.parse(storage.getItem('agClaudeStyle.settings.v1') || '{}');
-    savedMap.hudCompact = true;
+    savedMap.hudRimProgress = true;
     storage.setItem('agClaudeStyle.settings.v1', JSON.stringify(savedMap));
     sandbox.window.__agClaudeStudio.refreshConfig({
       ...cdp.DEFAULT_CONFIG,
@@ -3991,7 +3997,7 @@ test('hudBottomBar triggers quota fetch in context mode, low-context triggers /c
     });
     const stAfter = sandbox.window.__agClaudeStudio.getState();
     assert.equal(stAfter.cfg.palette, 'claude');
-    assert.equal(stAfter.cfg.hudCompact, true);
+    assert.equal(stAfter.cfg.hudRimProgress, true);
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
   } finally {

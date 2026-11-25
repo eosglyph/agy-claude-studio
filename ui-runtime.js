@@ -93,7 +93,7 @@
   function isUsageStatsEnabled() {
     if (typeof cfg.usageStatsEnabled === 'boolean') return cfg.usageStatsEnabled;
     if (typeof cfg.usageMonitorCompat === 'boolean') return !cfg.usageMonitorCompat;
-    return false;
+    return true;
   }
   const domTranslator =
     i18nCore && i18nLocales && typeof i18nCore.createDomTranslator === 'function'
@@ -466,7 +466,7 @@
     html.setAttribute('data-ag-cs-logo-ink', cfg.logoInk === 'foreground' ? 'foreground' : 'accent');
     html.setAttribute('data-ag-cs-sidebar', cfg.sidebarRestyle === false ? 'off' : 'on');
     html.setAttribute('data-ag-cs-sidebar-compact', cfg.sidebarCompact === true ? 'on' : 'off');
-    html.setAttribute('data-ag-cs-hud-compact', cfg.hudCompact === true ? 'on' : 'off');
+    html.removeAttribute('data-ag-cs-hud-compact');
     html.setAttribute('data-ag-cs-effort-accent', cfg.effortAccent === false ? 'off' : 'on');
     html.setAttribute('data-ag-cs-lang', lang);
     const isCjk = i18nCore && typeof i18nCore.isCjkLanguage === 'function' ? i18nCore.isCjkLanguage(lang) : isZh();
@@ -2192,7 +2192,7 @@
   }
 
   function resolveCompactPresetText(ui) {
-    const mode = cfg?.compactPreset || 'empty';
+    const mode = cfg?.compactPreset || 'clean';
     if (mode === 'clean') {
       return String(
         ui?.compactPresetClean ||
@@ -3948,29 +3948,10 @@
       if (rimBar) rimBar.remove();
     }
 
-    // 4. Footer Chip (.ag-cs-hud-footer-chip)
+    // Clean up any legacy Footer Chip (.ag-cs-hud-footer-chip) left from older versions
     if (footer) {
-      let chip = footer.querySelector('.ag-cs-hud-footer-chip');
-      if (cfg.hudFooterChip === true) {
-        if (!chip) {
-          chip = document.createElement('button');
-          chip.type = 'button';
-          chip.className = 'ag-cs-hud-footer-chip';
-          chip.setAttribute('data-ag-no-i18n', '');
-          chip.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            openContextPopover(chip, resolveCardConvoData(card, d), 'quotas');
-          });
-          footer.appendChild(chip);
-        }
-        const chipTxt = `${ui.remShort || 'Rem'} ${ring.pctRound}% (${formatCompactK(ring.remainingTokens)})`;
-        if (chip.textContent !== chipTxt) {
-          chip.textContent = chipTxt;
-          chip.style.setProperty('--ag-cs-chip-color', ring.color);
-        }
-      } else if (chip) {
-        chip.remove();
-      }
+      const legacyChip = footer.querySelector('.ag-cs-hud-footer-chip');
+      if (legacyChip) legacyChip.remove();
     }
   }
 
@@ -4098,6 +4079,7 @@
     const interactive = !isOrchSelected || (canSelectOrchPlanner && resolved.hasRealVariants);
 
     const commitSelection = (opt, effortId, effortDisplay, fullLabel, onHostResolved) => {
+      if (isModelButtonLocked(modelBtn)) return;
       const hasOrchPlannerSetter = Boolean(canSelectOrchPlanner && opt && opt.value !== undefined);
       const hasRealModelSetter = Boolean(
         hasOrchPlannerSetter || (!isOrchSelected && opt && fiberProps && typeof fiberProps.setSelectedModel === 'function')
@@ -4892,6 +4874,10 @@
     const anchor = badgeEl || modelBtn;
     if (!anchor) return;
     const resolvedModelBtn = modelBtn || anchor?.closest?.('[data-testid="model-selector-trigger"]') || null;
+    if (isModelButtonLocked(resolvedModelBtn)) {
+      closeEffortPopover();
+      return;
+    }
     const preCtx = resolveModelEffortContext(resolvedModelBtn, badgeEl);
     if (!preCtx.interactive) return;
     if (openEffortPop && (openEffortAnchor === anchor || (resolvedModelBtn && resolvedModelBtn.contains(openEffortAnchor)))) {
@@ -6371,10 +6357,34 @@
     document.querySelectorAll('.' + UM_CTX_PROXY_CLS + ', .ag-cs-um-multi-proxy').forEach((el) => el.remove());
   }
 
-  const UM_SIDECAR_TARGET = 'usage-monitor/panel/';
-  const UM_SIDECAR_TAB_ID = 'sidecar__usage-monitor/panel__/';
-  let lastPinnedUmConvoKey = null;
-  let lastPinUmEnabled = false;
+  const RIGHT_PANE_TARGETS = {
+    'usage-monitor': {
+      sidecarTarget: 'usage-monitor/panel/',
+      sidecarFallback: 'usage-monitor/panel',
+      tabId: 'sidecar__usage-monitor/panel__/',
+      sidecarId: 'usage-monitor/panel',
+      labelRe: /^(用量监控|用量監控|Usage Monitor|使用量モニター)$/i,
+    },
+    studio: {
+      sidecarTarget: 'agy-claude-studio/studio/',
+      sidecarFallback: 'agy-claude-studio/studio',
+      tabId: 'sidecar__agy-claude-studio/studio__/',
+      sidecarId: 'agy-claude-studio/studio',
+      labelRe: /^Claude Studio$/i,
+    },
+  };
+  let lastPinnedPaneConvoKey = null;
+  let lastPinnedPaneTarget = 'off';
+
+  function getEffectivePinRightPane() {
+    if (cfg.pinRightPane === 'off' || cfg.pinRightPane === 'studio' || cfg.pinRightPane === 'usage-monitor') {
+      return cfg.pinRightPane;
+    }
+    if (typeof cfg.pinUsageMonitorPane === 'boolean') {
+      return cfg.pinUsageMonitorPane ? 'usage-monitor' : 'off';
+    }
+    return 'studio';
+  }
 
   function findSidecarLinkBridge() {
     try {
@@ -6399,45 +6409,48 @@
     return null;
   }
 
-  function findUsageMonitorTabButton(strip) {
-    if (!strip) return null;
+  function findRightSidecarTabButton(strip, spec) {
+    if (!strip || !spec) return null;
     for (const btn of strip.querySelectorAll('button')) {
       try {
         const fk = Object.keys(btn).find((k) => k.startsWith('__reactFiber'));
         let f = fk ? btn[fk] : null;
         for (let i = 0; i < 6 && f; i++, f = f.return) {
           const tab = f?.memoizedProps?.tab;
-          if (tab && (tab.id === UM_SIDECAR_TAB_ID || tab.content?.sidecarView?.sidecarId === 'usage-monitor/panel')) {
+          if (tab && (tab.id === spec.tabId || tab.content?.sidecarView?.sidecarId === spec.sidecarId)) {
             return btn;
           }
         }
       } catch {}
       const label = (btn.textContent || '').trim();
       const aria = btn.getAttribute('aria-label') || '';
-      if (!aria && /^(用量监控|用量監控|Usage Monitor|使用量モニター)$/i.test(label)) {
+      if (!aria && spec.labelRe.test(label)) {
         return btn;
       }
     }
     return null;
   }
 
-  function openUsageMonitorPane({ forceSwitch = true } = {}) {
+  function openRightSidecarPane(targetKey, { forceSwitch = true } = {}) {
+    const spec = RIGHT_PANE_TARGETS[targetKey];
+    if (!spec) return { ok: false, status: 'invalid_target' };
+
     const auxPane = document.querySelector('[data-aux-pane-open]');
     const strip = document.querySelector('[data-side-panel-strip]');
     const isAuxOpen = auxPane ? auxPane.getAttribute('data-aux-pane-open') === 'true' : Boolean(strip);
     const activeTabId = strip?.getAttribute('data-active-tab-id') || '';
 
-    if (isAuxOpen && activeTabId === UM_SIDECAR_TAB_ID) {
+    if (isAuxOpen && activeTabId === spec.tabId) {
       return { ok: true, status: 'already_open' };
     }
 
-    const existingTab = findUsageMonitorTabButton(strip);
+    const existingTab = findRightSidecarTabButton(strip, spec);
     if (existingTab) {
       if (!isAuxOpen) {
         const toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
         if (toggleBtn && typeof toggleBtn.click === 'function') toggleBtn.click();
       }
-      if (forceSwitch && activeTabId !== UM_SIDECAR_TAB_ID) {
+      if (forceSwitch && activeTabId !== spec.tabId) {
         existingTab.click();
       }
       return { ok: true, status: 'switched' };
@@ -6447,11 +6460,11 @@
     if (bridge) {
       let resolved = null;
       try {
-        resolved = bridge.resolveSidecarLink(UM_SIDECAR_TARGET) || bridge.resolveSidecarLink('usage-monitor/panel');
+        resolved = bridge.resolveSidecarLink(spec.sidecarTarget) || bridge.resolveSidecarLink(spec.sidecarFallback);
       } catch {}
       if (resolved) {
         try {
-          bridge.onSidecarLinkClick(UM_SIDECAR_TARGET);
+          bridge.onSidecarLinkClick(spec.sidecarTarget);
           return { ok: true, status: 'opened' };
         } catch {}
       }
@@ -6459,20 +6472,28 @@
     return { ok: false, status: 'not_found' };
   }
 
-  function syncPinUsageMonitorPane(convoKey) {
-    const enabled = cfg.pinUsageMonitorPane === true;
-    if (!enabled) {
-      lastPinUmEnabled = false;
-      lastPinnedUmConvoKey = null;
+  function openUsageMonitorPane(opts = {}) {
+    return openRightSidecarPane('usage-monitor', opts);
+  }
+
+  function openStudioPane(opts = {}) {
+    return openRightSidecarPane('studio', opts);
+  }
+
+  function syncPinRightPane(convoKey) {
+    const target = getEffectivePinRightPane();
+    if (target === 'off') {
+      lastPinnedPaneTarget = 'off';
+      lastPinnedPaneConvoKey = null;
       return;
     }
     const key = String(convoKey || '');
     if (!key) return;
-    if (lastPinUmEnabled && lastPinnedUmConvoKey === key) return;
-    const res = openUsageMonitorPane({ forceSwitch: true });
+    if (lastPinnedPaneTarget === target && lastPinnedPaneConvoKey === key) return;
+    const res = openRightSidecarPane(target, { forceSwitch: true });
     if (res.ok) {
-      lastPinUmEnabled = true;
-      lastPinnedUmConvoKey = key;
+      lastPinnedPaneTarget = target;
+      lastPinnedPaneConvoKey = key;
     }
   }
 
@@ -6518,6 +6539,9 @@
       // 2. Effort level accent badge inside [data-testid="model-selector-trigger"]
       const modelBtn = card.querySelector('[data-testid="model-selector-trigger"]');
       if (modelBtn) {
+        if (isModelButtonLocked(modelBtn) && openEffortPop && openEffortModelBtn === modelBtn) {
+          closeEffortPopover();
+        }
         const sub = findModelEffortBadgeSpan(modelBtn, { preferTagged: false });
         for (const el of modelBtn.querySelectorAll('.ag-cs-effort-badge, [data-ag-cs-effort]')) {
           if (el !== sub) {
@@ -6568,7 +6592,7 @@
       const inConvo = Boolean(cascadeId || card.closest('[data-testid="conversation-view"]'));
       if (card === primaryCard) {
         const paneKey = inConvo ? cascadeId || (typeof location !== 'undefined' ? location.pathname : 'convo') : '';
-        syncPinUsageMonitorPane(paneKey);
+        syncPinRightPane(paneKey);
       }
       const hudSuppressed = !isUsageStatsEnabled();
 
@@ -7457,7 +7481,11 @@
   function findClickedEffortBadge(ev) {
     const t = ev?.target;
     if (!t || !t.closest) return null;
-    return t.closest('[data-testid="model-selector-trigger"] .ag-cs-effort-badge, [data-testid="model-selector-trigger"] [data-ag-cs-effort]');
+    const badge = t.closest('[data-testid="model-selector-trigger"] .ag-cs-effort-badge, [data-testid="model-selector-trigger"] [data-ag-cs-effort]');
+    if (!badge) return null;
+    const modelBtn = badge.closest('[data-testid="model-selector-trigger"]');
+    if (isModelButtonLocked(modelBtn)) return null;
+    return badge;
   }
 
   function onDocPointerDown(ev) {
@@ -7863,6 +7891,12 @@
     },
     openUsageMonitorPane(opts) {
       return openUsageMonitorPane(opts);
+    },
+    openStudioPane(opts) {
+      return openStudioPane(opts);
+    },
+    openRightSidecarPane(target, opts) {
+      return openRightSidecarPane(target, opts);
     },
     getState() {
       return {

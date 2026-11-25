@@ -23,12 +23,12 @@ description: >-
    - `办公群机器人 → 飞书 / 钉钉 / 企业微信`
    - `其他 → Telegram Bot / 自定义 Webhook`
 2. 告知用户最稳妥的填写方式：
-   - **方式 1（推荐）**：直接在右侧栏 **Claude Studio → 设置 → 🔔 手机推送** 填入凭据、勾选「启用推送」并点击「发送测试」；
-   - **方式 2（对话代填）**：若用户愿意直接发凭据给你，由你通过 `notify-core.js` 的 `saveNotifyConfig` 安全写入 `PLUGIN_DATA/notify.json`，并调用 `sendTestNotification` 立即发一条真实测试消息验证通路。
+   - **方式 1（推荐）**：直接在右侧栏 **Claude Studio → 设置 → 手机推送** 填入凭据、勾选「开启手机推送」并点击「发送测试」（后续也可在 **工具** 页的折叠卡片里一键开关与改阈值）；
+   - **方式 2（对话代填）**：若用户愿意直接发凭据给你，由你通过 `notify-core.js` 的 `writeNotifyConfig` 安全写入 `PLUGIN_DATA/notify.json`，并调用 `deliverNotification` 立即发一条真实测试消息验证通路。
 3. 顺手确认 3 个实用项：
-   - **最短耗时门槛**（`minDurationSec`，默认 60 秒，防止 3 秒小问答频繁弹窗打扰）；
-   - **静默免打扰时段**（如夜间 23:00–08:00）；
-   - 若选了 **Server酱**，确认是否开启「完整 Markdown 正文推送（最高 28KB）」（默认开启）。
+   - **最短耗时门槛**（`minDurationSec`，默认 `180` 秒 / 3 分钟，短对话不打扰）；
+   - **防打扰过滤**：是否仅在后台全空闲时推送（`onlyFullyIdle`，默认开启）、异常报错立即推送（`notifyOnError`，默认开启）、手动停止时不推送（`skipUserCanceled`，默认开启）；
+   - 若选了 **Server酱**，确认是否开启「推送完整 Markdown 全文（最高约 28KB）」（默认开启）。
 
 ## 场景 B：没收到推送的快速排障清单
 
@@ -36,6 +36,7 @@ description: >-
 1. 检查 `~/.gemini/antigravity/plugin_data/agy-claude-studio/notify.json` 是否存在、`enabled` 是否为 `true`、所选通道凭据是否非空。
 2. 检查 `~/.gemini/config/plugins/agy-claude-studio/hooks.json` 是否正确指向 `scripts/notify-stop.mjs`。
 3. 检查是否命中静默过滤条件：
-   - 本轮任务耗时是否小于 `minDurationSec`（默认 60s）？
-   - 当前时间是否落在 `quietHours` 免打扰区间内？
-4. 查看 `notify.json` / 本地日志中的最近一次投递错误，或直接触发一次测试推送定位 HTTP 状态码与接口返回信息，给出明确修复建议。
+   - 本轮任务耗时是否小于 `minDurationSec`（默认 `180s` / 3 分钟）？
+   - 是否开启了 `onlyFullyIdle` 而此时仍有子代理或后台任务在运行？
+   - 是否为用户手动点击停止（命中 `skipUserCanceled`）或处于 `cooldownSec`（默认 20s）冷却窗口内？
+4. 查看 `PLUGIN_DATA/notify-state.json` 中的最近一次投递状态，或直接触发一次测试推送定位 HTTP 状态码与接口返回信息，给出明确修复建议。

@@ -19,7 +19,7 @@ const CHANNEL_LIST = [
 const DEFAULT_NOTIFY_CONFIG = {
   enabled: false,
   channel: 'serverchan',
-  minDurationSec: 15,
+  minDurationSec: 180,
   cooldownSec: 20,
   onlyFullyIdle: true,
   notifyOnError: true,

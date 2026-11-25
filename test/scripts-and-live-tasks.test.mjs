@@ -52,6 +52,22 @@ test('scripts-core parses args, CRUDs entries in scripts.json, and executes scri
     const delRes = scriptsCore.deleteCustomScript(tmpDir, id);
     assert.equal(delRes.ok, true);
     assert.equal(delRes.scripts.length, 0);
+
+    // Fresh data dir automatically seeds the clean Antigravity changelog (ver) script once
+    const freshDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-scripts-seed-'));
+    try {
+      const seeded = studioMain.getScriptsApi({ dataDir: freshDir });
+      assert.equal(seeded.ok, true);
+      assert.equal(seeded.scripts.length, 1);
+      assert.equal(seeded.scripts[0].id, 'agy_changelog_ver');
+      assert.match(seeded.scripts[0].scriptPath, /fetch-agy-changelog\.mjs$/);
+      // Deleting it persists empty list and does not re-seed
+      scriptsCore.deleteCustomScript(freshDir, 'agy_changelog_ver');
+      const afterDel = studioMain.getScriptsApi({ dataDir: freshDir });
+      assert.equal(afterDel.scripts.length, 0);
+    } finally {
+      fs.rmSync(freshDir, { recursive: true, force: true });
+    }
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -85,7 +101,7 @@ test('getLiveTasksApi queries ConversationService and tail GetCascadeTrajectoryS
       };
     }
     if (url.includes('GetCascadeTrajectorySteps')) {
-      assert.equal(body.stepOffset, 238);
+      assert.equal(body.stepOffset, 234);
       return {
         ok: true,
         status: 200,
@@ -176,6 +192,66 @@ test('getLiveTasksApi queries ConversationService and tail GetCascadeTrajectoryS
     { type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE', status: 'CORTEX_STEP_STATUS_GENERATING', plannerResponse: { thinking: 'analyzing...' } },
   ]);
   assert.equal(thinkingAct.kind, 'thinking');
+  assert.equal(thinkingAct.detail, 'analyzing...');
+
+  const respAct = studioMain.classifyLiveStepActivity([
+    {
+      type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE',
+      status: 'CORTEX_STEP_STATUS_GENERATING',
+      plannerResponse: {
+        thinking: 'done thinking',
+        response: '**现在这一波改动**（右侧栏 [Claude 极简风](file:///x)）已经全部完成。',
+      },
+    },
+  ]);
+  assert.equal(respAct.kind, 'responding');
+  assert.equal(respAct.detail, '现在这一波改动（右侧栏 Claude 极简风）已经全部完成。');
+
+  // Active real tool is preserved even when trailing bookkeeping/ephemeral steps appear after it
+  const trailingBookkeepingAct = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE', status: 'CORTEX_STEP_STATUS_DONE', plannerResponse: { toolCalls: [{ name: 'run_command' }, { name: 'run_command' }] } },
+    { type: 'CORTEX_STEP_TYPE_RUN_COMMAND', status: 'CORTEX_STEP_STATUS_DONE', metadata: { toolCall: { name: 'run_command', argumentsJson: JSON.stringify({ toolSummary: 'Search effort badge' }) } } },
+    { type: 'CORTEX_STEP_TYPE_RUN_COMMAND', status: 'CORTEX_STEP_STATUS_RUNNING', metadata: { toolCall: { name: 'run_command', argumentsJson: JSON.stringify({ toolSummary: 'Check style.css' }) } } },
+    { type: 'CORTEX_STEP_TYPE_EPHEMERAL_MESSAGE', status: 'CORTEX_STEP_STATUS_DONE' },
+    { type: 'CORTEX_STEP_TYPE_GENERIC', status: 'CORTEX_STEP_STATUS_RUNNING', metadata: { toolCall: { name: 'update_focus' } } },
+  ]);
+  assert.equal(trailingBookkeepingAct.kind, 'running_command');
+  assert.deepEqual(trailingBookkeepingAct.batch, { done: 1, total: 2 });
+  assert.equal(trailingBookkeepingAct.detail, 'Search effort badge, Check style.css');
+
+  // Between steps: fresh USER_INPUT -> waiting_ttft; active generating PLANNER_RESPONSE without visible thinking -> thinking (with focus, never stale file); command_status -> waiting_command
+  const betweenStepsAct = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_USER_INPUT', status: 'CORTEX_STEP_STATUS_DONE', metadata: { createdAt: '2026-11-25T02:00:00Z' } },
+  ]);
+  assert.equal(betweenStepsAct.kind, 'waiting_ttft');
+
+  const pendingPlannerAfterUser = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_USER_INPUT', status: 'CORTEX_STEP_STATUS_DONE' },
+    { type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE', status: 'CORTEX_STEP_STATUS_PENDING', plannerResponse: {} },
+  ]);
+  assert.equal(pendingPlannerAfterUser.kind, 'waiting_ttft');
+
+  const afterToolsDoneAct = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_GENERIC', status: 'CORTEX_STEP_STATUS_DONE', metadata: { toolCall: { name: 'update_focus', argumentsJson: JSON.stringify({ focus: 'Removing unused Outputs section' }) } } },
+    { type: 'CORTEX_STEP_TYPE_RUN_COMMAND', status: 'CORTEX_STEP_STATUS_DONE', metadata: { completedAt: '2026-11-25T02:00:05Z', toolCall: { name: 'run_command', argumentsJson: JSON.stringify({ toolSummary: 'Run unit tests' }) } } },
+    { type: 'CORTEX_STEP_TYPE_EPHEMERAL_MESSAGE', status: 'CORTEX_STEP_STATUS_DONE' },
+  ]);
+  assert.equal(afterToolsDoneAct.kind, 'thinking');
+  assert.equal(afterToolsDoneAct.detail, 'Removing unused Outputs section');
+
+  const generatingPlannerAfterTool = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_GENERIC', status: 'CORTEX_STEP_STATUS_DONE', metadata: { toolCall: { name: 'update_focus', argumentsJson: JSON.stringify({ focus: 'Removing unused Outputs section' }) } } },
+    { type: 'CORTEX_STEP_TYPE_VIEW_FILE', status: 'CORTEX_STEP_STATUS_DONE', viewFile: { absolutePathUri: 'file:///d:/repo/index.html', startLine: 0, endLine: 49 } },
+    { type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE', status: 'CORTEX_STEP_STATUS_GENERATING', plannerResponse: {} },
+  ]);
+  assert.equal(generatingPlannerAfterTool.kind, 'thinking');
+  assert.equal(generatingPlannerAfterTool.detail, 'Removing unused Outputs section');
+
+  const cmdStatusAct = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_COMMAND_STATUS', status: 'CORTEX_STEP_STATUS_RUNNING', metadata: { toolCall: { name: 'command_status', argumentsJson: JSON.stringify({ toolSummary: 'Wait for build' }) } } },
+  ]);
+  assert.equal(cmdStatusAct.kind, 'waiting_command');
+  assert.equal(cmdStatusAct.detail, 'Wait for build');
 
   const cmdAct = studioMain.classifyLiveStepActivity([
     { type: 'CORTEX_STEP_TYPE_GENERIC', status: 'CORTEX_STEP_STATUS_RUNNING', metadata: { toolCall: { name: 'run_command', argumentsJson: JSON.stringify({ toolSummary: 'Run unit tests' }) } } },

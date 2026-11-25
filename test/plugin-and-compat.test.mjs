@@ -426,7 +426,10 @@ test('usageStatsEnabled defaults to false, controls all in-chat HUD without muta
   sandbox.globalThis = sandbox;
 
   try {
-    assert.equal(cdp.DEFAULT_CONFIG.usageStatsEnabled, false, 'Built-in usage stats must default to false');
+    assert.equal(cdp.DEFAULT_CONFIG.usageStatsEnabled, true, 'Built-in usage stats must default to true');
+    assert.equal(cdp.DEFAULT_CONFIG.hudBottomBar, false, 'hudBottomBar must default to false');
+    assert.equal(cdp.DEFAULT_CONFIG.hudRimProgress, false, 'hudRimProgress must default to false');
+    assert.equal(cdp.DEFAULT_CONFIG.pinRightPane, 'studio', 'pinRightPane must default to studio');
     assert.equal(cdp.sanitizeConfig({ usageMonitorCompat: true }).usageStatsEnabled, false, 'Legacy usageMonitorCompat:true maps to usageStatsEnabled:false');
     assert.equal(cdp.sanitizeConfig({ usageMonitorCompat: false }).usageStatsEnabled, true, 'Legacy usageMonitorCompat:false maps to usageStatsEnabled:true');
 
@@ -457,7 +460,6 @@ test('usageStatsEnabled defaults to false, controls all in-chat HUD without muta
         hudTopBar: true,
         hudBottomBar: true,
         hudRimProgress: true,
-        hudFooterChip: true,
       }),
       sandbox
     );
@@ -466,7 +468,7 @@ test('usageStatsEnabled defaults to false, controls all in-chat HUD without muta
     assert.ok(card.querySelector('.ag-cs-hud-top-bar'), 'Top HUD bar must stay active when inlineStats is false');
     assert.ok(card.querySelector('.ag-cs-hud-bottom-bar'), 'Bottom HUD bar must stay active when inlineStats is false');
     assert.ok(card.querySelector('.ag-cs-hud-rim-progress'), 'Rim progress must stay active when inlineStats is false');
-    assert.ok(footer.querySelector('.ag-cs-hud-footer-chip'), 'Footer quota chip must stay active when inlineStats is false');
+    assert.equal(footer.querySelector('.ag-cs-hud-footer-chip'), null, 'Removed footer quota chip must not mount');
 
     vm.runInNewContext(
       cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: true, inlineStats: true, hudTopBar: true }),
@@ -494,7 +496,10 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
 
   const studioHtml = fs.readFileSync(path.join(ROOT_DIR, 'sidecars', 'studio', 'index.html'), 'utf8');
   assert.ok(studioHtml.includes('usageStatsEnabled'), 'Studio UI includes usageStatsEnabled master toggle');
-  assert.ok(studioHtml.includes('pinUsageMonitorPane'), 'Studio UI includes pinUsageMonitorPane toggle');
+  assert.ok(studioHtml.includes('pinRightPane'), 'Studio UI includes pinRightPane dropdown');
+  assert.equal(studioHtml.includes('hudFooterChip'), false, 'Studio UI removes deprecated hudFooterChip toggle');
+  assert.equal(studioHtml.includes('hudCompact'), false, 'Studio UI removes deprecated hudCompact toggle');
+  assert.equal(studioHtml.includes('超过 1 分钟（推荐）'), false, 'Studio UI removes recommended-time label from notify duration options');
   assert.ok(studioHtml.includes('btn-open-um') && studioHtml.includes('/api/open-usage-monitor'), 'Studio UI includes one-click jump button to Usage Monitor pane');
   assert.ok(studioHtml.includes('黑曜石'), 'Studio UI labels obsidian palette as 黑曜石');
   assert.ok(studioHtml.includes('glassEffect'), 'Studio UI includes standalone glassEffect toggle');
@@ -779,7 +784,7 @@ test('openUsageMonitorPane switches existing tab or opens via host sidecar link 
       child: {
         memoizedProps: {
           value: {
-            resolveSidecarLink: (t) => (/usage-monitor\/panel/.test(t) ? { title: '用量监控' } : null),
+            resolveSidecarLink: (t) => (/usage-monitor\/panel|agy-claude-studio\/studio/.test(t) ? { title: t } : null),
             onSidecarLinkClick: (t) => { sidecarCalls.push(t); },
           },
         },
@@ -824,21 +829,25 @@ test('openUsageMonitorPane switches existing tab or opens via host sidecar link 
   sandbox.globalThis = sandbox;
 
   try {
-    // 1. With pinUsageMonitorPane: true and no tab yet -> opens via host sidecar link bridge ONCE for convo-aaa
+    // 1. With pinRightPane: 'usage-monitor' and no tab yet -> opens via host sidecar link bridge ONCE for convo-aaa
     vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, pinUsageMonitorPane: true }),
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'usage-monitor' }),
       sandbox
     );
     assert.deepEqual(sidecarCalls, ['usage-monitor/panel/'], 'Auto-opens Usage Monitor pane once when entering conversation');
 
     // Re-syncing same conversation must NOT re-trigger (polite: never steals focus!)
-    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinUsageMonitorPane: true });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'usage-monitor' });
     assert.equal(sidecarCalls.length, 1, 'Must not re-open Usage Monitor within the same conversation');
 
     // 2. Switching to a new conversation triggers once again
     conv.setAttribute('data-cascade-id', '22222222-2222-4222-8222-222222222222');
-    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinUsageMonitorPane: true });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'usage-monitor' });
     assert.equal(sidecarCalls.length, 2, 'Auto-opens Usage Monitor once when switching to a new conversation');
+
+    // 2b. Switching pinRightPane to 'studio' opens Claude Studio sidecar pane
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.deepEqual(sidecarCalls[2], 'agy-claude-studio/studio/', 'Auto-opens Claude Studio pane when pinRightPane is studio');
 
     // 3. Explicit openUsageMonitorPane when tab already exists expands closed pane & clicks tab
     const umTabBtn = strip.appendChild(makeEl('button', { text: '用量监控' }));
@@ -944,7 +953,7 @@ test('cdp.ensureMigratedPluginConfig migrates legacy agy-claude-style plugin_dat
     assert.equal(parsed.palette, 'obsidian');
     assert.equal(parsed.glassEffect, false);
     assert.equal(parsed.usageStatsEnabled, false);
-    assert.equal(parsed.pinUsageMonitorPane, true);
+    assert.equal(parsed.pinRightPane, 'usage-monitor', 'Legacy pinUsageMonitorPane:true migrates to pinRightPane:usage-monitor');
   } finally {
     fs.rmSync(tmpBase, { recursive: true, force: true });
   }
@@ -2153,7 +2162,7 @@ test('ui-runtime clicks inner mention row (not outer option) when filling /compa
 });
 
 test('compactPreset config validation, sanitization, and auto-fill after /compact chip conversion', async () => {
-  assert.equal(cdp.DEFAULT_CONFIG.compactPreset, 'empty');
+  assert.equal(cdp.DEFAULT_CONFIG.compactPreset, 'clean');
   assert.equal(cdp.DEFAULT_CONFIG.compactCustomText, '');
   assert.equal(cdp.validateConfigSetting('compactPreset', 'clean'), true);
   assert.equal(cdp.validateConfigSetting('compactPreset', 'dev'), true);
@@ -2164,7 +2173,7 @@ test('compactPreset config validation, sanitization, and auto-fill after /compac
   assert.equal(cdp.validateConfigSetting('compactCustomText', 'bad\0text'), false);
 
   const sanitized = cdp.sanitizeConfig({ compactPreset: 'bogus', compactCustomText: 'hello\0world' });
-  assert.equal(sanitized.compactPreset, 'empty');
+  assert.equal(sanitized.compactPreset, 'clean');
   assert.equal(sanitized.compactCustomText, 'helloworld');
 
   const timers = new Set();
