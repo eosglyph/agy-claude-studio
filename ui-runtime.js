@@ -4960,9 +4960,15 @@
       ev.preventDefault();
       const card = btn.closest('.surface-composer-card');
       const mBtn = card?.querySelector('[data-testid="model-selector-trigger"]') || btn._agCsModelBtn || null;
+      if (btn.getAttribute('aria-disabled') === 'true' || isModelButtonLocked(mBtn)) return;
       openPeriodicSelector(btn, mBtn);
     });
     return btn;
+  }
+
+  function isModelButtonLocked(modelBtn) {
+    if (!modelBtn) return false;
+    return Boolean(modelBtn.disabled || modelBtn.getAttribute('aria-disabled') === 'true');
   }
 
   function resolveInlineModelAnchor(modelBtn) {
@@ -4986,7 +4992,18 @@
 
     const lang = getLang();
     const ui = uiText(lang);
-    const tip = ui.psTriggerTooltip || 'Gemini 4 Periodic Table Model Selector';
+    const isLocked = isModelButtonLocked(modelBtn);
+    const lockedTip =
+      lang === 'zh-CN'
+        ? '智能体运行中无法更改模型'
+        : lang === 'zh-TW'
+        ? '代理執行中無法變更模型'
+        : lang === 'yue'
+        ? '代理行緊嗰陣唔可以改模型'
+        : lang === 'ja'
+        ? 'エージェント実行中はモデルを変更できません'
+        : 'Model cannot be changed while the agent is running';
+    const tip = isLocked ? lockedTip : ui.psTriggerTooltip || 'Gemini 4 Periodic Table Model Selector';
     const inlineMode = !footer || cfg.composerRestyle === false;
     const inlineAnchor = inlineMode ? resolveInlineModelAnchor(modelBtn) : null;
     const desiredParent = inlineMode ? inlineAnchor.parent : footer;
@@ -4994,6 +5011,15 @@
 
     const btn = existing || buildPeriodicTriggerButton();
     btn._agCsModelBtn = modelBtn;
+    if (btn.classList.contains('is-disabled') !== isLocked) {
+      btn.classList.toggle('is-disabled', isLocked);
+    }
+    if (isLocked) {
+      if (btn.getAttribute('aria-disabled') !== 'true') btn.setAttribute('aria-disabled', 'true');
+      if (openPsTrigger === btn) closePeriodicSelector();
+    } else if (btn.hasAttribute('aria-disabled')) {
+      btn.removeAttribute('aria-disabled');
+    }
     if (inlineMode) {
       if (!btn.classList.contains('is-inline')) btn.classList.add('is-inline');
     } else if (btn.classList.contains('is-inline')) {
@@ -5046,6 +5072,7 @@
       ev.stopPropagation();
       ev.preventDefault();
       const mBtn = btn._agCsModelBtn || btn.closest('.surface-composer-card')?.querySelector('[data-testid="model-selector-trigger"]') || null;
+      if (btn.getAttribute('aria-disabled') === 'true' || isModelButtonLocked(mBtn)) return;
       const fp = getModelFiberProps(mBtn);
       if (!fp || !periodicCore || typeof periodicCore.computeOrchestratorToggleTarget !== 'function') return;
       const prevSelected = fp.selectedModel || null;
@@ -5130,11 +5157,20 @@
     const btn = existing || buildOrchestratorSwitchButton();
     btn._agCsModelBtn = modelBtn;
     const isOrch = Boolean(state.isOrchestrator);
+    const isLocked = isModelButtonLocked(modelBtn);
     if (btn.classList.contains('is-inline') !== inlineMode) {
       btn.classList.toggle('is-inline', inlineMode);
     }
     if (btn.classList.contains('is-active') !== isOrch) {
       btn.classList.toggle('is-active', isOrch);
+    }
+    if (btn.classList.contains('is-disabled') !== isLocked) {
+      btn.classList.toggle('is-disabled', isLocked);
+    }
+    if (isLocked) {
+      if (btn.getAttribute('aria-disabled') !== 'true') btn.setAttribute('aria-disabled', 'true');
+    } else if (btn.hasAttribute('aria-disabled')) {
+      btn.removeAttribute('aria-disabled');
     }
     const checkedVal = isOrch ? 'true' : 'false';
     if (btn.getAttribute('aria-checked') !== checkedVal) {
@@ -5162,7 +5198,19 @@
         if (pEl?.symbol) targetSym = pEl.symbol;
       }
     }
-    const tip = isOrch
+    const lockedTip =
+      lang === 'zh-CN'
+        ? '智能体运行中无法切换协作模式'
+        : lang === 'zh-TW'
+        ? '代理執行中無法切換協作模式'
+        : lang === 'yue'
+        ? '代理行緊嗰陣唔可以切換協作模式'
+        : lang === 'ja'
+        ? 'エージェント実行中は協調モードを切り替えられません'
+        : 'Orchestrator cannot be changed while the agent is running';
+    const tip = isLocked
+      ? lockedTip
+      : isOrch
       ? isZh
         ? `协作模式已开启${targetSym ? `（${targetSym}）` : ''} — 点击切回标准模型`
         : `Orchestrator ON${targetSym ? ` (${targetSym})` : ''} — Click to return to standard model`

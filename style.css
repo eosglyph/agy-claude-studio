@@ -1340,6 +1340,25 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-tool
 .ag-cs-orch-switch.is-active:hover {
   background: color-mix(in srgb, #d97757 18%, transparent) !important;
 }
+.ag-cs-orch-switch.is-disabled,
+.ag-cs-orch-switch[aria-disabled="true"],
+.ag-cs-periodic-trigger.is-disabled,
+.ag-cs-periodic-trigger[aria-disabled="true"] {
+  opacity: 0.42 !important;
+  cursor: not-allowed !important;
+}
+.ag-cs-orch-switch.is-disabled:hover,
+.ag-cs-orch-switch[aria-disabled="true"]:hover,
+.ag-cs-periodic-trigger.is-disabled:hover,
+.ag-cs-periodic-trigger[aria-disabled="true"]:hover {
+  background: transparent !important;
+  color: var(--secondary-foreground);
+}
+.ag-cs-orch-switch.is-active.is-disabled:hover,
+.ag-cs-orch-switch.is-active[aria-disabled="true"]:hover {
+  background: color-mix(in srgb, #d97757 12%, transparent) !important;
+  color: #d97757 !important;
+}
 .ag-cs-orch-switch.is-inline {
   order: initial;
   margin-left: 0;
@@ -4020,17 +4039,19 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] .surface-composer-card > div.relat
   background: color-mix(in srgb, var(--ag-cs-composer-bg, var(--card, #ffffff)) 74%, transparent) !important;
   backdrop-filter: blur(18px) saturate(1.22) !important;
   -webkit-backdrop-filter: blur(18px) saturate(1.22) !important;
-  border: 1px solid color-mix(in srgb, var(--foreground, #111827) 10%, rgba(255, 255, 255, 0.72)) !important;
+  border: 1px solid color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 32%, rgba(255, 255, 255, 0.72)) !important;
   box-shadow:
-    0 10px 30px rgba(15, 23, 42, 0.08),
+    0 0 0 2px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 11%, transparent),
+    0 8px 24px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 11%, rgba(15, 23, 42, 0.08)),
     inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
 }
 html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full,
 html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .surface-composer-card > div.relative.w-full {
   background: color-mix(in srgb, var(--ag-cs-composer-bg, var(--card, #1c1f28)) 72%, transparent) !important;
-  border-color: rgba(255, 255, 255, 0.14) !important;
+  border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 36%, rgba(255, 255, 255, 0.14)) !important;
   box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.42),
+    0 0 0 2px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 14%, transparent),
+    0 10px 28px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 14%, rgba(0, 0, 0, 0.42)),
     inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
 }
 html[data-ag-cs-style][data-ag-cs-glass="on"] .ag-cs-home-panel,
@@ -4109,7 +4130,16 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="new-tab-search-input
   border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 58%, transparent) !important;
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 18%, transparent),
-    0 8px 24px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 14%, rgba(0, 0, 0, 0.08)) !important;
+    0 8px 24px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 16%, rgba(0, 0, 0, 0.08)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+}
+html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full:focus-within,
+html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .surface-composer-card > div.relative.w-full:focus-within {
+  border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 62%, transparent) !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 22%, transparent),
+    0 10px 28px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 20%, rgba(0, 0, 0, 0.46)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
 }
 html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="user-message-bubble"],
 html[data-ag-cs-style][data-ag-cs-glass="on"] .agy-user-bubble {
