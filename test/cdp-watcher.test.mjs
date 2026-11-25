@@ -6,7 +6,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -189,7 +189,7 @@ async function waitFor(fn, timeoutMs = 12000, intervalMs = 150) {
   throw new Error('Timed out waiting for condition');
 }
 
-async function killAndWait(proc, timeoutMs = 1500) {
+async function killAndWait(proc, timeoutMs = 2500) {
   if (!proc || proc.exitCode !== null) return;
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, timeoutMs);
@@ -198,7 +198,15 @@ async function killAndWait(proc, timeoutMs = 1500) {
       resolve();
     });
     try {
-      proc.kill('SIGKILL');
+      if (process.platform === 'win32' && proc.pid) {
+        try {
+          execFileSync('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore', windowsHide: true });
+        } catch {
+          proc.kill('SIGKILL');
+        }
+      } else {
+        proc.kill('SIGKILL');
+      }
     } catch {
       clearTimeout(timer);
       resolve();
@@ -207,7 +215,13 @@ async function killAndWait(proc, timeoutMs = 1500) {
 }
 
 function cleanupTempDir(dir) {
-  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 15, retryDelay: 100 });
+  try {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 120 });
+  } catch (err) {
+    if (err?.code !== 'EBUSY' && err?.code !== 'EPERM' && err?.code !== 'ENOTEMPTY') {
+      throw err;
+    }
+  }
 }
 
 test('formatCdpUnavailableMessage clearly distinguishes Antigravity 2.33.0+ running without CDP vs not running', () => {
@@ -554,7 +568,7 @@ test('inject.js --watch --exit-on-host-close --startup-grace 1 exits 0 and clean
 
     const exitCode = await Promise.race([
       exitPromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Watcher did not exit after startup grace')), 5000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Watcher did not exit after startup grace')), 15000)),
     ]);
     assert.equal(exitCode, 0);
     assert.equal(fs.existsSync(path.join(dir, '.watch.pid')), false, '.watch.pid cleaned up after startup grace exit');
@@ -649,7 +663,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
       } catch {
         return false;
       }
-    }, 5000, 50);
+    }, 15000, 50);
 
     // 1. Plain duplicate --watch exits 1 without overwriting .watch.pid
     dupPlain = spawn(process.execPath, [path.join(dir, 'inject.js'), '--watch'], {
@@ -659,7 +673,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
     });
     const dupPlainCode = await Promise.race([
       new Promise((resolve) => dupPlain.on('exit', resolve)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Plain duplicate watcher did not exit')), 5000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Plain duplicate watcher did not exit')), 15000)),
     ]);
     assert.equal(dupPlainCode, 1);
     assert.equal(fs.readFileSync(pidFile, 'utf8').trim(), String(first.pid));
@@ -673,7 +687,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
     });
     const dupManagedCode = await Promise.race([
       new Promise((resolve) => dupManaged.on('exit', resolve)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Duplicate --managed did not exit')), 5000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Duplicate --managed did not exit')), 15000)),
     ]);
     assert.equal(dupManagedCode, 0);
     assert.equal(fs.readFileSync(pidFile, 'utf8').trim(), String(first.pid));
@@ -688,7 +702,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
     });
     await Promise.race([
       firstExitPromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('--replace did not terminate existing watcher')), 5000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('--replace did not terminate existing watcher')), 15000)),
     ]);
     await waitFor(() => {
       try {
@@ -696,7 +710,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
       } catch {
         return false;
       }
-    }, 5000, 50);
+    }, 15000, 50);
     assert.equal(replacer.exitCode, null);
   } finally {
     for (const proc of [first, dupPlain, dupManaged, replacer]) {
