@@ -313,6 +313,15 @@ function resolveExtraI18nOptOutSelectors(config = {}, pluginDataDir = PLUGIN_DAT
   );
 }
 
+function readPeriodicOverride(pluginDataDir = PLUGIN_DATA_DIR || STATE_DIR) {
+  try {
+    const periodicSync = require('./periodic-sync.js');
+    return periodicSync.readPeriodicOverride(pluginDataDir);
+  } catch {
+    return null;
+  }
+}
+
 async function syncRemoteI18nCompat({
   url = REMOTE_I18N_COMPAT_URL,
   pluginDataDir = PLUGIN_DATA_DIR,
@@ -715,8 +724,10 @@ function buildInjectExpression(customConfig) {
           const baseCfg = ${JSON.stringify(
             (() => {
               const extraOptOut = resolveExtraI18nOptOutSelectors(config);
+              const periodicOverride = readPeriodicOverride();
               const out = { ...config, binding: SETTING_BINDING, codeHash };
               if (extraOptOut.length) out.i18nOptOutSelectors = extraOptOut;
+              if (periodicOverride) out.periodicOverride = periodicOverride;
               return out;
             })()
           )};
@@ -762,8 +773,10 @@ function buildConfigScriptExpression(customConfig, expectedCodeHash) {
   const config = customConfig || readConfig();
   const expectedHash = expectedCodeHash || '';
   const extraOptOut = resolveExtraI18nOptOutSelectors(config);
+  const periodicOverride = readPeriodicOverride();
   const payload = { ...config, binding: SETTING_BINDING, codeHash: expectedHash };
   if (extraOptOut.length) payload.i18nOptOutSelectors = extraOptOut;
+  if (periodicOverride) payload.periodicOverride = periodicOverride;
   return `(() => {
     const nextCfg = ${JSON.stringify(payload)};
     globalThis.__agCsOverrideConfig = nextCfg;
@@ -1687,6 +1700,7 @@ module.exports = {
   REMOTE_I18N_COMPAT_URL,
   sanitizeSelectorList,
   readI18nCompatData,
+  readPeriodicOverride,
   resolveExtraI18nOptOutSelectors,
   syncRemoteI18nCompat,
   validateConfigSetting,

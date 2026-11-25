@@ -191,11 +191,78 @@ async function startWatchController(options = {}) {
         }
       };
 
+      let periodicSyncInFlight = false;
       await session.send('Page.enable');
       session.on('Runtime.bindingCalled', ({ name, payload }) => {
-        if (name !== SETTING_BINDING || typeof updateConfigSetting !== 'function') return;
+        if (name !== SETTING_BINDING) return;
         try {
-          const { key, value } = JSON.parse(payload);
+          const msg = JSON.parse(payload);
+          if (msg && msg.action === 'syncPeriodicElements') {
+            const requestId = String(msg.requestId || '');
+            if (periodicSyncInFlight) {
+              session
+                .evaluate(
+                  `window.__agCsOnPeriodicSyncResult && window.__agCsOnPeriodicSyncResult(${JSON.stringify({
+                    requestId,
+                    ok: false,
+                    error: 'already_running',
+                  })});`
+                )
+                .catch(() => {});
+              return;
+            }
+            periodicSyncInFlight = true;
+            (async () => {
+              try {
+                const periodicSync = require('./periodic-sync.js');
+                const freshCdp = require('./cdp');
+                const dataDir = freshCdp.PLUGIN_DATA_DIR || freshCdp.STATE_DIR;
+                const syncRes = await periodicSync.syncAndSavePeriodicElements({
+                  pluginDataDir: dataDir,
+                  timeoutMs: 25000,
+                });
+                logger.log(
+                  `[↻] AI Studio 元素周期表同步完成: ${syncRes.totalElements} 个元素` +
+                    (syncRes.newSymbols.length ? ` (新增: ${syncRes.newSymbols.join(', ')})` : '')
+                );
+                triggerHotReload(periodicSync.PERIODIC_OVERRIDE_FILENAME);
+                if (!session.closed) {
+                  await session
+                    .evaluate(
+                      `window.__agCsOnPeriodicSyncResult && window.__agCsOnPeriodicSyncResult(${JSON.stringify({
+                        requestId,
+                        ok: true,
+                        totalElements: syncRes.totalElements,
+                        symbols: syncRes.symbols,
+                        newSymbols: syncRes.newSymbols,
+                        updatedSymbols: syncRes.updatedSymbols,
+                        syncedAt: syncRes.syncedAt,
+                        override: syncRes.override,
+                      })});`
+                    )
+                    .catch(() => {});
+                }
+              } catch (err) {
+                logger.log(`[!] AI Studio 元素同步失败: ${err?.message || err}`);
+                if (!session.closed) {
+                  await session
+                    .evaluate(
+                      `window.__agCsOnPeriodicSyncResult && window.__agCsOnPeriodicSyncResult(${JSON.stringify({
+                        requestId,
+                        ok: false,
+                        error: String(err?.message || err || 'sync_failed').slice(0, 180),
+                      })});`
+                    )
+                    .catch(() => {});
+                }
+              } finally {
+                periodicSyncInFlight = false;
+              }
+            })();
+            return;
+          }
+          if (typeof updateConfigSetting !== 'function') return;
+          const { key, value } = msg;
           if (updateConfigSetting(key, value)) {
             logger.log(`[⚙] 设置已保存: ${key} = ${JSON.stringify(value)}`);
           }
@@ -373,7 +440,10 @@ async function startWatchController(options = {}) {
     clearTimeout(reloadTimer);
     reloadTimer = setTimeout(async () => {
       if (stopped) return;
-      const isConfigOnly = path.basename(String(filename || '')).toLowerCase() === path.basename(CDP_CONFIG_FILE).toLowerCase();
+      const baseChanged = path.basename(String(filename || '')).toLowerCase();
+      const isConfigOnly =
+        baseChanged === path.basename(CDP_CONFIG_FILE).toLowerCase() ||
+        baseChanged === 'periodic-override.json';
       let refreshOnly = false;
       try {
         delete require.cache[require.resolve('./cdp')];
@@ -434,8 +504,9 @@ async function startWatchController(options = {}) {
       fs.mkdirSync(configDir, { recursive: true });
       configWatcher = fs.watch(configDir, (_, filename) => {
         if (stopped || !filename) return;
-        if (path.basename(filename).toLowerCase() !== configBase) return;
-        triggerHotReload(path.basename(CDP_CONFIG_FILE));
+        const base = path.basename(filename).toLowerCase();
+        if (base !== configBase && base !== 'periodic-override.json') return;
+        triggerHotReload(base);
       });
       if (typeof configWatcher.unref === 'function') configWatcher.unref();
     }

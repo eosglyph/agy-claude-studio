@@ -146,6 +146,34 @@
     },
   });
 
+  let dynamicSpecs = null;
+
+  function setDynamicSpecs(nextSpecs) {
+    if (!nextSpecs || typeof nextSpecs !== 'object') {
+      dynamicSpecs = null;
+      return;
+    }
+    const clean = Object.create(null);
+    for (const [sym, spec] of Object.entries(nextSpecs)) {
+      if (!/^[A-Z][a-z]?$/.test(sym) || !spec || typeof spec !== 'object') continue;
+      clean[sym] = { ...spec };
+    }
+    dynamicSpecs = Object.keys(clean).length ? clean : null;
+  }
+
+  function getEffectiveSpecs() {
+    if (!dynamicSpecs) return GEMINI4_SPECS;
+    return { ...GEMINI4_SPECS, ...dynamicSpecs };
+  }
+
+  function getSpec(symbol) {
+    if (!symbol) return null;
+    if (dynamicSpecs && Object.prototype.hasOwnProperty.call(dynamicSpecs, symbol)) {
+      return dynamicSpecs[symbol];
+    }
+    return GEMINI4_SPECS[symbol] || null;
+  }
+
   const EFFORT_DISPLAY_MAP = {
     none: 'None',
     off: 'Off',
@@ -429,7 +457,7 @@
       if (!fam) {
         const elementEl = matchGemini4Element(baseName);
         const elementSymbol = elementEl ? elementEl.symbol : '';
-        const spec = elementSymbol ? GEMINI4_SPECS[elementSymbol] || null : null;
+        const spec = elementSymbol ? getSpec(elementSymbol) : null;
         fam = {
           id: slugFromBaseName(baseName) || key,
           baseName,
@@ -498,7 +526,7 @@
 
     const tiles = PERIODIC_ELEMENTS.map((el) => {
       const fam = !el.isRange && el.symbol ? bySymbol[el.symbol] || null : null;
-      const spec = !el.isRange && el.symbol ? GEMINI4_SPECS[el.symbol] || null : null;
+      const spec = !el.isRange && el.symbol ? getSpec(el.symbol) : null;
       const disabledInfo = !fam && !el.isRange && el.symbol ? disabledBySymbol[el.symbol] || null : null;
       const orchestratorOption = !el.isRange && el.symbol ? orchBySymbol[el.symbol] || null : null;
       const isOrchestratorSelected = Boolean(orchestratorOption && selectedOrchSymbol === el.symbol);
@@ -596,7 +624,7 @@
 
   function buildPeriodicSyncPrompt(lang) {
     const l = String(lang || '').trim();
-    const knownSymbols = Object.keys(GEMINI4_SPECS).join(', ');
+    const knownSymbols = Object.keys(getEffectiveSpecs()).join(', ');
     if (/^zh/i.test(l) || l === 'yue') {
       return [
         '请帮我更新 Antigravity 的 Gemini 4 元素周期表模型选择器：',
@@ -618,6 +646,9 @@
   return {
     PERIODIC_ELEMENTS,
     GEMINI4_SPECS,
+    setDynamicSpecs,
+    getEffectiveSpecs,
+    getSpec,
     parseOptionEffort,
     matchGemini4Element,
     parseOrchestratorOption,

@@ -3351,6 +3351,27 @@ html[data-ag-cs-style] [contenteditable="true"][data-ag-cs-smooth-caret="1"] {
   border-color: var(--ps-accent);
   color: var(--ps-text);
 }
+.ag-cs-ps-sync-btn.is-syncing {
+  opacity: 0.85;
+  cursor: wait;
+  border-color: var(--ps-accent);
+  color: var(--ps-text);
+}
+.ag-cs-ps-sync-btn.is-syncing svg {
+  animation: ag-cs-ps-spin 0.9s linear infinite;
+}
+.ag-cs-ps-sync-btn.is-synced {
+  border-color: rgba(46, 158, 102, 0.55);
+  color: #2e9e66;
+}
+.ag-cs-ps-sync-btn.is-fallback {
+  border-color: rgba(217, 130, 43, 0.6);
+  color: #c7761b;
+}
+@keyframes ag-cs-ps-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .ag-cs-ps-close {
   width: 26px;
   height: 26px;

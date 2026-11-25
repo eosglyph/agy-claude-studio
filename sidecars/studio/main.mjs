@@ -12,6 +12,7 @@ const cdp = require('../../cdp.js');
 const lifecycle = require('../../lifecycle.js');
 const notifyCore = require('../../notify-core.js');
 const scriptsCore = require('../../scripts-core.js');
+const periodicSync = require('../../periodic-sync.js');
 const { updateConfigSetting, injectOnce } = require('../../inject.js');
 const { removeFromAllWindows } = require('../../remove.js');
 
@@ -467,6 +468,36 @@ async function performStudioSelfUpdate({
       reason: 'git_pull_failed',
       error: err?.message || String(err),
       releaseUrl: LATEST_RELEASE_WEB_URL,
+    };
+  }
+}
+
+async function syncPeriodicElementsApi({
+  fetchFn = typeof fetch === 'function' ? fetch : null,
+  pluginDataDir = cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR,
+  reinjectFn = () => injectOnce({ log: () => {} }),
+} = {}) {
+  try {
+    const syncRes = await periodicSync.syncAndSavePeriodicElements({
+      pluginDataDir,
+      fetchFn,
+      timeoutMs: 25000,
+    });
+    try {
+      await reinjectFn();
+    } catch {}
+    return {
+      ok: true,
+      syncedAt: syncRes.syncedAt,
+      totalElements: syncRes.totalElements,
+      symbols: syncRes.symbols,
+      newSymbols: syncRes.newSymbols,
+      updatedSymbols: syncRes.updatedSymbols,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err?.message || 'periodic_sync_failed',
     };
   }
 }
@@ -1009,6 +1040,7 @@ async function startStudioSidecar() {
   app.api('/api/check-update', guardApi(async () => checkStudioUpdate()), 'GET');
   app.api('/api/self-update', guardApi(async () => performStudioSelfUpdate()), 'POST');
   app.api('/api/sync-i18n-compat', guardApi(async () => syncI18nCompatWhitelist()), 'POST');
+  app.api('/api/periodic-sync', guardApi(async () => syncPeriodicElementsApi()), 'POST');
   app.api('/api/notify', guardApi(async () => getNotifyConfigApi()), 'GET');
   app.api('/api/notify', guardApi(async (data) => saveNotifyConfigApi(data)), 'POST');
   app.api('/api/notify/test', guardApi(async (data) => testNotifyApi(data)), 'POST');
@@ -1110,6 +1142,7 @@ export {
   checkStudioUpdate,
   performStudioSelfUpdate,
   syncI18nCompatWhitelist,
+  syncPeriodicElementsApi,
   resolveNotifyDir,
   resolveScriptsDir,
   getNotifyConfigApi,

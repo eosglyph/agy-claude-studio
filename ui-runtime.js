@@ -387,9 +387,74 @@
       .forEach((el) => el.remove());
   }
 
+  const PERIODIC_DYNAMIC_STYLE_ID = 'ag-cs-periodic-dynamic';
+  let psSyncState = { status: 'idle', label: '', timer: null, reqId: '' };
+
+  function applyPeriodicOverride(override) {
+    if (periodicCore && typeof periodicCore.setDynamicSpecs === 'function') {
+      periodicCore.setDynamicSpecs(override && override.specs ? override.specs : null);
+    }
+    const cssText = override && typeof override.css === 'string' ? override.css : '';
+    const existing = document.getElementById(PERIODIC_DYNAMIC_STYLE_ID);
+    if (!cssText) {
+      if (existing) existing.remove();
+      return;
+    }
+    const targetParent = document.head || document.documentElement;
+    if (!targetParent) return;
+    let styleEl = existing;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = PERIODIC_DYNAMIC_STYLE_ID;
+      targetParent.appendChild(styleEl);
+    }
+    if (styleEl.textContent !== cssText) styleEl.textContent = cssText;
+  }
+
+  window.__agCsOnPeriodicSyncResult = function (res) {
+    if (!res || typeof res !== 'object') return;
+    if (psSyncState.reqId && res.requestId && res.requestId !== psSyncState.reqId) return;
+    if (psSyncState.timer) {
+      clearTimeout(psSyncState.timer);
+      psSyncState.timer = null;
+    }
+    const lang = getLang();
+    const ui = uiText(lang);
+    if (res.ok) {
+      if (res.override) {
+        cfg.periodicOverride = res.override;
+        applyPeriodicOverride(res.override);
+      }
+      const total = Number(res.totalElements || 0);
+      const added = Array.isArray(res.newSymbols) ? res.newSymbols : [];
+      const doneLbl = added.length
+        ? `${ui.psSyncAdded || 'Added'} ${added.join(', ')} (${total})`
+        : `${ui.psSyncDone || 'Synced'} (${total})`;
+      psSyncState = { status: 'synced', label: doneLbl, timer: null, reqId: '' };
+      psSyncState.timer = setTimeout(() => {
+        psSyncState = { status: 'idle', label: '', timer: null, reqId: '' };
+        refreshOpenPeriodicSelector();
+      }, 4000);
+      refreshOpenPeriodicSelector();
+    } else {
+      psSyncState = {
+        status: 'fallback',
+        label: ui.psSyncFailFallback || 'Direct sync failed · Use prompt',
+        timer: null,
+        reqId: '',
+      };
+      psSyncState.timer = setTimeout(() => {
+        psSyncState = { status: 'idle', label: '', timer: null, reqId: '' };
+        refreshOpenPeriodicSelector();
+      }, 10000);
+      refreshOpenPeriodicSelector();
+    }
+  };
+
   function applyRootAttrs() {
     const html = document.documentElement;
     if (!html) return;
+    applyPeriodicOverride(cfg.periodicOverride || null);
     const palette = getEffectivePalette();
     const lang = getLang();
     const dark = isDarkTheme();
@@ -5748,7 +5813,7 @@
     syncBtn.type = 'button';
     const syncTip =
       ui.psSyncTooltip ||
-      'Insert a prompt into the chat box so Gemini scrapes new elements, theme colors, and pricing from AI Studio';
+      '0-Token script sync directly from Google AI Studio for new elements, official light/dark colors, and pricing';
     syncBtn.setAttribute('title', syncTip);
     syncBtn.setAttribute('aria-label', syncTip);
     syncBtn.innerHTML =
@@ -5756,16 +5821,58 @@
       '<path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.88L2.5 10.3M2.5 13.5v-3.2h3.2"/>' +
       '<path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.88L13.5 5.7M13.5 2.5v3.2h-3.2"/>' +
       '</svg>';
-    syncBtn.appendChild(createEl('span', 'ag-cs-ps-sync-lbl', ui.psSyncBtn || 'Sync AI Studio'));
+    const syncLblText =
+      psSyncState.status === 'syncing'
+        ? ui.psSyncing || 'Syncing…'
+        : psSyncState.status === 'synced' || psSyncState.status === 'fallback'
+        ? psSyncState.label
+        : ui.psSyncBtn || 'Sync AI Studio';
+    if (psSyncState.status === 'syncing') {
+      syncBtn.classList.add('is-syncing');
+      syncBtn.disabled = true;
+    } else if (psSyncState.status === 'synced') {
+      syncBtn.classList.add('is-synced');
+    } else if (psSyncState.status === 'fallback') {
+      syncBtn.classList.add('is-fallback');
+    }
+    syncBtn.appendChild(createEl('span', 'ag-cs-ps-sync-lbl', syncLblText));
     syncBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       const sourceCard = (openPsTrigger || openPsModelBtn)?.closest?.('.surface-composer-card') || null;
-      const prompt =
-        typeof periodicCore.buildPeriodicSyncPrompt === 'function'
-          ? periodicCore.buildPeriodicSyncPrompt(getLang())
-          : '';
-      closePeriodicSelector();
-      if (prompt) insertTextIntoComposer(prompt, sourceCard);
+      const runPromptFallback = () => {
+        const prompt =
+          typeof periodicCore.buildPeriodicSyncPrompt === 'function'
+            ? periodicCore.buildPeriodicSyncPrompt(getLang())
+            : '';
+        closePeriodicSelector();
+        if (prompt) insertTextIntoComposer(prompt, sourceCard);
+      };
+      if (psSyncState.status === 'fallback') {
+        if (psSyncState.timer) clearTimeout(psSyncState.timer);
+        psSyncState = { status: 'idle', label: '', timer: null, reqId: '' };
+        runPromptFallback();
+        return;
+      }
+      const bindingName = cfg && cfg.binding ? String(cfg.binding) : '';
+      const bindingFn = bindingName && typeof window[bindingName] === 'function' ? window[bindingName] : null;
+      if (!bindingFn) {
+        runPromptFallback();
+        return;
+      }
+      if (psSyncState.timer) clearTimeout(psSyncState.timer);
+      const reqId = `ps-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      psSyncState = { status: 'syncing', label: ui.psSyncing || 'Syncing…', timer: null, reqId };
+      psSyncState.timer = setTimeout(() => {
+        if (psSyncState.reqId === reqId && psSyncState.status === 'syncing') {
+          window.__agCsOnPeriodicSyncResult?.({ requestId: reqId, ok: false, error: 'timeout' });
+        }
+      }, 30000);
+      refreshOpenPeriodicSelector();
+      try {
+        bindingFn(JSON.stringify({ action: 'syncPeriodicElements', requestId: reqId }));
+      } catch {
+        window.__agCsOnPeriodicSyncResult?.({ requestId: reqId, ok: false, error: 'binding_error' });
+      }
     });
     const closeBtn = createEl('button', 'ag-cs-ps-close', '×');
     closeBtn.type = 'button';
@@ -7813,6 +7920,14 @@
         el.removeAttribute('data-ag-cs-rim');
         el.style.removeProperty('--ag-cs-rim-color');
       });
+      if (psSyncState.timer) {
+        clearTimeout(psSyncState.timer);
+        psSyncState.timer = null;
+      }
+      try {
+        delete window.__agCsOnPeriodicSyncResult;
+      } catch {}
+      document.getElementById(PERIODIC_DYNAMIC_STYLE_ID)?.remove();
       document
         .querySelectorAll(
           '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, .ag-cs-page-translate-btn, #' +

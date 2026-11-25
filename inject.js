@@ -408,11 +408,65 @@ async function watch({
         attached.delete(page.id);
         log(`[-] 窗口已关闭: ${shortTitle(page)}`);
       };
+      let periodicSyncInFlight = false;
       await session.send('Page.enable');
       session.on('Runtime.bindingCalled', ({ name, payload }) => {
         if (name !== SETTING_BINDING) return;
         try {
-          const { key, value } = JSON.parse(payload);
+          const msg = JSON.parse(payload);
+          if (msg && msg.action === 'syncPeriodicElements') {
+            const requestId = String(msg.requestId || '');
+            if (periodicSyncInFlight) return;
+            periodicSyncInFlight = true;
+            (async () => {
+              try {
+                const periodicSync = require('./periodic-sync.js');
+                const dataDir = cdpApi.PLUGIN_DATA_DIR || cdpApi.STATE_DIR;
+                const syncRes = await periodicSync.syncAndSavePeriodicElements({
+                  pluginDataDir: dataDir,
+                  timeoutMs: 25000,
+                });
+                log(`[↻] AI Studio 元素周期表同步完成: ${syncRes.totalElements} 个元素`);
+                configExpr = cdpApi.buildConfigScriptExpression(currentConfig, currentCodeHash);
+                for (const item of attached.values()) {
+                  if (item) await apply(item, { refreshOnly: true }).catch(() => {});
+                }
+                if (!session.closed) {
+                  await session
+                    .evaluate(
+                      `window.__agCsOnPeriodicSyncResult && window.__agCsOnPeriodicSyncResult(${JSON.stringify({
+                        requestId,
+                        ok: true,
+                        totalElements: syncRes.totalElements,
+                        symbols: syncRes.symbols,
+                        newSymbols: syncRes.newSymbols,
+                        updatedSymbols: syncRes.updatedSymbols,
+                        syncedAt: syncRes.syncedAt,
+                        override: syncRes.override,
+                      })});`
+                    )
+                    .catch(() => {});
+                }
+              } catch (err) {
+                log(`[!] AI Studio 元素同步失败: ${err?.message || err}`);
+                if (!session.closed) {
+                  await session
+                    .evaluate(
+                      `window.__agCsOnPeriodicSyncResult && window.__agCsOnPeriodicSyncResult(${JSON.stringify({
+                        requestId,
+                        ok: false,
+                        error: String(err?.message || err || 'sync_failed').slice(0, 180),
+                      })});`
+                    )
+                    .catch(() => {});
+                }
+              } finally {
+                periodicSyncInFlight = false;
+              }
+            })();
+            return;
+          }
+          const { key, value } = msg;
           if (cdpApi.updateConfigSetting(key, value)) {
             currentConfig = cdpApi.readConfig();
             log(`[⚙] 设置已保存: ${key} = ${JSON.stringify(value)}`);
