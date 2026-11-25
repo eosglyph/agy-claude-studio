@@ -468,3 +468,76 @@ test('notify.json isolates secrets from config.json & renderer injection, and St
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test('ServerChan fullMarkdown sends full Markdown up to ~28KB with title<=32, short<=64, noip=1, while other channels stay concise', async () => {
+  const longMd = `# 变更总结\n\n${'- 完成第 N 项检查并验证通过，保留完整 Markdown 代码块与细节说明。\n'.repeat(420)}`;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-notify-sc-full-'));
+  try {
+    const transcriptPath = path.join(tmpDir, 'long.jsonl');
+    const now = Date.now();
+    fs.writeFileSync(
+      transcriptPath,
+      [
+        JSON.stringify({ type: 'USER_INPUT', source: 'USER_EXPLICIT', created_at: new Date(now - 35000).toISOString(), content: '生成一份完整发版检查报告' }),
+        JSON.stringify({ type: 'PLANNER_RESPONSE', created_at: new Date(now - 1000).toISOString(), content: longMd }),
+      ].join('\n') + '\n',
+      'utf8'
+    );
+
+    const summaryInfo = notifyCore.readTranscriptTailSummary(transcriptPath, { nowMs: now });
+    assert.ok(summaryInfo.fullReply.includes('# 变更总结'));
+    assert.ok(Buffer.byteLength(summaryInfo.fullReply, 'utf8') <= 28 * 1024);
+
+    // 1) ServerChan with fullMarkdown=true (default)
+    const scCfg = notifyCore.sanitizeNotifyConfig({
+      enabled: true,
+      channel: 'serverchan',
+      channels: { serverchan: { sendKey: 'SCT123456', fullMarkdown: true } },
+    });
+    const scMsg = notifyCore.buildNotificationMessage(
+      { workspacePaths: ['/tmp/very-long-workspace-directory-name-for-title-clip'], lastUserInput: '生成一份完整发版检查报告', terminationReason: 'NO_TOOL_CALL' },
+      summaryInfo,
+      scCfg
+    );
+    const scReq = notifyCore.buildChannelRequest(scCfg, scMsg);
+    const scPayload = JSON.parse(scReq.body);
+    assert.ok(scPayload.title.length <= 32, 'ServerChan title must be <= 32 chars');
+    assert.ok(scPayload.short.length <= 64, 'ServerChan short preview must be <= 64 chars');
+    assert.equal(scPayload.noip, 1);
+    assert.ok(scPayload.desp.includes('# 变更总结'), 'ServerChan fullMarkdown sends full Markdown desp');
+    assert.ok(Buffer.byteLength(scPayload.desp, 'utf8') <= 28 * 1024, 'ServerChan desp stays within 28KB safe ceiling');
+    assert.ok(scPayload.desp.length > 5000, 'Full Markdown desp should preserve multi-KB content');
+
+    // 2) ServerChan with fullMarkdown=false falls back to concise summary
+    const scShortCfg = notifyCore.sanitizeNotifyConfig({
+      enabled: true,
+      channel: 'serverchan',
+      channels: { serverchan: { sendKey: 'SCT123456', fullMarkdown: false } },
+    });
+    const scShortMsg = notifyCore.buildNotificationMessage(
+      { workspacePaths: ['/tmp/demo'], lastUserInput: '生成报告', terminationReason: 'NO_TOOL_CALL' },
+      summaryInfo,
+      scShortCfg
+    );
+    assert.equal(scShortMsg.fullBody, '');
+    const scShortPayload = JSON.parse(notifyCore.buildChannelRequest(scShortCfg, scShortMsg).body);
+    assert.ok(scShortPayload.desp.length < 400, 'Disabling fullMarkdown keeps desp concise');
+
+    // 3) Non-ServerChan channels (e.g. Bark) NEVER get fullBody
+    const barkCfg = notifyCore.sanitizeNotifyConfig({
+      enabled: true,
+      channel: 'bark',
+      channels: { bark: { deviceKey: 'dev-1' } },
+    });
+    const barkMsg = notifyCore.buildNotificationMessage(
+      { workspacePaths: ['/tmp/demo'], lastUserInput: '生成报告', terminationReason: 'NO_TOOL_CALL' },
+      summaryInfo,
+      barkCfg
+    );
+    assert.equal(barkMsg.fullBody, '');
+    const barkPayload = JSON.parse(notifyCore.buildChannelRequest(barkCfg, barkMsg).body);
+    assert.ok(barkPayload.body.length < 400, 'Bark stays strictly concise');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

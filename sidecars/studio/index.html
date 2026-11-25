@@ -1127,6 +1127,7 @@
       serverchan: [
         { key: 'sendKey', secret: true, placeholder: 'SCT... / sctp123t...' },
         { key: 'apiUrl', secret: false, placeholder: 'https://... (Optional)' },
+        { key: 'fullMarkdown', type: 'checkbox' },
       ],
       bark: [
         { key: 'deviceKey', secret: true, placeholder: 'Your Bark Device Key' },
@@ -1249,6 +1250,7 @@
         credLabels: {
           sendKey: ['SendKey', 'Server酱 / Server酱³ 密钥'],
           apiUrl: ['自定义 URL', '可选，留空自动识别 Server酱³'],
+          fullMarkdown: ['推送完整 Markdown 全文', '仅限 Server酱：正文最高推约 28KB 完整回复，卡片显示 64 字预览'],
           deviceKey: ['Device Key', 'Bark 客户端密钥'],
           serverUrl: ['服务器地址', '自建可修改，默认官方地址'],
           group: ['通知分组', '可选'],
@@ -1272,7 +1274,7 @@
           composerRestyle: ['Claude 风格输入框', '采用 Claude 风格圆角输入框与极简底栏'],
           placeholderStyle: ['输入框引导语', '选择 Claude 风格引导语或保留原生提示', [['studio', 'Claude 风格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素周期表', '在模型名旁添加四角星按钮，点击打开元素周期表选模型'],
-          orchestratorSwitch: ['Orchestrator 快捷开关', '在底栏模型名旁添加独立开关，一键在标准模型与 Orchestrator 编排模式间切换'],
+          orchestratorSwitch: ['协作模式快捷开关', '在底栏模型名旁添加独立开关，一键在标准模型与协作模式（Orchestrator）间切换'],
           compactPreset: [
             '/compact 预设文案',
             '点击 /compact 快捷按钮后自动填入的压缩要求（不会自动发送，可先改再回车）',
@@ -1389,6 +1391,7 @@
         credLabels: {
           sendKey: ['SendKey', 'Server醬 / Server醬³ 金鑰'],
           apiUrl: ['自訂 URL', '選填，留空自動辨識 Server醬³'],
+          fullMarkdown: ['推送完整 Markdown 全文', '僅限 Server醬：內文最高推送約 28KB 完整回覆，卡片顯示 64 字預覽'],
           deviceKey: ['Device Key', 'Bark 用戶端金鑰'],
           serverUrl: ['伺服器位址', '自建可修改，預設官方位址'],
           group: ['通知分組', '選填'],
@@ -1412,7 +1415,7 @@
           composerRestyle: ['Claude 風格輸入框', '採用 Claude 風格圓角輸入框與極簡底列'],
           placeholderStyle: ['輸入框引導語', '選擇 Claude 風格引導語或保留原生提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '在模型名旁加入四角星按鈕，點擊開啟元素週期表選模型'],
-          orchestratorSwitch: ['Orchestrator 快捷開關', '在底列模型名旁加入獨立開關，一鍵切換標準模型與 Orchestrator 編排模式'],
+          orchestratorSwitch: ['協作模式快捷開關', '在底列模型名旁加入獨立開關，一鍵切換標準模型與協作模式（Orchestrator）'],
           compactPreset: [
             '/compact 預設文案',
             '點擊 /compact 快捷按鈕後自動填入的壓縮要求（不會自動送出，可先微調再按 Enter）',
@@ -1529,6 +1532,7 @@
         credLabels: {
           sendKey: ['SendKey', 'Server醬 / Server酱³ 密鑰'],
           apiUrl: ['自訂 URL', '可留空，自動識別 Server醬³'],
+          fullMarkdown: ['推送完整 Markdown 全文', '只限 Server醬：內文最高推約 28KB 完整回覆，卡片顯示 64 字預覽'],
           deviceKey: ['Device Key', 'Bark 客戶端密鑰'],
           serverUrl: ['伺服器網址', '自建可改，預設官方地址'],
           group: ['通知分組', '選填'],
@@ -1552,7 +1556,7 @@
           composerRestyle: ['Claude 風格輸入框', '採用 Claude 風格圓角輸入框配極簡底欄'],
           placeholderStyle: ['輸入框引導語', '揀 Claude 風格引導語定保留原版提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '喺模型名隔離加粒四角星，撳開元素週期表揀模型'],
-          orchestratorSwitch: ['Orchestrator 快捷開關', '喺底欄模型名隔離加粒獨立開關，一鍵切換標準模型同 Orchestrator 編排模式'],
+          orchestratorSwitch: ['協作模式快捷開關', '喺底欄模型名隔離加粒獨立開關，一鍵切換標準模型同協作模式（Orchestrator）'],
           compactPreset: [
             '/compact 預設文案',
             '撳 /compact 快捷掣之後自動填入嘅壓縮要求（唔會自動送出，可以改完再按 Enter）',
@@ -1669,6 +1673,7 @@
         credLabels: {
           sendKey: ['SendKey', 'ServerChan / ServerChan³ key'],
           apiUrl: ['Custom URL', 'Optional (auto-detected if empty)'],
+          fullMarkdown: ['Push Full Markdown Reply', 'ServerChan only: send full Markdown up to ~28KB with a 64-char card preview'],
           deviceKey: ['Device Key', 'Bark device key'],
           serverUrl: ['Server URL', 'Default official server or self-hosted'],
           group: ['Group', 'Optional notification group'],
@@ -1809,6 +1814,7 @@
         credLabels: {
           sendKey: ['SendKey', 'ServerChan / ServerChan³ キー'],
           apiUrl: ['カスタム URL', '任意（空欄で自動判定）'],
+          fullMarkdown: ['Markdown 全文を送信', 'ServerChan 専用：最大約 28KB の全文と 64 文字のカード要約を送信'],
           deviceKey: ['Device Key', 'Bark デバイスキー'],
           serverUrl: ['サーバー URL', '自前サーバーも指定可能'],
           group: ['グループ', '任意'],
@@ -1974,7 +1980,7 @@
       skipUserCanceled: true,
       includeSummary: true,
       channels: {
-        serverchan: { sendKey: '', apiUrl: '' },
+        serverchan: { sendKey: '', apiUrl: '', fullMarkdown: true },
         bark: { serverUrl: 'https://api.day.app', deviceKey: '', group: 'Claude Studio', sound: '' },
         ntfy: { serverUrl: 'https://ntfy.sh', topic: '', token: '' },
         feishu: { webhookUrl: '' },
@@ -2257,6 +2263,44 @@
       box.innerHTML = '';
 
       for (const spec of schema) {
+        if (spec.type === 'checkbox') {
+          const row = document.createElement('div');
+          row.className = 'row';
+          row.style.padding = '6px 0 2px';
+          const lblBox = document.createElement('div');
+          lblBox.className = 'row-label';
+          const [labelTxt, hintTxt] = t.credLabels?.[spec.key] || [spec.key, ''];
+          const name = document.createElement('div');
+          name.className = 'row-name';
+          name.textContent = labelTxt;
+          lblBox.appendChild(name);
+          if (hintTxt) {
+            const desc = document.createElement('div');
+            desc.className = 'row-desc';
+            desc.textContent = hintTxt;
+            lblBox.appendChild(desc);
+          }
+          const sw = document.createElement('label');
+          sw.className = 'switch';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.id = `notify-cred-${ch}-${spec.key}`;
+          cb.checked = chData[spec.key] !== false;
+          cb.addEventListener('change', () => {
+            if (!notifyConfig.channels[ch]) notifyConfig.channels[ch] = {};
+            notifyConfig.channels[ch][spec.key] = cb.checked;
+            notifyDirty = true;
+            updateNotifyBadgesAndDirtyHint();
+          });
+          const track = document.createElement('span');
+          track.className = 'switch-track';
+          sw.appendChild(cb);
+          sw.appendChild(track);
+          row.appendChild(lblBox);
+          row.appendChild(sw);
+          box.appendChild(row);
+          continue;
+        }
         const field = document.createElement('div');
         field.className = 'notify-field';
         const head = document.createElement('div');

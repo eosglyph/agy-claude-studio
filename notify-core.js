@@ -26,7 +26,7 @@ const DEFAULT_NOTIFY_CONFIG = {
   skipUserCanceled: true,
   includeSummary: true,
   channels: {
-    serverchan: { sendKey: '', apiUrl: '' },
+    serverchan: { sendKey: '', apiUrl: '', fullMarkdown: true },
     bark: { serverUrl: 'https://api.day.app', deviceKey: '', group: 'Claude Studio', sound: '' },
     ntfy: { serverUrl: 'https://ntfy.sh', topic: '', token: '' },
     feishu: { webhookUrl: '' },
@@ -144,6 +144,7 @@ function sanitizeNotifyConfig(raw, base = DEFAULT_NOTIFY_CONFIG) {
     const src = rawChannels.serverchan;
     if (has(src, 'sendKey')) out.channels.serverchan.sendKey = sanitizeString(src.sendKey, 512);
     if (has(src, 'apiUrl')) out.channels.serverchan.apiUrl = sanitizeUrlField(src.apiUrl, '');
+    if (typeof src?.fullMarkdown === 'boolean') out.channels.serverchan.fullMarkdown = src.fullMarkdown;
   }
   if (has(rawChannels, 'bark')) {
     const src = rawChannels.bark;
@@ -285,11 +286,37 @@ function recordNotifySent(dataDir, conversationId, nowMs = Date.now()) {
   return next;
 }
 
+const SERVERCHAN_MAX_DESP_BYTES = 28 * 1024;
+
 function clipText(str, maxLen) {
   const s = String(str || '').trim();
   if (s.length <= maxLen) return s;
   if (maxLen <= 1) return s.slice(0, maxLen);
   return `${s.slice(0, maxLen - 1).trimEnd()}…`;
+}
+
+function clipUtf8Bytes(str, maxBytes, suffix = '\n\n> *(内容过长，已按 Server酱 32KB 上限自动截断，完整内容请回到电脑查看)*') {
+  const s = String(str || '');
+  if (!s || Buffer.byteLength(s, 'utf8') <= maxBytes) return s;
+  const suffixBytes = Buffer.byteLength(suffix, 'utf8');
+  const budget = Math.max(0, maxBytes - suffixBytes);
+  if (budget <= 0) return '';
+  let lo = 0;
+  let hi = s.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (Buffer.byteLength(s.slice(0, mid), 'utf8') <= budget) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  let end = lo;
+  if (end > 0) {
+    const code = s.charCodeAt(end - 1);
+    if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  }
+  return `${s.slice(0, end).trimEnd()}${suffix}`;
 }
 
 function summarizeReplyText(raw, maxLen = 180) {
@@ -345,6 +372,7 @@ function readTranscriptTailSummary(
     durationSec: null,
     truncatedBeforeUserInput: false,
     summary: '',
+    fullReply: '',
     lastUserInputFromTranscript: '',
   };
   if (!transcriptPath || typeof transcriptPath !== 'string') return empty;
@@ -409,6 +437,7 @@ function readTranscriptTailSummary(
       durationSec,
       truncatedBeforeUserInput: size > toRead && userInputMs === null,
       summary: summarizeReplyText(replyText, maxSummaryLen),
+      fullReply: clipUtf8Bytes(String(replyText || '').trim(), SERVERCHAN_MAX_DESP_BYTES),
       lastUserInputFromTranscript,
     };
   } catch {
@@ -520,9 +549,32 @@ function buildNotificationMessage(payload, summaryInfo = {}, cfg = DEFAULT_NOTIF
   if (detailLine) parts.push(detailLine);
   const body = parts.length > 0 ? parts.join('\n\n') : '任务已结束，请回到电脑查看结果。';
 
+  const short = clipText(
+    String(detailLine || summaryInfo?.summary || body)
+      .replace(/\s+/g, ' ')
+      .trim(),
+    64
+  );
+
+  let fullBody = '';
+  const wantServerChanFull =
+    cfg?.channel === 'serverchan' &&
+    cfg?.channels?.serverchan?.fullMarkdown !== false &&
+    cfg?.includeSummary !== false &&
+    !isError &&
+    Boolean(summaryInfo?.fullReply && String(summaryInfo.fullReply).trim());
+  if (wantServerChanFull) {
+    const fullParts = [];
+    if (promptLine) fullParts.push(`> ${promptLine}`);
+    fullParts.push(String(summaryInfo.fullReply).trim());
+    fullBody = clipUtf8Bytes(fullParts.join('\n\n'), SERVERCHAN_MAX_DESP_BYTES);
+  }
+
   return {
     title,
     body,
+    short,
+    fullBody,
     level,
     workspace,
     durationSec,
@@ -554,11 +606,22 @@ function buildChannelRequest(cfg, msg) {
           ? `https://${sc3Match[1]}.push.ft07.com/send/${encodeURIComponent(key)}.send`
           : `https://sctapi.ftqq.com/${encodeURIComponent(key)}.send`;
       }
+      const scTitle = clipText(title, 32);
+      const useFull = creds.fullMarkdown !== false && Boolean(msg?.fullBody && String(msg.fullBody).trim());
+      const desp = clipUtf8Bytes(useFull ? String(msg.fullBody) : body, SERVERCHAN_MAX_DESP_BYTES);
+      const scShort = clipText(
+        String(msg?.short || body)
+          .replace(/\s+/g, ' ')
+          .trim(),
+        64
+      );
+      const payload = { title: scTitle, desp, noip: 1 };
+      if (scShort) payload.short = scShort;
       return {
         url,
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        body: JSON.stringify({ title, desp: body }),
+        body: JSON.stringify(payload),
       };
     }
 
