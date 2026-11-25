@@ -293,7 +293,7 @@
     psReleased: ['个已发布', '個已發布', '個已發佈', 'released', 'リリース済み'],
     psTabAll: ['全部', '全部', '全部', 'All', 'すべて'],
     psTabGemini: ['Gemini', 'Gemini', 'Gemini', 'Gemini', 'Gemini'],
-    psTabOrchestrator: ['Orchestrator', 'Orchestrator', 'Orchestrator', 'Orchestrator', 'Orchestrator'],
+    psTabOrchestrator: ['协作模式', '協作模式', '協作模式', 'Orchestrator', 'Orchestrator'],
     psTabClaude: ['Claude', 'Claude', 'Claude', 'Claude', 'Claude'],
     psTabOther: ['其他', '其他', '其他', 'Other', 'その他'],
     psTriggerTooltip: [
@@ -2310,14 +2310,14 @@
     ['The coordinator asked. Answer it in its chat.', '协调者发起了提问，请在协调者对话中回复。', '協調者提出了問題，請在協調者對話中回覆。', '協調者問咗問題，請去佢個對話度覆。', 'コーディネーターからの質問です。チャットで回答してください。'],
 
     // ── Plan, Orchestrator, Coordinator & Newer Workbench Strings ──────────
-    ['Orchestrator', '编排器', '編排器', '編排器', 'オーケストレーター'],
-    ['Orchestrator Settings', '编排器设置', '編排器設定', '編排器設定', 'オーケストレーター設定'],
-    ['Choose the models Orchestrator uses. A larger, smarter orchestrator model with a faster, cheaper executor gives high quality for fewer tokens.', '选择编排器使用的模型。搭配更强的大模型负责规划与更快更省的执行模型，可用更少 Token 获得高质量结果。', '選擇編排器使用的模型。以更強大的規劃模型搭配更快速划算的執行模型，可用更少 Token 達成高品質成果。', '揀編排器用邊啲模型。用更強嘅大模型做規劃，配個快啲平啲嘅執行模型，慳 Token 又高質。', 'オーケストレーターが使用するモデルを選択します。高性能な計画モデルと高速・低コストな実行モデルの組み合わせで、少ないトークンで高品質な結果を得られます。'],
+    ['Orchestrator', '协作模式', '協作模式', '協作模式', 'オーケストレーター'],
+    ['Orchestrator Settings', '协作模式设置', '協作模式設定', '協作模式設定', 'オーケストレーター設定'],
+    ['Choose the models Orchestrator uses. A larger, smarter orchestrator model with a faster, cheaper executor gives high quality for fewer tokens.', '选择协作模式使用的模型。搭配更强的大模型负责规划与更快更省的执行模型，可用更少 Token 获得高质量结果。', '選擇協作模式使用的模型。以更強大的規劃模型搭配更快速划算的執行模型，可用更少 Token 達成高品質成果。', '揀協作模式用邊啲模型。用更強嘅大模型做規劃，配個快啲平啲嘅執行模型，慳 Token 又高質。', 'オーケストレーターが使用するモデルを選択します。高性能な計画モデルと高速・低コストな実行モデルの組み合わせで、少ないトークンで高品質な結果を得られます。'],
     ['Orchestrator Model', '规划模型', '規劃模型', '規劃模型', '計画モデル'],
-    ['Plans the work, makes design decisions, and reviews the result. Pick a top-tier model. You can also pick one per conversation from the Orchestrator row in the model menu.', '负责规划工作、做出设计决策并审查结果，建议选择顶级模型。也可以在模型菜单的“编排器”行中为每个对话单独指定。', '負責規劃工作、做出設計決策並審查結果，建議選用頂級模型。也可在模型選單的「編排器」列中為個別對話單獨指定。', '負責規劃工作、做設計決定同審查結果，建議揀頂級模型。亦可以喺模型選單嘅「編排器」嗰行幫每段對話逐個揀。', '作業計画・設計判断・結果レビューを担当します。最上位モデルを推奨します。モデルメニューのオーケストレーター行から会話ごとに選択することもできます。'],
+    ['Plans the work, makes design decisions, and reviews the result. Pick a top-tier model. You can also pick one per conversation from the Orchestrator row in the model menu.', '负责规划工作、做出设计决策并审查结果，建议选择顶级模型。也可以在模型菜单的“协作模式”行中为每个对话单独指定。', '負責規劃工作、做出設計決策並審查結果，建議選用頂級模型。也可在模型選單的「協作模式」列中為個別對話單獨指定。', '負責規劃工作、做設計決定同審查結果，建議揀頂級模型。亦可以喺模型選單嘅「協作模式」嗰行幫每段對話逐個揀。', '作業計画・設計判断・結果レビューを担当します。最上位モデルを推奨します。モデルメニューのオーケストレーター行から会話ごとに選択することもできます。'],
     ['Executor Model', '执行模型', '執行模型', '執行模型', '実行モデル'],
     ['Carries out the plan: searches, edits, builds, and tests. Pick a faster, cheaper model.', '负责执行计划：搜索、编辑、构建与测试。建议选择更快、成本更低的模型。', '負責執行計畫：搜尋、編輯、建置與測試。建議選用更快速、成本更低的模型。', '負責落實計畫：搜尋、改碼、建置同測試。建議揀快啲平啲嘅模型。', '計画を実行します（検索・編集・ビルド・テスト）。高速で低コストなモデルを選択してください。'],
-    ["The Orchestrator's own planner", '编排器自带规划器', '編排器內建規劃器', '編排器自帶規劃器', 'オーケストレーター内蔵プランナー'],
+    ["The Orchestrator's own planner", '协作模式自带规划器', '協作模式內建規劃器', '協作模式自帶規劃器', 'オーケストレーター内蔵プランナー'],
     ['Coordinators', '协调者', '協調者', '協調者', 'コーディネーター'],
     ['No coordinators', '暂无协调者', '尚無協調者', '暫時冇協調者', 'コーディネーターなし'],
     ['New Coordinator', '新建协调者', '新增協調者', '開新協調者', '新しいコーディネーター'],

@@ -1,5 +1,6 @@
 // Aux Pane Sidecar UI server for Claude Studio (agy-claude-studio).
 // Uses sidecar_sdk and cleans up cleanly via host /healthz watchdog when Antigravity exits.
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
@@ -13,8 +14,11 @@ const { updateConfigSetting, injectOnce } = require('../../inject.js');
 const { removeFromAllWindows } = require('../../remove.js');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT_DIR = resolve(__dirname, '..', '..');
 const HTML_PATH = join(__dirname, 'index.html');
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' };
+const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/eosglyph/agy-claude-studio/releases/latest';
+const LATEST_RELEASE_WEB_URL = 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
 
 function isLocalHostRequest(req) {
   if (!req?.headers) return true;
@@ -141,6 +145,8 @@ async function getStudioStatus() {
   const hostInfo = !activePort ? lifecycle.resolveDesktopHostExecutable() : { found: false };
   const canRelaunch = Boolean(hostInfo.found || process.platform === 'win32' || process.platform === 'darwin');
 
+  const compatInfo = cdp.readI18nCompatData();
+
   return {
     ok: true,
     version: cdp.PLUGIN_VERSION,
@@ -152,6 +158,17 @@ async function getStudioStatus() {
     },
     integrations: {
       usageMonitorInstalled,
+    },
+    i18nCompat: {
+      version: compatInfo.version,
+      updatedAt: compatInfo.updatedAt,
+      hasRemote: compatInfo.hasRemote,
+      pluginCount: compatInfo.plugins.length,
+      selectorCount: compatInfo.selectors.length,
+    },
+    update: {
+      isGitRepo: existsSync(join(PLUGIN_ROOT_DIR, '.git')),
+      releaseUrl: LATEST_RELEASE_WEB_URL,
     },
     launcher,
     cdp: {
@@ -239,6 +256,171 @@ async function openUsageMonitorPaneInHost() {
   return lastResult;
 }
 
+function parseSemverParts(raw) {
+  const clean = String(raw || '').trim().replace(/^v/i, '').split('-')[0];
+  const parts = clean.split('.').map((n) => parseInt(n, 10));
+  if (parts.some((n) => !Number.isFinite(n))) return null;
+  while (parts.length < 3) parts.push(0);
+  return parts.slice(0, 3);
+}
+
+function compareSemver(a, b) {
+  const pa = parseSemverParts(a);
+  const pb = parseSemverParts(b);
+  if (!pa || !pb) return 0;
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] > pb[i]) return 1;
+    if (pa[i] < pb[i]) return -1;
+  }
+  return 0;
+}
+
+function inspectGitRepoState(pluginDir = PLUGIN_ROOT_DIR, execFn = execFileSync) {
+  const isGitRepo = Boolean(pluginDir && existsSync(join(pluginDir, '.git')));
+  if (!isGitRepo) return { isGitRepo: false, gitClean: false, branch: '' };
+  try {
+    const statusOut = String(execFn('git', ['status', '--porcelain'], { cwd: pluginDir, encoding: 'utf8', timeout: 5000 })).trim();
+    let branch = '';
+    try {
+      branch = String(execFn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: pluginDir, encoding: 'utf8', timeout: 5000 })).trim();
+    } catch {}
+    return { isGitRepo: true, gitClean: statusOut.length === 0, branch };
+  } catch {
+    return { isGitRepo: true, gitClean: false, branch: '' };
+  }
+}
+
+async function checkStudioUpdate({
+  fetchFn = typeof fetch === 'function' ? fetch : null,
+  pluginDir = PLUGIN_ROOT_DIR,
+  currentVersion = cdp.PLUGIN_VERSION,
+  execFn = execFileSync,
+  timeoutMs = 8000,
+} = {}) {
+  const gitState = inspectGitRepoState(pluginDir, execFn);
+  if (!fetchFn) {
+    return { ok: false, error: 'fetch unavailable', currentVersion, ...gitState, releaseUrl: LATEST_RELEASE_WEB_URL };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchFn(LATEST_RELEASE_API_URL, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': `agy-claude-studio/${currentVersion}`,
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `HTTP ${res.status}`,
+        currentVersion,
+        ...gitState,
+        releaseUrl: LATEST_RELEASE_WEB_URL,
+      };
+    }
+    const data = await res.json();
+    const latestTag = String(data?.tag_name || '').trim();
+    const latestVersion = latestTag.replace(/^v/i, '');
+    const hasUpdate = Boolean(latestVersion && compareSemver(latestVersion, currentVersion) > 0);
+    return {
+      ok: true,
+      currentVersion,
+      latestVersion: latestVersion || currentVersion,
+      latestTag: latestTag || `v${currentVersion}`,
+      hasUpdate,
+      releaseName: String(data?.name || latestTag || ''),
+      publishedAt: String(data?.published_at || ''),
+      releaseUrl: String(data?.html_url || LATEST_RELEASE_WEB_URL),
+      ...gitState,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err?.name === 'AbortError' ? 'timeout' : err?.message || 'network error',
+      currentVersion,
+      ...gitState,
+      releaseUrl: LATEST_RELEASE_WEB_URL,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function performStudioSelfUpdate({
+  pluginDir = PLUGIN_ROOT_DIR,
+  execFn = execFileSync,
+  reinjectFn = () => injectOnce({ log: () => {} }),
+} = {}) {
+  const gitState = inspectGitRepoState(pluginDir, execFn);
+  if (!gitState.isGitRepo) {
+    return {
+      ok: false,
+      reason: 'not_git_repo',
+      releaseUrl: LATEST_RELEASE_WEB_URL,
+    };
+  }
+  if (!gitState.gitClean) {
+    return {
+      ok: false,
+      reason: 'dirty_worktree',
+      branch: gitState.branch,
+      releaseUrl: LATEST_RELEASE_WEB_URL,
+    };
+  }
+  try {
+    execFn('git', ['fetch', '--tags', 'origin'], { cwd: pluginDir, encoding: 'utf8', timeout: 25000 });
+    const pullOut = String(
+      execFn('git', ['pull', '--ff-only'], { cwd: pluginDir, encoding: 'utf8', timeout: 25000 })
+    ).trim();
+    let nextVersion = cdp.PLUGIN_VERSION;
+    try {
+      const pkg = JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8'));
+      if (pkg?.version) nextVersion = String(pkg.version);
+    } catch {}
+    try {
+      await reinjectFn();
+    } catch {}
+    return {
+      ok: true,
+      updated: !/already up to date/i.test(pullOut),
+      output: pullOut,
+      version: nextVersion,
+      branch: gitState.branch,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'git_pull_failed',
+      error: err?.message || String(err),
+      releaseUrl: LATEST_RELEASE_WEB_URL,
+    };
+  }
+}
+
+async function syncI18nCompatWhitelist({
+  fetchFn = typeof fetch === 'function' ? fetch : null,
+  pluginDataDir = cdp.PLUGIN_DATA_DIR,
+  reinjectFn = () => injectOnce({ log: () => {} }),
+} = {}) {
+  try {
+    const syncRes = await cdp.syncRemoteI18nCompat({ fetchFn, pluginDataDir });
+    try {
+      await reinjectFn();
+    } catch {}
+    return {
+      ok: true,
+      ...syncRes,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err?.name === 'AbortError' ? 'timeout' : err?.message || 'sync failed',
+    };
+  }
+}
+
 async function resetStudioConfig() {
   cdp.ensureMigratedPluginConfig();
   cdp.atomicWriteFileSync(cdp.CONFIG_FILE, JSON.stringify(cdp.DEFAULT_CONFIG, null, 2) + '\n');
@@ -286,6 +468,9 @@ async function startStudioSidecar() {
     return { ok: true, removed };
   }), 'POST');
   app.api('/api/open-usage-monitor', guardApi(async () => openUsageMonitorPaneInHost()), 'POST');
+  app.api('/api/check-update', guardApi(async () => checkStudioUpdate()), 'GET');
+  app.api('/api/self-update', guardApi(async () => performStudioSelfUpdate()), 'POST');
+  app.api('/api/sync-i18n-compat', guardApi(async () => syncI18nCompatWhitelist()), 'POST');
   app.api('/api/relaunch', guardApi(async () => {
     const res = await relaunchDesktopHost();
     if (!res?.ok) {
@@ -375,6 +560,10 @@ if (isSameEntryPath(invokedPath, currentPath)) {
 export {
   isLocalHostRequest,
   detectUsageMonitorInstalled,
+  compareSemver,
+  checkStudioUpdate,
+  performStudioSelfUpdate,
+  syncI18nCompatWhitelist,
   getStudioStatus,
   applyConfigUpdate,
   resetStudioConfig,

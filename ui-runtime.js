@@ -106,6 +106,41 @@
   const STORAGE_SETTINGS_KEY = 'agClaudeStyle.settings.v1';
   const STORAGE_FILE_CFG_KEY = 'agClaudeStyle.lastFileConfig.v1';
   const STORAGE_USAGE_CACHE_KEY = 'agClaudeStyle.trajRollup.v1';
+  const STORAGE_LAST_STD_MODEL_KEY = 'agClaudeStyle.lastStdModel.v1';
+
+  let lastStandardModelMeta = null;
+  try {
+    const rawStd = JSON.parse(localStorage.getItem(STORAGE_LAST_STD_MODEL_KEY) || 'null');
+    if (rawStd && typeof rawStd === 'object') lastStandardModelMeta = rawStd;
+  } catch {}
+
+  function rememberStandardModel(opt) {
+    if (!opt || !periodicCore) return;
+    if (typeof periodicCore.parseOrchestratorOption === 'function' && periodicCore.parseOrchestratorOption(opt)) {
+      return;
+    }
+    const label = String(opt.label || opt.modelId || '').trim();
+    if (!label) return;
+    const parsed = periodicCore.parseOptionEffort(label);
+    const next = {
+      modelId: String(opt.modelId || ''),
+      label,
+      value: opt.value,
+      effortId: parsed.effortId || '',
+    };
+    if (
+      lastStandardModelMeta &&
+      lastStandardModelMeta.modelId === next.modelId &&
+      lastStandardModelMeta.label === next.label &&
+      lastStandardModelMeta.effortId === next.effortId
+    ) {
+      return;
+    }
+    lastStandardModelMeta = next;
+    try {
+      localStorage.setItem(STORAGE_LAST_STD_MODEL_KEY, JSON.stringify(next));
+    } catch {}
+  }
 
   function loadSettings(base) {
     try {
@@ -269,6 +304,14 @@
     else html.removeAttribute('data-ag-cs-cjk');
 
     cleanupLegacyAuroraArtifacts();
+
+    if (domTranslator && typeof domTranslator.setExtraOptOut === 'function') {
+      const mergedOptOut = [
+        ...(Array.isArray(cfg.i18nOptOutSelectors) ? cfg.i18nOptOutSelectors : []),
+        ...(Array.isArray(cfg.i18nIgnoreSelectors) ? cfg.i18nIgnoreSelectors : []),
+      ];
+      domTranslator.setExtraOptOut(mergedOptOut, document);
+    }
 
     const prevLang = lastAppliedLang;
     if (lang !== prevLang) {
@@ -3451,8 +3494,8 @@
   function resolveModelEffortContext(modelBtn, badgeEl) {
     const readLiveBadgeEffort = (el) => {
       if (!el) return '';
-      const rawTxt = stripEffortBadgeSuffix(el.textContent).toLowerCase();
-      const m = rawTxt.match(/\b(extra|xhigh|high|med(?:ium)?|low|max)\b/);
+      const rawTxt = stripEffortBadgeSuffix(el.textContent).toLowerCase().replace(/\s+/g, ' ');
+      const m = rawTxt.match(/\b(extra high|extra|xhigh|high|med(?:ium)?|low|max)\b/);
       if (m) return m[1].startsWith('med') ? 'medium' : m[1];
       return (el.getAttribute('data-ag-cs-effort') || rawTxt).trim().toLowerCase();
     };
@@ -3465,12 +3508,46 @@
     }
     const fiberProps = getModelFiberProps(modelBtn);
 
-    const selectedLabel = fiberProps?.selectedModel?.label || getCurrentModelLabel(modelBtn?.closest?.('.surface-composer-card')) || '';
-    const resolved = effortCore.resolveClaudeEffortSteps(fiberProps?.modelOptions, selectedLabel, badgeEffort);
+    const isOrchSelected = Boolean(
+      periodicCore &&
+        typeof periodicCore.parseOrchestratorOption === 'function' &&
+        fiberProps?.selectedModel &&
+        periodicCore.parseOrchestratorOption(fiberProps.selectedModel)
+    );
+    const canSelectOrchPlanner = Boolean(
+      isOrchSelected &&
+        Array.isArray(fiberProps?.orchestratorPlanners) &&
+        fiberProps.orchestratorPlanners.length > 0 &&
+        typeof fiberProps?.orchestratorPick?.select === 'function'
+    );
+    const activePlanner =
+      canSelectOrchPlanner && typeof periodicCore.resolveOrchestratorPlanner === 'function'
+        ? periodicCore.resolveOrchestratorPlanner(
+            fiberProps.orchestratorPlanners,
+            fiberProps.orchestratorPick,
+            fiberProps.orchestratorDefaultPlanner
+          )
+        : null;
+
+    const effectiveOptions = canSelectOrchPlanner ? fiberProps.orchestratorPlanners : fiberProps?.modelOptions;
+    const selectedLabel =
+      (canSelectOrchPlanner && activePlanner?.label) ||
+      fiberProps?.selectedModel?.label ||
+      getCurrentModelLabel(modelBtn?.closest?.('.surface-composer-card')) ||
+      '';
+    const resolved = effortCore.resolveClaudeEffortSteps(effectiveOptions, selectedLabel, badgeEffort);
+    const interactive = !isOrchSelected || (canSelectOrchPlanner && resolved.hasRealVariants);
 
     const commitSelection = (opt, effortId, effortDisplay, fullLabel, onHostResolved) => {
-      const hasRealModelSetter = Boolean(opt && fiberProps && typeof fiberProps.setSelectedModel === 'function');
-      if (hasRealModelSetter) {
+      const hasOrchPlannerSetter = Boolean(canSelectOrchPlanner && opt && opt.value !== undefined);
+      const hasRealModelSetter = Boolean(
+        hasOrchPlannerSetter || (!isOrchSelected && opt && fiberProps && typeof fiberProps.setSelectedModel === 'function')
+      );
+      if (hasOrchPlannerSetter) {
+        try {
+          fiberProps.orchestratorPick.select(opt.value);
+        } catch {}
+      } else if (hasRealModelSetter) {
         try {
           fiberProps.setSelectedModel(opt);
         } catch {}
@@ -3482,25 +3559,34 @@
         }
         let resolvedDisplay = effortDisplay;
         if (targetBadge) {
-          if (!hasRealModelSetter) {
+          if (!hasRealModelSetter && !isOrchSelected) {
             const ctxSuffix = (targetBadge.textContent || '').match(/(\s*[·•]\s*.+)$/)?.[1] || '';
             targetBadge.textContent = ' ' + effortDisplay + ctxSuffix;
-          } else if (effortId === 'xhigh' && /\bextra\b/i.test(stripEffortBadgeSuffix(targetBadge.textContent))) {
-            resolvedDisplay = 'Extra';
+          } else if (effortId === 'xhigh') {
+            const hostTxt = stripEffortBadgeSuffix(targetBadge.textContent);
+            if (/\bextra\s+high\b/i.test(hostTxt)) {
+              resolvedDisplay = 'Extra High';
+            } else if (/\bextra\b/i.test(hostTxt)) {
+              resolvedDisplay = 'Extra';
+            }
           }
           const badgeLevel = String(resolvedDisplay || '').trim().toLowerCase() === 'extra' ? 'extra' : effortId;
-          targetBadge.setAttribute('data-ag-cs-effort', badgeLevel);
-          targetBadge.classList.add('ag-cs-effort-badge');
+          if (targetBadge.getAttribute('data-ag-cs-effort') !== badgeLevel) {
+            targetBadge.setAttribute('data-ag-cs-effort', badgeLevel);
+          }
+          if (!targetBadge.classList.contains('ag-cs-effort-badge')) {
+            targetBadge.classList.add('ag-cs-effort-badge');
+          }
           openEffortAnchor = targetBadge;
           openEffortBadgeEl = targetBadge;
         }
         if (resolvedDisplay !== effortDisplay && typeof onHostResolved === 'function') {
           onHostResolved(resolvedDisplay);
         }
-        if (modelBtn && !hasRealModelSetter) {
+        if (modelBtn && !hasRealModelSetter && !isOrchSelected) {
           const aria = modelBtn.getAttribute('aria-label') || '';
           if (aria) {
-            modelBtn.setAttribute('aria-label', fullLabel || aria.replace(/\b(Low|Medium|High|XHigh|Max)\)?$/i, effortDisplay));
+            modelBtn.setAttribute('aria-label', fullLabel || aria.replace(/\b(Low|Medium|High|Extra High|XHigh|Max)\)?$/i, effortDisplay));
           }
         }
       };
@@ -3517,11 +3603,13 @@
       fiberProps,
       selectedLabel,
       badgeEffort,
+      isOrchSelected,
+      interactive,
       baseName: resolved.baseName,
       steps: resolved.steps,
       selectedIdx: resolved.selectedIdx,
       selectStep(step, onHostResolved) {
-        if (!step) return;
+        if (!step || !interactive) return;
         commitSelection(step.option, step.id, step.display, step.option?.label, onHostResolved);
       },
     };
@@ -4243,7 +4331,10 @@
   function openEffortPopover(badgeEl, modelBtn) {
     const anchor = badgeEl || modelBtn;
     if (!anchor) return;
-    if (openEffortPop && (openEffortAnchor === anchor || (modelBtn && modelBtn.contains(openEffortAnchor)))) {
+    const resolvedModelBtn = modelBtn || anchor?.closest?.('[data-testid="model-selector-trigger"]') || null;
+    const preCtx = resolveModelEffortContext(resolvedModelBtn, badgeEl);
+    if (!preCtx.interactive) return;
+    if (openEffortPop && (openEffortAnchor === anchor || (resolvedModelBtn && resolvedModelBtn.contains(openEffortAnchor)))) {
       closeEffortPopover();
       return;
     }
@@ -4255,7 +4346,7 @@
     pop.setAttribute('data-ag-no-i18n', '');
     openEffortPop = pop;
     openEffortAnchor = anchor;
-    openEffortModelBtn = modelBtn || anchor?.closest?.('[data-testid="model-selector-trigger"]') || null;
+    openEffortModelBtn = resolvedModelBtn;
     openEffortBadgeEl = badgeEl || null;
     document.body.appendChild(pop);
     renderEffortPopoverContent(pop, openEffortModelBtn, openEffortBadgeEl);
@@ -4380,6 +4471,14 @@
     return btn;
   }
 
+  function resolveInlineModelAnchor(modelBtn) {
+    const wrap = modelBtn && typeof modelBtn.closest === 'function' ? modelBtn.closest('.no-focus-agent-input') : null;
+    if (wrap && wrap.parentElement) {
+      return { parent: wrap.parentElement, slot: wrap };
+    }
+    return { parent: modelBtn?.parentElement || null, slot: modelBtn };
+  }
+
   function syncPeriodicTrigger(card, footer, modelBtn) {
     if (!card) return;
     const existing = card.querySelector('.ag-cs-periodic-trigger');
@@ -4395,25 +4494,207 @@
     const ui = uiText(lang);
     const tip = ui.psTriggerTooltip || 'Gemini 4 Periodic Table Model Selector';
     const inlineMode = !footer || cfg.composerRestyle === false;
-    const desiredParent = inlineMode ? modelBtn.parentElement : footer;
+    const inlineAnchor = inlineMode ? resolveInlineModelAnchor(modelBtn) : null;
+    const desiredParent = inlineMode ? inlineAnchor.parent : footer;
     if (!desiredParent) return;
 
     const btn = existing || buildPeriodicTriggerButton();
     btn._agCsModelBtn = modelBtn;
-    if (inlineMode) btn.classList.add('is-inline');
-    else btn.classList.remove('is-inline');
+    if (inlineMode) {
+      if (!btn.classList.contains('is-inline')) btn.classList.add('is-inline');
+    } else if (btn.classList.contains('is-inline')) {
+      btn.classList.remove('is-inline');
+    }
     if (btn.getAttribute('title') !== tip) {
       btn.setAttribute('title', tip);
       btn.setAttribute('aria-label', tip);
     }
-    btn.setAttribute('aria-expanded', openPsTrigger === btn && openPsDrawer?.isConnected ? 'true' : 'false');
+    const expandedVal = openPsTrigger === btn && openPsDrawer?.isConnected ? 'true' : 'false';
+    if (btn.getAttribute('aria-expanded') !== expandedVal) {
+      btn.setAttribute('aria-expanded', expandedVal);
+    }
 
     if (inlineMode) {
-      if (btn.parentElement !== desiredParent || btn.nextSibling !== modelBtn) {
-        desiredParent.insertBefore(btn, modelBtn);
+      const slot = inlineAnchor.slot;
+      if (btn.parentElement !== desiredParent || btn.nextSibling !== slot) {
+        desiredParent.insertBefore(btn, slot);
       }
     } else {
       if (btn.parentElement !== footer) {
+        footer.appendChild(btn);
+      }
+    }
+  }
+
+  function buildOrchestratorSwitchButton() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ag-cs-orch-switch';
+    btn.setAttribute('data-ag-no-i18n', '');
+    btn.setAttribute('role', 'switch');
+    btn.setAttribute('aria-checked', 'false');
+    btn.innerHTML =
+      '<svg class="ag-cs-orch-ico" viewBox="0 0 16 16" aria-hidden="true">' +
+      '<circle cx="8" cy="3.2" r="1.7" fill="currentColor"/>' +
+      '<circle cx="3.3" cy="12.2" r="1.7" fill="currentColor"/>' +
+      '<circle cx="12.7" cy="12.2" r="1.7" fill="currentColor"/>' +
+      '<path d="M8 5.1v2.5M8 7.6L4.5 10.8M8 7.6l3.5 3.2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" fill="none"/>' +
+      '</svg>' +
+      '<span class="ag-cs-orch-lbl">协作</span>' +
+      '<span class="ag-cs-orch-dot" aria-hidden="true"></span>';
+    btn.addEventListener('pointerdown', (ev) => {
+      ev.stopPropagation();
+    });
+    btn.addEventListener('mousedown', (ev) => {
+      ev.stopPropagation();
+    });
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const mBtn = btn._agCsModelBtn || btn.closest('.surface-composer-card')?.querySelector('[data-testid="model-selector-trigger"]') || null;
+      const fp = getModelFiberProps(mBtn);
+      if (!fp || !periodicCore || typeof periodicCore.computeOrchestratorToggleTarget !== 'function') return;
+      const prevSelected = fp.selectedModel || null;
+      if (prevSelected) rememberStandardModel(prevSelected);
+      const preferredEff = lastStandardModelMeta?.effortId || '';
+      const activePlanner =
+        typeof periodicCore.resolveOrchestratorPlanner === 'function' && Array.isArray(fp.orchestratorPlanners)
+          ? periodicCore.resolveOrchestratorPlanner(fp.orchestratorPlanners, fp.orchestratorPick, fp.orchestratorDefaultPlanner)
+          : null;
+      const res = periodicCore.computeOrchestratorToggleTarget(
+        fp.modelOptions,
+        prevSelected,
+        preferredEff,
+        lastStandardModelMeta,
+        activePlanner
+      );
+      if (res && res.targetOption && typeof fp.setSelectedModel === 'function') {
+        if (
+          res.nextOrchestrator &&
+          prevSelected &&
+          typeof fp.orchestratorPick?.select === 'function' &&
+          typeof periodicCore.findMatchingOrchestratorPlanner === 'function' &&
+          Array.isArray(fp.orchestratorPlanners)
+        ) {
+          const matchingPlanner = periodicCore.findMatchingOrchestratorPlanner(
+            fp.orchestratorPlanners,
+            prevSelected,
+            preferredEff
+          );
+          if (matchingPlanner && matchingPlanner.value !== undefined) {
+            try {
+              fp.orchestratorPick.select(matchingPlanner.value);
+            } catch {}
+          }
+        }
+        try {
+          fp.setSelectedModel(res.targetOption);
+        } catch {}
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => scheduleSync());
+        } else {
+          scheduleSync();
+        }
+      }
+    });
+    return btn;
+  }
+
+  function syncOrchestratorSwitch(card, footer, modelBtn) {
+    if (!card) return;
+    const existing = card.querySelector('.ag-cs-orch-switch');
+    if (
+      cfg.orchestratorSwitch === false ||
+      !modelBtn ||
+      !periodicCore ||
+      typeof periodicCore.resolveOrchestratorState !== 'function'
+    ) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    const fp = getModelFiberProps(modelBtn);
+    if (!fp || !Array.isArray(fp.modelOptions) || !fp.modelOptions.length) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (fp.selectedModel) rememberStandardModel(fp.selectedModel);
+
+    const state = periodicCore.resolveOrchestratorState(
+      fp.modelOptions,
+      fp.selectedModel,
+      lastStandardModelMeta?.effortId || ''
+    );
+    if (!state.available) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    const inlineMode = !footer || cfg.composerRestyle === false;
+    const inlineAnchor = inlineMode ? resolveInlineModelAnchor(modelBtn) : null;
+    const desiredParent = inlineMode ? inlineAnchor.parent : footer;
+    if (!desiredParent) return;
+
+    const btn = existing || buildOrchestratorSwitchButton();
+    btn._agCsModelBtn = modelBtn;
+    const isOrch = Boolean(state.isOrchestrator);
+    if (btn.classList.contains('is-inline') !== inlineMode) {
+      btn.classList.toggle('is-inline', inlineMode);
+    }
+    if (btn.classList.contains('is-active') !== isOrch) {
+      btn.classList.toggle('is-active', isOrch);
+    }
+    const checkedVal = isOrch ? 'true' : 'false';
+    if (btn.getAttribute('aria-checked') !== checkedVal) {
+      btn.setAttribute('aria-checked', checkedVal);
+    }
+
+    const lang = getLang();
+    const isZh = lang === 'zh-CN' || lang === 'zh-TW' || lang === 'yue';
+    const lblText = lang === 'zh-CN' ? '协作' : (lang === 'zh-TW' || lang === 'yue') ? '協作' : lang === 'ja' ? '協調' : 'Orch';
+    const lblEl = btn.querySelector('.ag-cs-orch-lbl');
+    if (lblEl && lblEl.textContent !== lblText) lblEl.textContent = lblText;
+
+    let targetSym = isOrch
+      ? state.activeSymbol || state.matchingOrchestratorSymbol || ''
+      : state.matchingOrchestratorSymbol || state.activeSymbol || '';
+    if (isOrch && typeof periodicCore.resolveOrchestratorPlanner === 'function' && Array.isArray(fp.orchestratorPlanners)) {
+      const planner = periodicCore.resolveOrchestratorPlanner(
+        fp.orchestratorPlanners,
+        fp.orchestratorPick,
+        fp.orchestratorDefaultPlanner
+      );
+      if (planner) {
+        const pParsed = periodicCore.parseOptionEffort(planner.label || planner.modelId || '');
+        const pEl = periodicCore.matchGemini4Element(pParsed.base || planner.label || '');
+        if (pEl?.symbol) targetSym = pEl.symbol;
+      }
+    }
+    const tip = isOrch
+      ? isZh
+        ? `协作模式已开启${targetSym ? `（${targetSym}）` : ''} — 点击切回标准模型`
+        : `Orchestrator ON${targetSym ? ` (${targetSym})` : ''} — Click to return to standard model`
+      : isZh
+      ? `点击开启协作模式${targetSym ? `（${targetSym}）` : ''}`
+      : `Click to enable Orchestrator mode${targetSym ? ` (${targetSym})` : ''}`;
+    if (btn.getAttribute('title') !== tip) {
+      btn.setAttribute('title', tip);
+      btn.setAttribute('aria-label', tip);
+    }
+
+    const periodicBtn = card.querySelector('.ag-cs-periodic-trigger');
+    if (inlineMode) {
+      const slot = inlineAnchor.slot;
+      const afterSlot = slot ? slot.nextSibling : null;
+      if (btn.parentElement !== desiredParent || (slot && slot.nextSibling !== btn)) {
+        desiredParent.insertBefore(btn, afterSlot);
+      }
+    } else {
+      if (periodicBtn && periodicBtn.parentElement === footer) {
+        if (btn.parentElement !== footer || btn.nextSibling !== periodicBtn) {
+          footer.insertBefore(btn, periodicBtn);
+        }
+      } else if (btn.parentElement !== footer) {
         footer.appendChild(btn);
       }
     }
@@ -4598,18 +4879,84 @@
     if (quotaTxt) chipsRow.appendChild(createEl('span', 'ag-cs-ps-meta-chip', quotaTxt));
     if (chipsRow.childElementCount > 0) drawerInner.appendChild(chipsRow);
 
-    if (fam && Array.isArray(fam.variants) && fam.variants.length > 0) {
+    if ((fam && Array.isArray(fam.variants) && fam.variants.length > 0) || tile.orchestratorOption) {
       const effRow = createEl('div', 'ag-cs-ps-effort-row');
-      effRow.appendChild(createEl('span', 'ag-cs-ps-effort-lbl', `${ui.psEffortLabel || 'Effort'}:`));
-      for (const v of fam.variants) {
-        const isActive = fam.isSelected && v.effortId === fam.selectedEffortId;
-        const eb = createEl('button', `ag-cs-ps-effort-btn${isActive ? ' is-active' : ''}`, v.effortDisplay || v.label);
-        eb.type = 'button';
-        eb.addEventListener('click', (ev) => {
+      if (fam && Array.isArray(fam.variants) && fam.variants.length > 0) {
+        effRow.appendChild(createEl('span', 'ag-cs-ps-effort-lbl', `${ui.psEffortLabel || 'Effort'}:`));
+        for (const v of fam.variants) {
+          const isActive = fam.isSelected && !tile.isOrchestratorSelected && v.effortId === fam.selectedEffortId;
+          const eb = createEl('button', `ag-cs-ps-effort-btn${isActive ? ' is-active' : ''}`, v.effortDisplay || v.label);
+          eb.type = 'button';
+          eb.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            rememberStandardModel(v.option);
+            commitPeriodicModelOption(fiberProps, v.option);
+          });
+          effRow.appendChild(eb);
+        }
+      }
+      if (tile.orchestratorOption) {
+        const isOrchOn = Boolean(tile.isOrchestratorSelected);
+        const curLang = getLang();
+        const orchLabel = curLang === 'zh-CN' ? '协作模式' : (curLang === 'zh-TW' || curLang === 'yue') ? '協作模式' : 'Orchestrator';
+        const orchBtn = createEl('button', `ag-cs-ps-orch-toggle${isOrchOn ? ' is-active' : ''}`);
+        orchBtn.type = 'button';
+        orchBtn.setAttribute('role', 'switch');
+        orchBtn.setAttribute('aria-checked', isOrchOn ? 'true' : 'false');
+        orchBtn.setAttribute('data-ag-no-i18n', '');
+        orchBtn.innerHTML =
+          '<svg class="ag-cs-orch-ico" viewBox="0 0 16 16" aria-hidden="true">' +
+          '<circle cx="8" cy="3.2" r="1.7" fill="currentColor"/>' +
+          '<circle cx="3.3" cy="12.2" r="1.7" fill="currentColor"/>' +
+          '<circle cx="12.7" cy="12.2" r="1.7" fill="currentColor"/>' +
+          '<path d="M8 5.1v2.5M8 7.6L4.5 10.8M8 7.6l3.5 3.2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" fill="none"/>' +
+          '</svg>' +
+          `<span class="ag-cs-ps-orch-label">${orchLabel}</span>` +
+          '<span class="ag-cs-orch-dot" aria-hidden="true"></span>';
+        orchBtn.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          commitPeriodicModelOption(fiberProps, v.option);
+          if (isOrchOn && fam) {
+            const activePlanner =
+              typeof periodicCore.resolveOrchestratorPlanner === 'function' && Array.isArray(fiberProps?.orchestratorPlanners)
+                ? periodicCore.resolveOrchestratorPlanner(
+                    fiberProps.orchestratorPlanners,
+                    fiberProps.orchestratorPick,
+                    fiberProps.orchestratorDefaultPlanner
+                  )
+                : null;
+            const plannerEff = activePlanner ? periodicCore.parseOptionEffort(activePlanner.label || '').effortId : '';
+            const preferred = periodicCore.pickPreferredVariant(
+              fam,
+              plannerEff || lastStandardModelMeta?.effortId || curEffortId
+            );
+            if (preferred?.option) {
+              commitPeriodicModelOption(fiberProps, preferred.option);
+            }
+          } else {
+            if (fiberProps?.selectedModel) rememberStandardModel(fiberProps.selectedModel);
+            const desiredEffort = lastStandardModelMeta?.effortId || curEffortId || 'high';
+            const preferredForTile = fam ? periodicCore.pickPreferredVariant(fam, desiredEffort)?.option : null;
+            if (
+              preferredForTile &&
+              typeof fiberProps?.orchestratorPick?.select === 'function' &&
+              typeof periodicCore.findMatchingOrchestratorPlanner === 'function' &&
+              Array.isArray(fiberProps?.orchestratorPlanners)
+            ) {
+              const matchingPlanner = periodicCore.findMatchingOrchestratorPlanner(
+                fiberProps.orchestratorPlanners,
+                preferredForTile,
+                desiredEffort
+              );
+              if (matchingPlanner && matchingPlanner.value !== undefined) {
+                try {
+                  fiberProps.orchestratorPick.select(matchingPlanner.value);
+                } catch {}
+              }
+            }
+            commitPeriodicModelOption(fiberProps, tile.orchestratorOption);
+          }
         });
-        effRow.appendChild(eb);
+        effRow.appendChild(orchBtn);
       }
       drawerInner.appendChild(effRow);
     }
@@ -5359,256 +5706,20 @@
   const UM_CAPSULE_ID = 'ag-usage-monitor-capsule';
   const UM_SPLIT_STYLE_ID = 'ag-cs-um-split-css';
   const UM_CTX_PROXY_CLS = 'ag-cs-um-ctx-proxy';
-  const UM_RING_R = 5.2;
-  const UM_RING_CIRC = +(2 * Math.PI * UM_RING_R).toFixed(2);
-  function buildUmSplitCss(footerWidth) {
-    const narrow = footerWidth > 0 && footerWidth < 560;
-    const ultraNarrow = footerWidth > 0 && footerWidth < 460;
-    const rules = [
-      // Counteract usage-monitor's false-positive ring-only collapse when its display:contents parent reports width 0
-      ultraNarrow
-        ? ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-cap-slot[data-vis-rank="1"]:not([hidden]):not([data-metric="context"]) { display: inline-flex !important; }'
-        : ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-cap-slot:not([hidden]):not([data-metric="context"]) { display: inline-flex !important; }',
-      ultraNarrow
-        ? ''
-        : ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-sep:not([hidden]) { display: inline-block !important; }',
-      narrow
-        ? ''
-        : ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-multi-label { display: inline-block !important; }',
-      narrow
-        ? ''
-        : ':host(.wm-capsule-host[data-dock="composer"][data-modern-ui="true"][data-layout]) .wm-multi-label[data-od-active="1"] { display: inline-flex !important; }',
-      ':host(.wm-capsule-host[data-dock="composer"][data-layout="ring-only"]) .wm-capsule-btn { padding: 0 8px !important; }',
-      // Always hide context segment & its adjacent separator inside the footer capsule (mirrored on far right)
-      ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-capsule-btn > [data-metric="context"], .wm-capsule-btn > [data-metric="context"] { display: none !important; }',
-      ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-capsule-btn > .wm-sep:not([hidden]):has(+ [data-metric="context"]), .wm-capsule-btn > .wm-sep:has(+ [data-metric="context"]) { display: none !important; }',
-      ':host(.wm-capsule-host[data-dock="composer"][data-layout]) .wm-capsule-btn > [data-metric="context"][data-vis-rank="1"] + .wm-sep:not([hidden]), .wm-capsule-btn > [data-metric="context"][data-vis-rank="1"] + .wm-sep { display: none !important; }',
-      '.wm-capsule-btn:not(:has(> .wm-cap-slot:not([hidden]):not([data-metric="context"]))) { display: none !important; }',
-    ];
-    return rules.filter(Boolean).join('\n');
-  }
-  const UM_TONES = ['tone-good', 'tone-info', 'tone-warn', 'tone-danger', 'tone-muted'];
-
-  let umShadowObserver = null;
-  let umObservedRoot = null;
-  let umObservedFooter = null;
-  let umSplitSyncing = false;
-
-  function removeUmSplitStyle(shadowRoot) {
-    if (!shadowRoot) return;
-    try {
-      const el =
-        typeof shadowRoot.getElementById === 'function'
-          ? shadowRoot.getElementById(UM_SPLIT_STYLE_ID)
-          : shadowRoot.querySelector?.('#' + UM_SPLIT_STYLE_ID);
-      if (el) el.remove();
-    } catch {}
-  }
 
   function cleanupUsageMonitorFooterSplit() {
-    if (umShadowObserver) {
-      try {
-        umShadowObserver.disconnect();
-      } catch {}
-      umShadowObserver = null;
-    }
-    if (umObservedRoot) {
-      removeUmSplitStyle(umObservedRoot);
-      umObservedRoot = null;
-    }
-    umObservedFooter = null;
     const cap = document.getElementById(UM_CAPSULE_ID);
-    if (cap && cap.shadowRoot) removeUmSplitStyle(cap.shadowRoot);
-    document.querySelectorAll('.' + UM_CTX_PROXY_CLS + ', .ag-cs-um-multi-proxy').forEach((el) => el.remove());
-  }
-
-  function createUmCtxProxyButton(umCap) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = UM_CTX_PROXY_CLS;
-    btn.setAttribute('data-ag-no-i18n', '');
-    const NS = 'http://www.w3.org/2000/svg';
-    const svg =
-      typeof document.createElementNS === 'function'
-        ? document.createElementNS(NS, 'svg')
-        : document.createElement('svg');
-    svg.setAttribute('viewBox', '0 0 14 14');
-    svg.setAttribute('aria-hidden', 'true');
-    const mkCircle = (cls) => {
-      const c =
-        typeof document.createElementNS === 'function'
-          ? document.createElementNS(NS, 'circle')
-          : document.createElement('circle');
-      c.setAttribute('cx', '7');
-      c.setAttribute('cy', '7');
-      c.setAttribute('r', String(UM_RING_R));
-      c.setAttribute('class', cls);
-      return c;
-    };
-    const track = mkCircle('ag-cs-um-ring-track');
-    const fill = mkCircle('ag-cs-um-ring-fill');
-    fill.setAttribute('stroke-dasharray', String(UM_RING_CIRC));
-    fill.setAttribute('stroke-dashoffset', String(UM_RING_CIRC));
-    svg.appendChild(track);
-    svg.appendChild(fill);
-    const label = document.createElement('span');
-    label.className = 'ag-cs-um-ctx-label';
-    btn.appendChild(svg);
-    btn.appendChild(label);
-    btn._agCsUmFill = fill;
-    btn._agCsUmLabel = label;
-
-    const getSourceBtn = () => {
-      const liveCap = umCap && umCap.isConnected ? umCap : document.getElementById(UM_CAPSULE_ID);
-      return liveCap?.shadowRoot?.querySelector?.('.wm-capsule-btn') || null;
-    };
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const srcBtn = getSourceBtn();
-      if (srcBtn && typeof srcBtn.click === 'function') srcBtn.click();
-    });
-    btn.addEventListener('mouseenter', () => {
-      const srcBtn = getSourceBtn();
-      if (srcBtn && typeof srcBtn.dispatchEvent === 'function' && typeof MouseEvent === 'function') {
-        srcBtn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      }
-    });
-    btn.addEventListener('mouseleave', () => {
-      const srcBtn = getSourceBtn();
-      if (srcBtn && typeof srcBtn.dispatchEvent === 'function' && typeof MouseEvent === 'function') {
-        srcBtn.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-      }
-    });
-    return btn;
-  }
-
-  function syncUsageMonitorFooterSplit(footer) {
-    if (umSplitSyncing) return false;
-    umSplitSyncing = true;
-    try {
-      if (cfg.composerRestyle === false || !footer) {
-        if (footer) footer.querySelectorAll('.' + UM_CTX_PROXY_CLS).forEach((el) => el.remove());
-        return false;
-      }
-      const umCap = footer.querySelector('#' + UM_CAPSULE_ID);
-      if (!umCap || !umCap.shadowRoot) {
-        footer.querySelectorAll('.' + UM_CTX_PROXY_CLS).forEach((el) => el.remove());
-        return false;
-      }
-      const sr = umCap.shadowRoot;
-      // Attach Shadow DOM observer BEFORE checking ctxSlot visibility so cold-start capsules
-      // that initially render hidden (before telemetry loads) still trigger footer split immediately.
-      if (umObservedRoot !== sr || umObservedFooter !== footer) {
-        if (umShadowObserver) {
-          try {
-            umShadowObserver.disconnect();
-          } catch {}
-          umShadowObserver = null;
-        }
-        if (umObservedRoot && umObservedRoot !== sr) removeUmSplitStyle(umObservedRoot);
-        umObservedRoot = sr;
-        umObservedFooter = footer;
-        if (typeof MutationObserver === 'function') {
-          umShadowObserver = new MutationObserver((mutations) => {
-            if (destroyed || umSplitSyncing) return;
-            const onlyOwnStyle = mutations.every(
-              (m) =>
-                m.target?.id === UM_SPLIT_STYLE_ID ||
-                (m.addedNodes?.length === 1 && m.addedNodes[0]?.id === UM_SPLIT_STYLE_ID) ||
-                (m.removedNodes?.length === 1 && m.removedNodes[0]?.id === UM_SPLIT_STYLE_ID)
-            );
-            if (onlyOwnStyle) return;
-            if (umObservedFooter && umObservedFooter.isConnected) {
-              syncUsageMonitorFooterSplit(umObservedFooter);
-            } else {
-              cleanupUsageMonitorFooterSplit();
-            }
-          });
-          umShadowObserver.observe(sr, {
-            childList: true,
-            subtree: true,
-            characterData: true,
-            attributes: true,
-            attributeFilter: ['class', 'hidden', 'data-od-value', 'aria-label', 'stroke-dashoffset', 'stroke-dasharray', 'data-vis-rank'],
-          });
-        }
-      }
-
-      const ctxSlot = sr.querySelector('.wm-capsule-btn [data-metric="context"]');
-      const isVisible = Boolean(ctxSlot && !ctxSlot.hidden && !ctxSlot.hasAttribute('hidden'));
-      if (!isVisible) {
-        removeUmSplitStyle(sr);
-        footer.querySelectorAll('.' + UM_CTX_PROXY_CLS).forEach((el) => el.remove());
-        return true;
-      }
-
-      // Inject Shadow DOM CSS hiding the context segment (and its adjacent divider) inside the footer capsule,
-      // while preventing false-positive ring-only collapse when display:contents parent reports 0px width.
-      const splitCss = buildUmSplitCss(Number(footer.clientWidth) || 0);
-      let styleEl =
-        typeof sr.getElementById === 'function'
-          ? sr.getElementById(UM_SPLIT_STYLE_ID)
-          : sr.querySelector?.('#' + UM_SPLIT_STYLE_ID);
-      if (!styleEl) {
-        styleEl = document.createElement('style');
-        styleEl.id = UM_SPLIT_STYLE_ID;
-        styleEl.textContent = splitCss;
-        sr.appendChild(styleEl);
-      } else if (styleEl.textContent !== splitCss) {
-        styleEl.textContent = splitCss;
-      }
-
-      // Read live percentage, SVG ring progress, and tone from usage-monitor's shadow DOM
-      const pctNode = ctxSlot.querySelector('.wm-ctx-pct, [data-od-value], .wm-slot-text');
-      const rawPctText = String(
-        (pctNode && (pctNode.getAttribute('data-od-value') || pctNode.getAttribute('aria-label'))) ||
-          (pctNode && pctNode.textContent) ||
-          ctxSlot.textContent ||
-          ''
-      )
-        .replace(/\s+/g, '')
-        .trim();
-      const numMatch = rawPctText.match(/(\d+(?:\.\d+)?)/);
-      const pctNum = numMatch ? Math.max(0, Math.min(100, parseFloat(numMatch[1]))) : 0;
-      const displayLabel = numMatch ? `${Math.round(pctNum)}%` : rawPctText || '—';
-
-      const srcFill = ctxSlot.querySelector('.wm-ring-fill');
-      const dashArray = (srcFill && srcFill.getAttribute('stroke-dasharray')) || String(UM_RING_CIRC);
-      const parsedCirc = parseFloat(dashArray) || UM_RING_CIRC;
-      const rawOffset = srcFill && srcFill.getAttribute('stroke-dashoffset');
-      const dashOffset =
-        rawOffset !== null && rawOffset !== ''
-          ? rawOffset
-          : String(+(parsedCirc * (1 - pctNum / 100)).toFixed(2));
-
-      const activeTone = UM_TONES.find((t) => ctxSlot.classList && ctxSlot.classList.contains(t)) || '';
-
-      let proxyBtn = footer.querySelector('.' + UM_CTX_PROXY_CLS);
-      if (!proxyBtn) {
-        proxyBtn = createUmCtxProxyButton(umCap);
-        footer.appendChild(proxyBtn);
-      }
-
-      const fillEl = proxyBtn._agCsUmFill || proxyBtn.querySelector('.ag-cs-um-ring-fill');
-      const labelEl = proxyBtn._agCsUmLabel || proxyBtn.querySelector('.ag-cs-um-ctx-label');
-      if (fillEl) {
-        if (fillEl.getAttribute('stroke-dasharray') !== dashArray) fillEl.setAttribute('stroke-dasharray', dashArray);
-        if (fillEl.getAttribute('stroke-dashoffset') !== dashOffset) fillEl.setAttribute('stroke-dashoffset', dashOffset);
-      }
-      if (labelEl && labelEl.textContent !== displayLabel) {
-        labelEl.textContent = displayLabel;
-      }
-      for (const t of UM_TONES) {
-        proxyBtn.classList.toggle(t, t === activeTone);
-      }
-      const srcBtn = sr.querySelector('.wm-capsule-btn');
-      const tip = ctxSlot.getAttribute('title') || srcBtn?.getAttribute('title') || `Context ${displayLabel}`;
-      if (proxyBtn.getAttribute('title') !== tip) proxyBtn.setAttribute('title', tip);
-      if (proxyBtn.getAttribute('aria-label') !== tip) proxyBtn.setAttribute('aria-label', tip);
-      return true;
-    } finally {
-      umSplitSyncing = false;
+    const sr = cap && cap.shadowRoot;
+    if (sr) {
+      try {
+        const el =
+          typeof sr.getElementById === 'function'
+            ? sr.getElementById(UM_SPLIT_STYLE_ID)
+            : sr.querySelector?.('#' + UM_SPLIT_STYLE_ID);
+        if (el) el.remove();
+      } catch {}
     }
+    document.querySelectorAll('.' + UM_CTX_PROXY_CLS + ', .ag-cs-um-multi-proxy').forEach((el) => el.remove());
   }
 
   const UM_SIDECAR_TARGET = 'usage-monitor/panel/';
@@ -5732,7 +5843,6 @@
     if (!primaryCard && cards.length > 0) primaryCard = cards[0];
 
     let activeInfoForCrab = null;
-    let hasUmFooterSplit = false;
 
     for (const card of cards) {
       const inputBox = card.closest('[data-testid="agent-input-box"]');
@@ -5759,25 +5869,40 @@
         const sub = findModelEffortBadgeSpan(modelBtn, { preferTagged: false });
         for (const el of modelBtn.querySelectorAll('.ag-cs-effort-badge, [data-ag-cs-effort]')) {
           if (el !== sub) {
-            el.removeAttribute('data-ag-cs-effort');
-            el.classList.remove('ag-cs-effort-badge');
+            if (el.hasAttribute('data-ag-cs-effort')) el.removeAttribute('data-ag-cs-effort');
+            if (el.classList.contains('ag-cs-effort-badge')) el.classList.remove('ag-cs-effort-badge');
           }
         }
         if (sub && sub.childElementCount === 0) {
-          const txt = stripEffortBadgeSuffix(sub.textContent).toLowerCase();
+          const fpForBadge = getModelFiberProps(modelBtn);
+          const isOrchBadge = Boolean(
+            periodicCore &&
+              typeof periodicCore.parseOrchestratorOption === 'function' &&
+              fpForBadge?.selectedModel &&
+              periodicCore.parseOrchestratorOption(fpForBadge.selectedModel)
+          );
+          const canTuneOrchBadge = Boolean(
+            !isOrchBadge ||
+              (Array.isArray(fpForBadge?.orchestratorPlanners) &&
+                fpForBadge.orchestratorPlanners.length > 0 &&
+                typeof fpForBadge?.orchestratorPick?.select === 'function')
+          );
+          const txt = stripEffortBadgeSuffix(sub.textContent).toLowerCase().replace(/\s+/g, ' ');
           let level = '';
-          if (/\bmax\b/.test(txt)) level = 'max';
-          else if (/\bxhigh\b/.test(txt)) level = 'xhigh';
-          else if (/\bhigh\b/.test(txt)) level = 'high';
-          else if (/\bmed(?:ium)?\b/.test(txt)) level = 'medium';
-          else if (/\blow\b/.test(txt)) level = 'low';
-          else if (/\bextra\b/.test(txt)) level = 'extra';
+          if (canTuneOrchBadge) {
+            if (/\bmax\b/.test(txt)) level = 'max';
+            else if (/\b(?:extra high|xhigh)\b/.test(txt)) level = 'xhigh';
+            else if (/\bhigh\b/.test(txt)) level = 'high';
+            else if (/\bmed(?:ium)?\b/.test(txt)) level = 'medium';
+            else if (/\blow\b/.test(txt)) level = 'low';
+            else if (/\bextra\b/.test(txt)) level = 'extra';
+          }
           if (level) {
             if (sub.getAttribute('data-ag-cs-effort') !== level) sub.setAttribute('data-ag-cs-effort', level);
-            sub.classList.add('ag-cs-effort-badge');
+            if (!sub.classList.contains('ag-cs-effort-badge')) sub.classList.add('ag-cs-effort-badge');
           } else {
             if (sub.hasAttribute('data-ag-cs-effort')) sub.removeAttribute('data-ag-cs-effort');
-            sub.classList.remove('ag-cs-effort-badge');
+            if (sub.classList.contains('ag-cs-effort-badge')) sub.classList.remove('ag-cs-effort-badge');
           }
         }
       }
@@ -5785,7 +5910,7 @@
       // 3. Inline stats, remaining-usage ring, turn badges & surround HUD (both new conversations & active chats)
       const footer = card.querySelector('.agy-composer-footer');
       syncPeriodicTrigger(card, footer, modelBtn);
-      if (syncUsageMonitorFooterSplit(footer)) hasUmFooterSplit = true;
+      syncOrchestratorSwitch(card, footer, modelBtn);
       const isHomeCard = Boolean(card.closest('.agy-home') && !card.closest('[data-testid="conversation-view"]'));
       const cascadeId = isHomeCard ? '' : resolveCascadeId(inputBox);
       const inConvo = Boolean(cascadeId || card.closest('[data-testid="conversation-view"]'));
@@ -5795,7 +5920,7 @@
       }
       const hudSuppressed = !isUsageStatsEnabled();
 
-      if (hudSuppressed || !footer || cfg.composerRestyle === false) {
+      if (hudSuppressed || !footer) {
         card
           .querySelectorAll('.ag-cs-inline-stats, .ag-cs-context-ring, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip')
           .forEach((n) => n.remove());
@@ -5866,7 +5991,7 @@
       if (card === primaryCard) syncTurnBadges(cached);
     }
 
-    if (!hasUmFooterSplit) cleanupUsageMonitorFooterSplit();
+    cleanupUsageMonitorFooterSplit();
     syncCrab(primaryCard, activeInfoForCrab);
     syncSmoothCaret(false);
   }
@@ -6016,7 +6141,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, #' +
+        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-studio-css, #ag-claude-style-css'
       )
@@ -6279,9 +6404,6 @@
         openEffortPop._syncEffortKnob(true);
       }
     }
-    if (umObservedFooter && umObservedFooter.isConnected) {
-      syncUsageMonitorFooterSplit(umObservedFooter);
-    }
   }
 
   function isIgnorableMutation(m) {
@@ -6534,7 +6656,7 @@
       });
       document
         .querySelectorAll(
-          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #' +
+          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #' +
             SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());

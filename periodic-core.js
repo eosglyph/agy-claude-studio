@@ -199,6 +199,181 @@
     return ELEMENT_BY_NAME.get(m[1].toLowerCase()) || null;
   }
 
+  function parseOrchestratorOption(opt) {
+    if (!opt || opt.disabled) return null;
+    const label = String(opt.label || opt.modelId || '').trim();
+    const modelId = String(opt.modelId || '').trim();
+    const combined = `${label} ${modelId}`.toLowerCase();
+    if (!/\borchestrator\b/.test(combined)) return null;
+
+    let elementEl = null;
+    const parenMatch = label.match(/\(([^)]+)\)/);
+    if (parenMatch) {
+      const inner = parenMatch[1].trim().toLowerCase();
+      elementEl = ELEMENT_BY_NAME.get(inner) || null;
+    }
+    if (!elementEl && modelId) {
+      const idMatch = modelId.toLowerCase().match(/orchestrator[-_\s]+([a-z]+)\b/);
+      if (idMatch) {
+        elementEl = ELEMENT_BY_NAME.get(idMatch[1]) || null;
+      }
+    }
+    return {
+      option: opt,
+      label,
+      modelId,
+      elementSymbol: elementEl ? elementEl.symbol : '',
+      elementName: elementEl ? elementEl.name : '',
+    };
+  }
+
+  function resolveOrchestratorState(modelOptions, selectedModel, preferredEffortId) {
+    const opts = Array.isArray(modelOptions) ? modelOptions : [];
+    const bySymbol = Object.create(null);
+    const all = [];
+    for (const opt of opts) {
+      const parsed = parseOrchestratorOption(opt);
+      if (!parsed) continue;
+      all.push(parsed);
+      if (parsed.elementSymbol && !bySymbol[parsed.elementSymbol]) {
+        bySymbol[parsed.elementSymbol] = parsed;
+      }
+    }
+
+    const activeOrch = all.find((entry) => isSameOption(entry.option, selectedModel)) || null;
+    const isOrchestrator = Boolean(activeOrch);
+
+    let activeSymbol = activeOrch ? activeOrch.elementSymbol : '';
+    if (!activeSymbol && selectedModel) {
+      const parsedSel = parseOptionEffort(selectedModel.label || selectedModel.modelId || '');
+      const el = matchGemini4Element(parsedSel.base || selectedModel.label || '');
+      if (el) activeSymbol = el.symbol;
+    }
+
+    const defaultEntry = bySymbol.Ne || bySymbol.C || bySymbol.Ar || all[0] || null;
+    const matchingOrchEntry = (activeSymbol && bySymbol[activeSymbol]) || defaultEntry;
+
+    let matchingStandardOption = null;
+    if (isOrchestrator) {
+      const grouped = groupModelOptions(opts, selectedModel);
+      const targetFam =
+        (activeSymbol && grouped.bySymbol[activeSymbol]) ||
+        grouped.bySymbol.Ne ||
+        grouped.families.find((f) => f.category === 'gemini4') ||
+        grouped.families.find((f) => f.category !== 'orchestrator') ||
+        null;
+      const picked = targetFam ? pickPreferredVariant(targetFam, preferredEffortId) : null;
+      matchingStandardOption = picked ? picked.option : null;
+    }
+
+    return {
+      available: all.length > 0,
+      isOrchestrator,
+      activeSymbol,
+      activeOption: activeOrch ? activeOrch.option : null,
+      bySymbol,
+      all,
+      defaultOption: defaultEntry ? defaultEntry.option : null,
+      matchingOrchestratorOption: matchingOrchEntry ? matchingOrchEntry.option : null,
+      matchingOrchestratorSymbol: matchingOrchEntry ? matchingOrchEntry.elementSymbol : '',
+      matchingStandardOption,
+    };
+  }
+
+  function resolveOrchestratorPlanner(orchestratorPlanners, orchestratorPick, orchestratorDefaultPlanner) {
+    const planners = Array.isArray(orchestratorPlanners) ? orchestratorPlanners.filter((p) => p && !p.disabled) : [];
+    const pickVal = orchestratorPick && typeof orchestratorPick === 'object' ? orchestratorPick.model : orchestratorPick;
+    if (pickVal !== undefined && pickVal !== null && pickVal !== 0) {
+      const hit = planners.find((p) => p.value === pickVal || p.modelId === pickVal);
+      if (hit) return hit;
+    }
+    if (orchestratorDefaultPlanner && !orchestratorDefaultPlanner.disabled) {
+      const matchedDefault = planners.find((p) => isSameOption(p, orchestratorDefaultPlanner));
+      return matchedDefault || orchestratorDefaultPlanner;
+    }
+    return planners[0] || null;
+  }
+
+  function findMatchingOrchestratorPlanner(orchestratorPlanners, targetOption, preferredEffortId) {
+    const planners = Array.isArray(orchestratorPlanners) ? orchestratorPlanners.filter((p) => p && !p.disabled) : [];
+    if (!planners.length || !targetOption) return null;
+
+    const exact = planners.find((p) => isSameOption(p, targetOption));
+    if (exact) return exact;
+
+    const parsedTarget = parseOptionEffort(targetOption.label || targetOption.modelId || '');
+    const targetBase = (parsedTarget.base || '').toLowerCase();
+    const desiredEffort = String(parsedTarget.effortId || preferredEffortId || '').toLowerCase();
+
+    if (targetBase) {
+      const sameFamily = planners.filter((p) => parseOptionEffort(p.label || p.modelId || '').base.toLowerCase() === targetBase);
+      if (sameFamily.length) {
+        if (desiredEffort) {
+          const effHit = sameFamily.find((p) => parseOptionEffort(p.label || '').effortId === desiredEffort);
+          if (effHit) return effHit;
+        }
+        return (
+          sameFamily.find((p) => parseOptionEffort(p.label || '').effortId === 'high') ||
+          sameFamily.find((p) => parseOptionEffort(p.label || '').effortId === 'medium') ||
+          sameFamily[0]
+        );
+      }
+    }
+
+    const el = matchGemini4Element(targetBase || targetOption.label || '');
+    if (el) {
+      const elMatches = planners.filter((p) => {
+        const pe = matchGemini4Element(parseOptionEffort(p.label || '').base || p.label || '');
+        return pe && pe.symbol === el.symbol;
+      });
+      if (elMatches.length) {
+        if (desiredEffort) {
+          const effHit = elMatches.find((p) => parseOptionEffort(p.label || '').effortId === desiredEffort);
+          if (effHit) return effHit;
+        }
+        return elMatches.find((p) => parseOptionEffort(p.label || '').effortId === 'high') || elMatches[0];
+      }
+    }
+
+    return null;
+  }
+
+  function computeOrchestratorToggleTarget(
+    modelOptions,
+    selectedModel,
+    preferredEffortId,
+    fallbackStandardOption,
+    activePlannerOption
+  ) {
+    const state = resolveOrchestratorState(modelOptions, selectedModel, preferredEffortId);
+    if (!state.available) {
+      return { available: false, nextOrchestrator: false, targetOption: null, state };
+    }
+    if (state.isOrchestrator) {
+      const opts = Array.isArray(modelOptions) ? modelOptions : [];
+      let target = null;
+      if (activePlannerOption) {
+        target = opts.find((o) => o && !o.disabled && isSameOption(o, activePlannerOption)) || null;
+      }
+      if (!target) target = state.matchingStandardOption;
+      if (!target && fallbackStandardOption) {
+        target = opts.find((o) => o && !o.disabled && isSameOption(o, fallbackStandardOption)) || null;
+      }
+      return {
+        available: Boolean(target),
+        nextOrchestrator: false,
+        targetOption: target,
+        state,
+      };
+    }
+    return {
+      available: Boolean(state.matchingOrchestratorOption),
+      nextOrchestrator: true,
+      targetOption: state.matchingOrchestratorOption,
+      state,
+    };
+  }
+
   function classifyCategory(baseName, elementEl) {
     if (elementEl) return 'gemini4';
     const lower = String(baseName || '').toLowerCase();
@@ -308,10 +483,25 @@
       }
     }
 
+    const orchBySymbol = Object.create(null);
+    let selectedOrchSymbol = '';
+    for (const opt of opts) {
+      const parsedOrch = parseOrchestratorOption(opt);
+      if (!parsedOrch || !parsedOrch.elementSymbol) continue;
+      if (!orchBySymbol[parsedOrch.elementSymbol]) {
+        orchBySymbol[parsedOrch.elementSymbol] = parsedOrch.option;
+      }
+      if (isSameOption(parsedOrch.option, selectedModel)) {
+        selectedOrchSymbol = parsedOrch.elementSymbol;
+      }
+    }
+
     const tiles = PERIODIC_ELEMENTS.map((el) => {
       const fam = !el.isRange && el.symbol ? bySymbol[el.symbol] || null : null;
       const spec = !el.isRange && el.symbol ? GEMINI4_SPECS[el.symbol] || null : null;
       const disabledInfo = !fam && !el.isRange && el.symbol ? disabledBySymbol[el.symbol] || null : null;
+      const orchestratorOption = !el.isRange && el.symbol ? orchBySymbol[el.symbol] || null : null;
+      const isOrchestratorSelected = Boolean(orchestratorOption && selectedOrchSymbol === el.symbol);
       const isAvailableInHost = Boolean(fam);
       const isDisabledInHost = Boolean(disabledInfo);
       const isLaunched = Boolean(fam || disabledInfo || spec);
@@ -323,6 +513,8 @@
         family: fam,
         spec,
         disabledInfo,
+        orchestratorOption,
+        isOrchestratorSelected,
         theme,
         isLaunched,
         isAvailableInHost,
@@ -331,7 +523,7 @@
         isSubscriptionLocked,
         isHero: Boolean(spec?.isHero),
         isNew: Boolean(spec?.isNew || fam?.tagTitle === 'New'),
-        isSelected: Boolean(fam?.isSelected),
+        isSelected: Boolean(fam?.isSelected || isOrchestratorSelected),
       };
     });
 
@@ -428,6 +620,11 @@
     GEMINI4_SPECS,
     parseOptionEffort,
     matchGemini4Element,
+    parseOrchestratorOption,
+    resolveOrchestratorState,
+    resolveOrchestratorPlanner,
+    findMatchingOrchestratorPlanner,
+    computeOrchestratorToggleTarget,
     groupModelOptions,
     pickPreferredVariant,
     filterModelFamilies,

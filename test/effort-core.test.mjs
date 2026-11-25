@@ -66,6 +66,33 @@ test('resolveClaudeEffortSteps groups model variants in ascending strength and f
   assert.equal(labelOnlyExtra.selectedIdx, 2);
   assert.equal(labelOnlyExtra.steps[2].id, 'xhigh');
   assert.equal(labelOnlyExtra.steps[2].display, 'Extra');
+
+  // Two-word "Extra High" (e.g. Antigravity Orchestrator planner display) must preserve "Extra High"
+  // and report hasRealVariants accurately instead of degrading to broken "Extra".
+  const extraHighReal = effortCore.resolveClaudeEffortSteps(
+    [
+      { label: 'Gemini 4 Neon (Low)', value: 1534 },
+      { label: 'Gemini 4 Neon (Medium)', value: 1533 },
+      { label: 'Gemini 4 Neon (High)', value: 1532 },
+      { label: 'Gemini 4 Neon (XHigh)', value: 1535 },
+    ],
+    'Gemini 4 Neon (XHigh)',
+    'extra high'
+  );
+  assert.equal(extraHighReal.hasRealVariants, true);
+  assert.equal(extraHighReal.selectedIdx, 3);
+  assert.equal(extraHighReal.steps[3].id, 'xhigh');
+  assert.equal(extraHighReal.steps[3].display, 'Extra High');
+  assert.equal(extraHighReal.steps[3].option.value, 1535);
+
+  const orchNoVariants = effortCore.resolveClaudeEffortSteps(
+    [{ label: 'Orchestrator (Neon)', value: 1537 }],
+    'Orchestrator (Neon)',
+    'extra high'
+  );
+  assert.equal(orchNoVariants.hasRealVariants, false);
+  assert.equal(orchNoVariants.steps[3].id, 'xhigh');
+  assert.equal(orchNoVariants.steps[3].display, 'Extra High');
 });
 
 test('dampTravel (DETENT = 0.8) is strictly monotonic, pins endpoints, and slows mid-detents', () => {

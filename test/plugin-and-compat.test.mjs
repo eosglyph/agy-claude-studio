@@ -271,7 +271,7 @@ test('i18n-core protects usage-monitor DOM roots and translates Antigravity 2.33
 
     assert.equal(coordNode.childNodes[0].nodeValue, '协调者');
     assert.equal(customModelsNode.childNodes[0].nodeValue, '自定义模型');
-    assert.equal(orchHeading.childNodes[0].nodeValue, '编排器设置');
+    assert.equal(orchHeading.childNodes[0].nodeValue, '协作模式设置');
     assert.equal(orchModel.childNodes[0].nodeValue, '规划模型');
     assert.equal(execModel.childNodes[0].nodeValue, '执行模型');
     assert.equal(weeklyLimit.childNodes[0].nodeValue, 'Gemini 4 Argon 本周额度');
@@ -507,8 +507,10 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   assert.equal(/liangwufeng|performanceBackdrop/i.test(studioHtml), false, 'Studio UI contains no Liang Wufeng controls');
 
   const css = fs.readFileSync(path.join(ROOT_DIR, 'style.css'), 'utf8');
-  assert.match(css, /\.agy-composer-footer\s+#ag-usage-monitor-capsule[\s\S]*?order:\s*5\s*!important[\s\S]*?margin-left:\s*8px\s*!important/, 'Composer CSS left-aligns usage-monitor metrics after left controls to prevent jitter');
-  assert.match(css, /\.ag-cs-um-ctx-proxy[\s\S]*?order:\s*8;/, 'Composer CSS places mirrored usage-monitor context ring at far right edge');
+  assert.match(css, /\.agy-composer-footer\s*\{[\s\S]*?position:\s*relative\s*!important/, 'Composer footer establishes positioning context so Tier-1 controls stay immune to bottom HUD bar');
+  assert.match(css, /permissions-selector-trigger[\s\S]*?order:\s*9\s*!important/, 'Permissions selector sits on the right side of the Claude-style footer');
+  assert.match(css, /button\[aria-haspopup="menu"\][\s\S]*?left:\s*8px\s*!important[\s\S]*?bottom:\s*calc\(100%\s*\+\s*18px\)\s*!important/, 'Add (+) button is pinned inside Tier-1 left edge');
+  assert.match(css, /div:nth-child\(2\)\s*>\s*div\.flex[\s\S]*?bottom:\s*calc\(100%\s*\+\s*18px\)\s*!important/, 'Voice/Mic & Send cluster is pinned inside Tier-1 right edge');
 
   const studioMod = await import('../sidecars/studio/main.mjs');
   assert.equal(studioMod.isLocalHostRequest({ headers: { host: '127.0.0.1:6155', origin: 'plugin://agy-claude-studio--studio-6155' } }), true);
@@ -529,13 +531,12 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   }
 });
 
-test('usage-monitor composer footer split mirrors context ring to far right, forwards clicks, and cleans up on undock or remove', () => {
+test('usage-monitor footer capsule is never mutated in Shadow DOM and legacy split artifacts are cleaned up', () => {
   const timers = new Set();
   const makeEl = (tag, opts = {}) => {
     const attrs = new Map(Object.entries(opts.attrs || {}));
     const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
     const children = [];
-    const listeners = new Map();
     const el = {
       tagName: tag.toUpperCase(),
       nodeType: 1,
@@ -592,15 +593,8 @@ test('usage-monitor composer footer split mirrors context ring to far right, for
           this.parentNode = null;
         }
       },
-      addEventListener(ev, fn) { if (!listeners.has(ev)) listeners.set(ev, []); listeners.get(ev).push(fn); },
+      addEventListener() {},
       removeEventListener() {},
-      dispatchEvent(ev) {
-        for (const fn of listeners.get(ev.type) || []) fn(ev);
-        return true;
-      },
-      click() {
-        this.dispatchEvent({ type: 'click', stopPropagation() {}, preventDefault() {} });
-      },
       animate() { return { cancel() {} }; },
       getBoundingClientRect() { return { left: 100, top: 600, right: 500, bottom: 660, width: 400, height: 60 }; },
       matches(sel) { return matchesSelector(this, sel); },
@@ -632,29 +626,15 @@ test('usage-monitor composer footer split mirrors context ring to far right, for
   const docEl = makeEl('html');
   const head = docEl.appendChild(makeEl('head'));
   const body = docEl.appendChild(makeEl('body', { className: 'theme-standalone' }));
-  const topBar = body.appendChild(makeEl('div', { className: 'top-bar' }));
   const inputBox = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
   const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
   const footer = card.appendChild(makeEl('div', { className: 'agy-composer-footer' }));
 
-  // Build mock usage-monitor capsule with Shadow DOM mounted inside footer
   const umCap = footer.appendChild(makeEl('div', { attrs: { id: 'ag-usage-monitor-capsule' } }));
   const sr = makeEl('div');
-  const umMultiBtn = sr.appendChild(makeEl('button', { className: 'wm-multi-btn is-running', attrs: { 'aria-label': '多会话实时信息', 'aria-expanded': 'false' } }));
-  let umMultiClicks = 0;
-  umMultiBtn.addEventListener('click', () => { umMultiClicks += 1; });
-  umMultiBtn.appendChild(makeEl('span', { className: 'wm-multi-dot' }));
-  umMultiBtn.appendChild(makeEl('span', { className: 'wm-multi-label', attrs: { 'data-od-value': '1 运行中', 'aria-label': '1 运行中' }, text: '0123456789 运行中' }));
-  const umBtn = sr.appendChild(makeEl('button', { className: 'wm-capsule-btn', attrs: { title: 'Usage Monitor' } }));
-  let umBtnClicks = 0;
-  umBtn.addEventListener('click', () => { umBtnClicks += 1; });
-  umBtn.appendChild(makeEl('span', { className: 'wm-cap-slot', attrs: { 'data-metric': 'tps', 'data-vis-rank': '1' }, text: '27.5 t/s' }));
-  umBtn.appendChild(makeEl('span', { className: 'wm-sep', attrs: { 'data-sep-for-rank': '2' } }));
-  const ctxSlot = umBtn.appendChild(makeEl('span', { className: 'wm-cap-slot wm-ctx-seg tone-danger', attrs: { 'data-metric': 'context', 'data-vis-rank': '2' } }));
-  const ringSvg = ctxSlot.appendChild(makeEl('svg', { className: 'wm-ring-svg' }));
-  ringSvg.appendChild(makeEl('circle', { className: 'wm-ring-fill', attrs: { 'stroke-dasharray': '32.67', 'stroke-dashoffset': '0.65' } }));
-  ctxSlot.appendChild(makeEl('span', { className: 'wm-slot-text wm-ctx-pct', attrs: { 'data-od-value': '98%', 'aria-label': '98%' }, text: '01234567890123456789%' }));
+  sr.appendChild(makeEl('style', { attrs: { id: 'ag-cs-um-split-css' }, text: '/* legacy */' }));
   umCap.shadowRoot = sr;
+  footer.appendChild(makeEl('button', { className: 'ag-cs-um-ctx-proxy' }));
 
   const doc = {
     documentElement: docEl,
@@ -699,31 +679,9 @@ test('usage-monitor composer footer split mirrors context ring to far right, for
       cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: false, composerRestyle: true }),
       sandbox
     );
-    const proxy = footer.querySelector('.ag-cs-um-ctx-proxy');
-    assert.ok(proxy, 'Far-right context proxy button must mount when usage-monitor is docked in footer');
-    assert.equal(proxy.querySelector('.ag-cs-um-ctx-label').textContent, '98%', 'Proxy must read clean data-od-value instead of raw odometer digits');
-    assert.equal(proxy.classList.contains('tone-danger'), true, 'Proxy must mirror tone-danger class');
-    assert.equal(proxy.querySelector('.ag-cs-um-ring-fill').getAttribute('stroke-dashoffset'), '0.65', 'Proxy must mirror SVG ring progress');
-    assert.ok(sr.getElementById('ag-cs-um-split-css'), 'Shadow DOM split style must hide duplicate context segment inside middle capsule');
-
-    proxy.click();
-    assert.equal(umBtnClicks, 1, 'Clicking far-right proxy must forward click to usage-monitor capsule button');
-
-    // Move usage-monitor back to top bar -> proxy & shadow split CSS must automatically clean up
-    topBar.appendChild(umCap);
-    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: false, composerRestyle: true });
-    assert.equal(footer.querySelector('.ag-cs-um-ctx-proxy'), null, 'Proxy must unmount when usage-monitor moves out of footer');
-    assert.equal(sr.getElementById('ag-cs-um-split-css'), null, 'Shadow DOM split style must be removed when usage-monitor moves back to top bar');
-
-    // Move back into footer and verify REMOVE_EXPRESSION cleans both proxy and shadow style
-    footer.appendChild(umCap);
-    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: false, composerRestyle: true });
-    assert.ok(footer.querySelector('.ag-cs-um-ctx-proxy'));
-    assert.ok(sr.getElementById('ag-cs-um-split-css'));
-
+    assert.equal(footer.querySelector('.ag-cs-um-ctx-proxy'), null, 'Legacy proxy button must be cleaned up');
+    assert.equal(sr.getElementById('ag-cs-um-split-css'), null, 'Legacy Shadow DOM split CSS must be removed');
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
-    assert.equal(footer.querySelector('.ag-cs-um-ctx-proxy'), null, 'REMOVE_EXPRESSION must remove proxy');
-    assert.equal(sr.getElementById('ag-cs-um-split-css'), null, 'REMOVE_EXPRESSION must remove shadow DOM split style');
   } finally {
     for (const id of timers) clearTimeout(id);
   }
@@ -984,9 +942,8 @@ test('cdp.ensureMigratedPluginConfig migrates legacy agy-claude-style plugin_dat
   }
 });
 
-test('usage-monitor footer split observes Shadow DOM even when context segment starts hidden on cold start', () => {
+test('disabling composerRestyle keeps HUD stats active and places periodic/orchestrator controls on a single inline row', () => {
   const timers = new Set();
-  const observedCallbacks = new Map();
   const makeEl = (tag, opts = {}) => {
     const attrs = new Map(Object.entries(opts.attrs || {}));
     const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
@@ -1017,6 +974,11 @@ test('usage-monitor footer split observes Shadow DOM even when context segment s
       set innerHTML(v) { this._text = String(v ?? ''); children.length = 0; },
       get childElementCount() { return children.length; },
       get firstChild() { return children[0] || null; },
+      get nextSibling() {
+        if (!this.parentElement) return null;
+        const i = this.parentElement.children.indexOf(this);
+        return i >= 0 ? this.parentElement.children[i + 1] || null : null;
+      },
       get lastElementChild() { return children[children.length - 1] || null; },
       getAttribute(k) { return k === 'class' ? this.className : (attrs.has(k) ? attrs.get(k) : null); },
       setAttribute(k, v) { if (k === 'class') this.className = v; else attrs.set(k, String(v)); },
@@ -1083,15 +1045,20 @@ test('usage-monitor footer split observes Shadow DOM even when context segment s
   const inputBox = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
   const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
   const footer = card.appendChild(makeEl('div', { className: 'agy-composer-footer' }));
-
-  const umCap = footer.appendChild(makeEl('div', { attrs: { id: 'ag-usage-monitor-capsule' } }));
-  const sr = makeEl('div');
-  const umBtn = sr.appendChild(makeEl('button', { className: 'wm-capsule-btn', attrs: { title: 'Usage Monitor' } }));
-  const ctxSlot = umBtn.appendChild(
-    makeEl('span', { className: 'wm-cap-slot wm-ctx-seg', hidden: true, attrs: { 'data-metric': 'context', hidden: '' } })
-  );
-  ctxSlot.appendChild(makeEl('span', { className: 'wm-slot-text wm-ctx-pct', attrs: { 'data-od-value': '42%' }, text: '42%' }));
-  umCap.shadowRoot = sr;
+  const flexRow = footer.appendChild(makeEl('div', { className: 'flex items-center gap-1 min-w-0' }));
+  const modelWrap = flexRow.appendChild(makeEl('div', { className: 'min-w-0 no-focus-agent-input' }));
+  const modelBtn = modelWrap.appendChild(makeEl('button', { attrs: { 'data-testid': 'model-selector-trigger' }, text: 'Gemini 4 Neon High' }));
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      modelOptions: [
+        { label: 'Gemini 4 Neon (High)', value: 1532 },
+        { label: 'Orchestrator (Neon)', value: 1537 },
+      ],
+      selectedModel: { label: 'Gemini 4 Neon (High)', value: 1532 },
+      setSelectedModel: () => {},
+    },
+    return: null,
+  };
 
   const doc = {
     documentElement: docEl,
@@ -1116,11 +1083,7 @@ test('usage-monitor footer split observes Shadow DOM even when context segment s
     localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     matchMedia: () => ({ matches: false }),
-    MutationObserver: class {
-      constructor(cb) { this.cb = cb; }
-      observe(target) { observedCallbacks.set(target, this.cb); }
-      disconnect() {}
-    },
+    MutationObserver: class { observe() {} disconnect() {} },
     ResizeObserver: class { observe() {} disconnect() {} },
     requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
     cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
@@ -1137,24 +1100,266 @@ test('usage-monitor footer split observes Shadow DOM even when context segment s
 
   try {
     vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, usageStatsEnabled: false, composerRestyle: true }),
+      cdp.buildInjectExpression({
+        ...cdp.DEFAULT_CONFIG,
+        composerRestyle: false,
+        usageStatsEnabled: true,
+        hudTopBar: true,
+        hudBottomBar: true,
+        inlineStats: true,
+      }),
       sandbox
     );
-    assert.equal(footer.querySelector('.ag-cs-um-ctx-proxy'), null);
-    const srCb = observedCallbacks.get(sr);
-    assert.equal(typeof srCb, 'function', 'Shadow DOM observer must attach even when context slot starts hidden');
+    // Periodic & Orchestrator controls must mount in flexRow alongside modelWrap (NOT inside block modelWrap)
+    const psBtn = card.querySelector('.ag-cs-periodic-trigger');
+    const orchBtn = card.querySelector('.ag-cs-orch-switch');
+    assert.ok(psBtn && orchBtn, 'Both periodic trigger and orchestrator switch must render when composerRestyle is false');
+    assert.equal(psBtn.parentElement, flexRow, 'Periodic trigger must mount in flex row, not inside block modelWrap');
+    assert.equal(orchBtn.parentElement, flexRow, 'Orchestrator switch must mount in flex row, not inside block modelWrap');
+    assert.deepEqual(flexRow.children, [psBtn, modelWrap, orchBtn], 'Inline order must be [✦] [Model] [协作] on one row');
 
-    ctxSlot.hidden = false;
-    ctxSlot.removeAttribute('hidden');
-    srCb([{ target: ctxSlot, addedNodes: [], removedNodes: [] }]);
-
-    const proxy = footer.querySelector('.ag-cs-um-ctx-proxy');
-    assert.ok(proxy, 'Proxy must mount immediately once Shadow DOM unhides context slot');
-    assert.equal(proxy.querySelector('.ag-cs-um-ctx-label').textContent, '42%');
-    assert.ok(sr.getElementById('ag-cs-um-split-css'));
+    // Disabling composerRestyle must NOT disable HUD stats!
+    assert.ok(card.querySelector('.ag-cs-hud-top-bar'), 'Top HUD bar must stay mounted when composerRestyle is false');
+    assert.ok(card.querySelector('.ag-cs-hud-bottom-bar'), 'Bottom HUD bar must stay mounted when composerRestyle is false');
+    assert.ok(footer.querySelector('.ag-cs-inline-stats'), 'Inline stats must stay mounted when composerRestyle is false');
+    assert.ok(footer.querySelector('.ag-cs-context-ring'), 'Context ring must stay mounted when composerRestyle is false');
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
   } finally {
     for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('i18n-core universal opt-out protocol and dynamic setExtraOptOut protect third-party roots', () => {
+  const i18nCore = require('../i18n-core.js');
+  const i18nLocales = require('../i18n-locales.js');
+
+  assert.ok(i18nCore.OPT_OUT_PROTOCOL.includes('[translate="no"]'));
+  assert.ok(i18nCore.OPT_OUT_PROTOCOL.includes('.notranslate'));
+  assert.ok(i18nCore.OPT_OUT_PROTOCOL.includes('[data-ag-no-i18n]'));
+  assert.ok(i18nCore.OPT_OUT_PROTOCOL.includes('[data-no-i18n]'));
+  assert.ok(i18nCore.OPT_OUT_PROTOCOL.includes('[data-agy-no-translate]'));
+
+  const makeNode = (tag, attrs = {}, text = '') => {
+    const attrMap = new Map(Object.entries(attrs));
+    const classes = new Set((attrs.class || '').split(/\s+/).filter(Boolean));
+    const el = {
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      parentElement: null,
+      childNodes: [],
+      children: [],
+      isConnected: true,
+      getAttribute(k) { return k === 'class' ? Array.from(classes).join(' ') : (attrMap.has(k) ? attrMap.get(k) : null); },
+      setAttribute(k, v) { if (k === 'class') { classes.clear(); String(v).split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); } else attrMap.set(k, String(v)); },
+      removeAttribute(k) { attrMap.delete(k); },
+      hasAttribute(k) { return attrMap.has(k); },
+      matches(sel) {
+        return sel.split(',').map((s) => s.trim()).filter(Boolean).some((s) => {
+          if (s === '[translate="no"]') return attrMap.get('translate') === 'no';
+          if (s === '.notranslate') return classes.has('notranslate');
+          if (s === '[data-ag-no-i18n]') return attrMap.has('data-ag-no-i18n');
+          if (s === '[data-no-i18n]') return attrMap.has('data-no-i18n');
+          if (s === '[data-agy-no-translate]') return attrMap.has('data-agy-no-translate');
+          if (s === '#third-party-widget') return attrMap.get('id') === 'third-party-widget';
+          return false;
+        });
+      },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches && cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children || []) {
+            if (c.matches && c.matches(sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+      appendChild(c) {
+        c.parentElement = this;
+        this.childNodes.push(c);
+        if (c.nodeType === 1) this.children.push(c);
+        return c;
+      },
+    };
+    if (text) {
+      el.appendChild({ nodeType: 3, nodeValue: text, parentElement: el, isConnected: true });
+    }
+    return el;
+  };
+
+  const htmlEl = makeNode('html');
+  const bodyEl = makeNode('body');
+  htmlEl.appendChild(bodyEl);
+  const doc = {
+    nodeType: 9,
+    documentElement: htmlEl,
+    body: bodyEl,
+    childNodes: [htmlEl],
+    children: [htmlEl],
+    createElement: (t) => makeNode(t),
+    querySelectorAll(sel) { return this.body.querySelectorAll(sel); },
+    createTreeWalker(root, what, filter) {
+      const flat = [];
+      const visit = (n) => {
+        for (const c of n.childNodes || []) {
+          if (c.nodeType === 1 && filter && filter.acceptNode(c) === 2) continue;
+          flat.push(c);
+          if (c.nodeType === 1) visit(c);
+        }
+      };
+      visit(root);
+      let idx = -1;
+      return {
+        currentNode: null,
+        nextNode() {
+          idx += 1;
+          if (idx >= flat.length) return false;
+          this.currentNode = flat[idx];
+          return true;
+        },
+      };
+    },
+  };
+
+  const normalBtn = makeNode('button', {}, 'Settings');
+  const htmlNoTrans = makeNode('div', { translate: 'no' }, 'Settings');
+  const clsNoTrans = makeNode('div', { class: 'notranslate' }, 'Settings');
+  const dataNoI18n = makeNode('div', { 'data-no-i18n': '' }, 'Settings');
+  const thirdParty = makeNode('div', { id: 'third-party-widget' }, 'Settings');
+  doc.body.appendChild(normalBtn);
+  doc.body.appendChild(htmlNoTrans);
+  doc.body.appendChild(clsNoTrans);
+  doc.body.appendChild(dataNoI18n);
+  doc.body.appendChild(thirdParty);
+
+  const origNF = globalThis.NodeFilter;
+  globalThis.NodeFilter = { SHOW_ELEMENT: 1, SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 };
+  try {
+    const tr = i18nCore.createDomTranslator(i18nLocales.resolveLocaleBundle);
+    tr.setLanguage('zh-CN', doc);
+    assert.equal(normalBtn.childNodes[0].nodeValue, '设置');
+    assert.equal(htmlNoTrans.childNodes[0].nodeValue, 'Settings', 'translate="no" must stay untranslated');
+    assert.equal(clsNoTrans.childNodes[0].nodeValue, 'Settings', '.notranslate must stay untranslated');
+    assert.equal(dataNoI18n.childNodes[0].nodeValue, 'Settings', 'data-no-i18n must stay untranslated');
+    assert.equal(thirdParty.childNodes[0].nodeValue, '设置', 'Unregistered third-party starts translated');
+
+    tr.setExtraOptOut(['#third-party-widget', 'bad<script>'], doc);
+    assert.equal(thirdParty.childNodes[0].nodeValue, 'Settings', 'setExtraOptOut must revert matching node live');
+    assert.equal(normalBtn.childNodes[0].nodeValue, '设置', 'Normal UI stays translated');
+    tr.destroy();
+  } finally {
+    if (origNF === undefined) delete globalThis.NodeFilter;
+    else globalThis.NodeFilter = origNF;
+  }
+});
+
+test('cdp.syncRemoteI18nCompat and Studio update helpers validate remote payloads and git safety', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cs-compat-'));
+  try {
+    const mockFetch = async (url) => {
+      if (String(url).includes('i18n-compat.json')) {
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              version: 2,
+              updatedAt: '2026-11-24',
+              protocol: ['[translate="no"]'],
+              plugins: [
+                { id: 'demo-plugin', name: 'Demo', selectors: ['#demo-plugin-root', '<bad>'] },
+              ],
+            };
+          },
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            tag_name: 'v2.2.0',
+            name: 'v2.2.0',
+            html_url: 'https://github.com/eosglyph/agy-claude-studio/releases/tag/v2.2.0',
+            published_at: '2026-11-24T00:00:00Z',
+          };
+        },
+      };
+    };
+
+    const syncRes = await cdp.syncRemoteI18nCompat({
+      pluginDataDir: tmpDir,
+      fetchFn: mockFetch,
+    });
+    assert.equal(syncRes.ok, true);
+    assert.equal(syncRes.version, 2);
+    assert.equal(syncRes.pluginCount, 1);
+
+    const extra = cdp.resolveExtraI18nOptOutSelectors(
+      { i18nIgnoreSelectors: ['.my-custom-badge'] },
+      tmpDir
+    );
+    assert.ok(extra.includes('#demo-plugin-root'));
+    assert.ok(extra.includes('.my-custom-badge'));
+    assert.ok(!extra.includes('<bad>'), 'Unsafe selector must be filtered out');
+
+    const studioMod = await import('../sidecars/studio/main.mjs');
+    assert.equal(studioMod.compareSemver('2.2.0', '2.1.0'), 1);
+    assert.equal(studioMod.compareSemver('2.1.0', '2.1.0'), 0);
+    assert.equal(studioMod.compareSemver('2.0.9', '2.1.0'), -1);
+
+    const upd = await studioMod.checkStudioUpdate({
+      fetchFn: mockFetch,
+      pluginDir: tmpDir,
+      currentVersion: '2.1.0',
+    });
+    assert.equal(upd.ok, true);
+    assert.equal(upd.hasUpdate, true);
+    assert.equal(upd.latestVersion, '2.2.0');
+    assert.equal(upd.isGitRepo, false);
+
+    const nonGitSelf = await studioMod.performStudioSelfUpdate({ pluginDir: tmpDir });
+    assert.equal(nonGitSelf.ok, false);
+    assert.equal(nonGitSelf.reason, 'not_git_repo');
+
+    fs.mkdirSync(path.join(tmpDir, '.git'), { recursive: true });
+    const dirtySelf = await studioMod.performStudioSelfUpdate({
+      pluginDir: tmpDir,
+      execFn: (cmd, args) => (args[0] === 'status' ? ' M cdp.js\n' : 'main\n'),
+    });
+    assert.equal(dirtySelf.ok, false);
+    assert.equal(dirtySelf.reason, 'dirty_worktree');
+
+    let reinjected = false;
+    const pulledCalls = [];
+    const cleanSelf = await studioMod.performStudioSelfUpdate({
+      pluginDir: tmpDir,
+      execFn: (cmd, args) => {
+        pulledCalls.push(args.join(' '));
+        if (args[0] === 'status') return '';
+        if (args[0] === 'rev-parse') return 'main\n';
+        if (args[0] === 'pull') return 'Updating 4c06173..abc1234\nFast-forward\n';
+        return '';
+      },
+      reinjectFn: async () => {
+        reinjected = true;
+      },
+    });
+    assert.equal(cleanSelf.ok, true);
+    assert.equal(cleanSelf.updated, true);
+    assert.equal(reinjected, true);
+    assert.ok(pulledCalls.includes('pull --ff-only'));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });

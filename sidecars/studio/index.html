@@ -481,11 +481,95 @@
     }
     .toast.show { display: block; }
     .footer-actions {
+      display: flex;
+      justify-content: center;
       margin-top: 2px;
-      padding: 2px 0 4px;
+      padding: 2px 0 8px;
+    }
+    .update-card-body {
+      padding: 12px 13px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      border-top: 1px solid var(--border-col);
+    }
+    .section.is-collapsed .update-card-body {
+      display: none;
+    }
+    .update-meta-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .update-meta-k {
+      font-size: 11.5px;
+      color: var(--muted-fg);
+      line-height: 1.3;
+    }
+    .update-meta-v {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--fg);
+      line-height: 1.35;
+      font-variant-numeric: tabular-nums;
+    }
+    .update-meta-sub {
+      font-size: 11px;
+      color: var(--muted-fg);
+      line-height: 1.35;
+    }
+    .update-meta-sub.is-available {
+      color: var(--brand-accent);
+      font-weight: 600;
+    }
+    .update-meta-sub a {
+      color: var(--brand-accent);
+      text-decoration: none;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+    .update-meta-sub a:hover {
+      text-decoration: underline;
+    }
+    .update-card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    button.update-pill-btn {
+      width: auto;
+      min-height: 30px;
+      padding: 0 11px;
+      border-radius: 9px;
+      border: 1px solid var(--border-col);
+      background: var(--control-bg);
+      color: var(--fg);
+      font-size: 12px;
+      font-weight: 500;
+      gap: 5px;
+    }
+    button.update-pill-btn:hover {
+      border-color: rgba(217, 119, 87, 0.5);
+      background: var(--control-hover);
+    }
+    button.update-pill-btn.primary {
+      min-height: 30px;
+      padding: 0 12px;
+    }
+    button.update-pill-btn svg {
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+      opacity: 0.85;
     }
     button.ghost-reset {
+      width: auto;
       min-height: 28px;
+      padding: 4px 14px;
+      border-radius: 8px;
       background: transparent;
       border-color: transparent;
       color: var(--muted-fg);
@@ -535,6 +619,45 @@
   </div>
 
   <div id="sections"></div>
+
+  <div class="section" id="update-section" data-group-id="updates">
+    <button type="button" class="section-head" id="update-section-head" aria-expanded="true">
+      <span class="section-title" id="update-section-title">⚡ 版本更新</span>
+      <span class="section-head-right">
+        <span class="section-badge" id="update-section-badge">v2.1.0</span>
+        <span class="section-chevron" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </span>
+    </button>
+    <div class="update-card-body">
+      <div class="update-meta-block">
+        <div class="update-meta-k" id="compat-meta-k">免汉化白名单</div>
+        <div class="update-meta-v" id="compat-meta-v">…</div>
+        <div class="update-meta-sub" id="compat-meta-sub">…</div>
+      </div>
+      <div class="update-meta-block">
+        <div class="update-meta-k" id="version-meta-k">当前版本</div>
+        <div class="update-meta-v" id="version-meta-v">…</div>
+        <div class="update-meta-sub" id="version-meta-sub">…</div>
+      </div>
+      <div class="update-card-actions">
+        <button type="button" class="update-pill-btn" id="btn-sync-compat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+          <span id="btn-sync-compat-lbl"></span>
+        </button>
+        <button type="button" class="update-pill-btn" id="btn-check-update">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+          <span id="btn-check-update-lbl"></span>
+        </button>
+        <button type="button" class="update-pill-btn primary" id="btn-self-update" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+          <span id="btn-self-update-lbl"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="footer-actions">
     <button class="ghost-reset" id="btn-reset"></button>
   </div>
@@ -592,6 +715,20 @@
         btnRemove: '还原原生',
         btnReset: '恢复默认',
         btnRefresh: '刷新状态',
+        btnCheckUpdate: '检查更新',
+        btnSelfUpdate: '一键更新',
+        btnSyncCompat: '同步白名单',
+        btnOpenRelease: '查看发布页 →',
+        updateAvailableTitle: (v) => `发现新版本 v${v}`,
+        updateAvailableGit: '检测到 Git 原生插件目录，可点击下方按钮原地拉取更新并热生效。',
+        updateAvailableManual: '当前非 Git 克隆目录（或存在本地修改），请前往发布页下载最新安装包。',
+        updateUpToDate: (v) => `当前已是最新版本 (v${v})`,
+        updateChecking: '正在检查新版本…',
+        updateRunning: '正在拉取更新并刷新窗口…',
+        updateDone: (v) => `已更新至 v${v} 并重新注入`,
+        updateFail: (e) => `更新检查失败：${e}`,
+        compatSynced: (p, s) => `已同步防汉化白名单（${p} 个插件 · ${s} 条规则）`,
+        compatSyncFail: (e) => `白名单同步失败：${e}`,
         btnOpenUm: '用量监控',
         openUmNotFound: '当前窗口未检测到正在运行的「用量监控」面板',
         umNotInstalled: '未检测到 usage-monitor 插件，安装后即可自动常驻右侧监控面板',
@@ -617,6 +754,7 @@
           composerRestyle: ['Claude 风格输入框', '采用 Claude 风格圆角输入框与极简底栏'],
           placeholderStyle: ['输入框引导语', '选择 Claude 风格引导语或保留原生提示', [['studio', 'Claude 风格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素周期表', '在模型名旁添加四角星按钮，点击打开元素周期表选模型'],
+          orchestratorSwitch: ['Orchestrator 快捷开关', '在底栏模型名旁添加独立开关，一键在标准模型与 Orchestrator 编排模式间切换'],
           effortSliderStyle: ['思考强度滑块', '点击模型思考等级时弹出的滑块样式', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude 推理色阶', 'Claude 模式下按思考等级显示蓝紫渐变色'],
           smoothCaret: ['丝滑打字光标', '打字时让光标平滑跟随滑动，兼容多行与中文输入法'],
@@ -681,6 +819,7 @@
           composerRestyle: ['Claude 風格輸入框', '採用 Claude 風格圓角輸入框與極簡底列'],
           placeholderStyle: ['輸入框引導語', '選擇 Claude 風格引導語或保留原生提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '在模型名旁加入四角星按鈕，點擊開啟元素週期表選模型'],
+          orchestratorSwitch: ['Orchestrator 快捷開關', '在底列模型名旁加入獨立開關，一鍵切換標準模型與 Orchestrator 編排模式'],
           effortSliderStyle: ['思考強度滑桿', '點擊模型思考等級時彈出的滑桿樣式', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude 推理色階', 'Claude 模式下依思考等級顯示藍紫漸層色'],
           smoothCaret: ['絲滑打字游標', '打字時讓游標平滑跟隨滑動，相容多行與中文輸入法'],
@@ -745,6 +884,7 @@
           composerRestyle: ['Claude 風格輸入框', '採用 Claude 風格圓角輸入框配極簡底欄'],
           placeholderStyle: ['輸入框引導語', '揀 Claude 風格引導語定保留原版提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '喺模型名隔離加粒四角星，撳開元素週期表揀模型'],
+          orchestratorSwitch: ['Orchestrator 快捷開關', '喺底欄模型名隔離加粒獨立開關，一鍵切換標準模型同 Orchestrator 編排模式'],
           effortSliderStyle: ['思考強度滑桿', '撳模型思考等級時彈出邊款滑桿樣式', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude 推理色階', 'Claude 模式下按思考等級顯示藍紫漸變色'],
           smoothCaret: ['順滑打字光標', '打字時光標順滑跟住滑動，支援多行同中文輸入法'],
@@ -784,6 +924,20 @@
         btnRemove: 'Vanilla UI',
         btnReset: 'Defaults',
         btnRefresh: 'Refresh',
+        btnCheckUpdate: 'Check Updates',
+        btnSelfUpdate: 'Update Now',
+        btnSyncCompat: 'Sync i18n List',
+        btnOpenRelease: 'View Release →',
+        updateAvailableTitle: (v) => `New version v${v} available`,
+        updateAvailableGit: 'Clean Git plugin folder detected. Click below to pull and hot-reload.',
+        updateAvailableManual: 'Non-Git install or local edits detected. Download the latest release package.',
+        updateUpToDate: (v) => `Already up to date (v${v})`,
+        updateChecking: 'Checking for updates...',
+        updateRunning: 'Pulling update and refreshing windows...',
+        updateDone: (v) => `Updated to v${v} and re-injected`,
+        updateFail: (e) => `Update check failed: ${e}`,
+        compatSynced: (p, s) => `Synced i18n compat list (${p} plugins · ${s} rules)`,
+        compatSyncFail: (e) => `Compat sync failed: ${e}`,
         btnOpenUm: 'Usage Monitor',
         openUmNotFound: 'Usage Monitor pane not found in active window',
         umNotInstalled: 'usage-monitor plugin not detected; install it to auto-pin the side pane',
@@ -809,6 +963,7 @@
           composerRestyle: ['Claude Composer Style', 'Use Claude-style rounded input card with a minimal footer'],
           placeholderStyle: ['Input Prompt Text', 'Show Claude-style prompt copy or keep the native prompt', [['studio', 'Claude Style'], ['host', 'Native']]],
           periodicSelector: ['Gemini 4 Periodic Table', 'Add a sparkle button beside model name to pick from the Periodic Table'],
+          orchestratorSwitch: ['Orchestrator Quick Switch', 'Add a compact switch beside the model selector to toggle Orchestrator mode in one click'],
           effortSliderStyle: ['Thinking Effort Slider', 'Slider style shown when clicking the model effort level', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude Effort Gradient', 'Color Claude slider & dot matrix with blue-violet gradient by level'],
           smoothCaret: ['Smooth Typing Caret', 'Glide the typing caret smoothly (multiline & IME friendly)'],
@@ -873,6 +1028,7 @@
           composerRestyle: ['Claude 風入力欄', 'Claude 風の角丸入力欄とシンプルなフッターに調整'],
           placeholderStyle: ['入力欄ガイド文', 'Claude 風のガイド文または標準の案内文を選択', [['studio', 'Claude 風'], ['host', '標準']]],
           periodicSelector: ['Gemini 4 元素周期表', 'モデル名横に星ボタンを追加し、周期表からモデルを選択'],
+          orchestratorSwitch: ['Orchestrator クイック切替', 'モデル名横にスイッチを追加し、通常モデルと Orchestrator をワンクリック切替'],
           effortSliderStyle: ['推論強度スライダー', '推論レベルをクリックした際に開くスライダー形式', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude 推論カラー', 'Claude モードで推論レベルに応じた青紫グラデを表示'],
           smoothCaret: ['スムーズカーソル', '入力時にカーソルを滑らかに追従（複数行・日本語入力対応）'],
@@ -920,7 +1076,7 @@
         id: 'advanced',
         icon: '✨',
         titleKey: 'grpAdvanced',
-        keys: ['periodicSelector', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
+        keys: ['periodicSelector', 'orchestratorSwitch', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
       },
       {
         id: 'telemetry',
@@ -974,7 +1130,8 @@
 
     function getT() {
       const lang = currentConfig?.language;
-      return TEXTS[lang] || TEXTS['zh-CN'];
+      const base = lang === 'en' || lang === 'ja' ? TEXTS.en : TEXTS['zh-CN'];
+      return { ...base, ...(TEXTS[lang] || TEXTS['zh-CN']) };
     }
 
     function parseColorLuminance(raw) {
@@ -1040,6 +1197,103 @@
       toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
     }
 
+    let lastUpdateCheck = null;
+
+    function formatCompatDate(raw) {
+      if (!raw) return '';
+      const s = String(raw).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return s;
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function renderUpdateCard() {
+      const t = getT();
+      const lang = currentConfig?.language || 'zh-CN';
+      const isZh = lang === 'zh-CN' || lang === 'zh-TW' || lang === 'yue';
+      const sec = document.getElementById('update-section');
+      const head = document.getElementById('update-section-head');
+      if (sec && head) {
+        const isCollapsed = collapsedGroups.has('updates');
+        sec.classList.toggle('is-collapsed', isCollapsed);
+        head.setAttribute('aria-expanded', String(!isCollapsed));
+      }
+
+      const titleEl = document.getElementById('update-section-title');
+      if (titleEl) {
+        titleEl.textContent = lang === 'zh-CN' ? '⚡ 版本更新' : (lang === 'zh-TW' || lang === 'yue') ? '⚡ 版本更新' : lang === 'ja' ? '⚡ アップデート' : '⚡ Updates & Sync';
+      }
+      const verStr = `v${lastStatus?.version || '2.1.0'}`;
+      const badgeEl = document.getElementById('update-section-badge');
+      if (badgeEl) badgeEl.textContent = lastUpdateCheck?.hasUpdate ? `v${lastUpdateCheck.latestVersion}` : verStr;
+
+      const compatK = document.getElementById('compat-meta-k');
+      const compatV = document.getElementById('compat-meta-v');
+      const compatSub = document.getElementById('compat-meta-sub');
+      const cInfo = lastStatus?.i18nCompat || {};
+      const pCnt = Number(cInfo.pluginCount || 0);
+      const sCnt = Number(cInfo.selectorCount || 0);
+      if (compatK) {
+        compatK.textContent = lang === 'zh-CN' ? '免汉化白名单' : (lang === 'zh-TW' || lang === 'yue') ? '免漢化白名單' : lang === 'ja' ? '翻訳除外リスト' : 'i18n Opt-Out Whitelist';
+      }
+      if (compatV) {
+        compatV.textContent = isZh ? `${sCnt} 条规则 · ${pCnt} 个插件` : `${sCnt} rules · ${pCnt} plugins`;
+      }
+      if (compatSub) {
+        const srcTxt = cInfo.hasRemote
+          ? (isZh ? '云端同步' : 'Cloud synced')
+          : (isZh ? '内置默认' : 'Built-in defaults');
+        const ts = formatCompatDate(cInfo.updatedAt);
+        compatSub.textContent = ts ? `${srcTxt} · ${isZh ? '更新于 ' : ''}${ts}` : srcTxt;
+      }
+
+      const verK = document.getElementById('version-meta-k');
+      const verV = document.getElementById('version-meta-v');
+      const verSub = document.getElementById('version-meta-sub');
+      const selfBtn = document.getElementById('btn-self-update');
+      if (verK) {
+        verK.textContent = lang === 'zh-CN' ? '当前版本' : (lang === 'zh-TW' || lang === 'yue') ? '目前版本' : lang === 'ja' ? '現在のバージョン' : 'Current Version';
+      }
+      if (verV) verV.textContent = verStr;
+
+      const isGit = Boolean(lastStatus?.update?.isGitRepo);
+      const gitTag = isGit ? ' (Git)' : '';
+      if (verSub) {
+        verSub.classList.remove('is-available');
+        if (lastUpdateCheck?.hasUpdate) {
+          verSub.classList.add('is-available');
+          const canGit = Boolean(lastUpdateCheck.isGitRepo && lastUpdateCheck.gitClean);
+          const url = lastUpdateCheck.releaseUrl || lastStatus?.update?.releaseUrl || 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
+          verSub.innerHTML = '';
+          verSub.appendChild(document.createTextNode(t.updateAvailableTitle(lastUpdateCheck.latestVersion)));
+          const a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.textContent = t.btnOpenRelease;
+          verSub.appendChild(a);
+          if (selfBtn) selfBtn.style.display = canGit ? '' : 'none';
+        } else if (lastUpdateCheck && lastUpdateCheck.hasUpdate === false) {
+          verSub.textContent = isZh ? `已是最新${gitTag}` : `Up to date${gitTag}`;
+          if (selfBtn) selfBtn.style.display = 'none';
+        } else {
+          verSub.textContent = isGit
+            ? (isZh ? 'Git 原生插件 · 支持原地更新' : 'Git plugin · In-place update ready')
+            : (isZh ? '独立安装版' : 'Standalone install');
+          if (selfBtn) selfBtn.style.display = 'none';
+        }
+      }
+
+      const checkLbl = document.getElementById('btn-check-update-lbl');
+      if (checkLbl) checkLbl.textContent = t.btnCheckUpdate;
+      const syncLbl = document.getElementById('btn-sync-compat-lbl');
+      if (syncLbl) syncLbl.textContent = t.btnSyncCompat;
+      const selfLbl = document.getElementById('btn-self-update-lbl');
+      if (selfLbl) selfLbl.textContent = t.btnSelfUpdate;
+    }
+
     function renderStaticChrome() {
       const t = getT();
       document.documentElement.lang = currentConfig?.language === 'yue' ? 'zh-HK' : (currentConfig?.language || 'zh-CN');
@@ -1075,7 +1329,7 @@
         txt.textContent = hasCdp
           ? t.connected(st.cdp.port, st.cdp.pageCount)
           : st.watcher?.alive ? t.waitingPort : t.disconnected;
-        meta.textContent = `v${st.version || '1.3.0'} · ${st.watcher?.alive ? t.watcherOn(st.watcher.pid) : t.watcherOff}`;
+        meta.textContent = `v${st.version || '2.1.0'} · ${st.watcher?.alive ? t.watcherOn(st.watcher.pid) : t.watcherOff}`;
         const showBanner = Boolean(st.cdp?.needsCdpRestart);
         document.getElementById('cdp-banner').classList.toggle('show', showBanner);
         if (metaBanner) {
@@ -1096,6 +1350,7 @@
         document.getElementById('status-text').textContent = t.checking;
         if (metaBanner) metaBanner.style.display = 'none';
       }
+      renderUpdateCard();
     }
 
     function isUsageMonitorAvailable() {
@@ -1191,7 +1446,7 @@
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked =
-              key === 'glassEffect'
+              key === 'glassEffect' || key === 'orchestratorSwitch'
                 ? cfg[key] !== false
                 : key === 'mascot'
                 ? cfg[key] === 'crab'
@@ -1324,8 +1579,81 @@
       }
     }
 
+    async function triggerCheckUpdate() {
+      const btn = document.getElementById('btn-check-update');
+      if (btn) btn.disabled = true;
+      showToast(getT().updateChecking);
+      try {
+        const res = await apiFetch('/api/check-update', { method: 'GET' });
+        const data = await res.json();
+        const t = getT();
+        if (!res.ok || !data?.ok) {
+          throw new Error(data?.error || 'Error');
+        }
+        lastUpdateCheck = data;
+        renderUpdateCard();
+        if (data.hasUpdate) {
+          showToast(t.updateAvailableTitle(data.latestVersion));
+        } else {
+          showToast(t.updateUpToDate(data.currentVersion));
+        }
+      } catch (err) {
+        showToast(getT().updateFail(err.message));
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function triggerSelfUpdate() {
+      const btn = document.getElementById('btn-self-update');
+      if (btn) btn.disabled = true;
+      showToast(getT().updateRunning);
+      try {
+        const res = await apiFetch('/api/self-update', { method: 'POST', body: '{}' });
+        const data = await res.json();
+        const t = getT();
+        if (!res.ok || !data?.ok) {
+          throw new Error(data?.error || data?.reason || 'Error');
+        }
+        lastUpdateCheck = { hasUpdate: false, currentVersion: data.version };
+        showToast(t.updateDone(data.version || ''));
+        await refreshStatus();
+      } catch (err) {
+        showToast(getT().updateFail(err.message));
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function triggerSyncCompat() {
+      const btn = document.getElementById('btn-sync-compat');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await apiFetch('/api/sync-i18n-compat', { method: 'POST', body: '{}' });
+        const data = await res.json();
+        const t = getT();
+        if (!res.ok || !data?.ok) {
+          throw new Error(data?.error || 'Error');
+        }
+        showToast(t.compatSynced(data.pluginCount || 0, data.selectorCount || 0));
+        await refreshStatus();
+      } catch (err) {
+        showToast(getT().compatSyncFail(err.message));
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    const updateSecEl = document.getElementById('update-section');
+    const updateHeadEl = document.getElementById('update-section-head');
+    if (updateSecEl && updateHeadEl) {
+      updateHeadEl.addEventListener('click', () => toggleGroupCollapse('updates', updateSecEl, updateHeadEl));
+    }
     document.getElementById('btn-relaunch').addEventListener('click', triggerRelaunch);
     document.getElementById('btn-open-um').addEventListener('click', triggerOpenUsageMonitor);
+    document.getElementById('btn-check-update').addEventListener('click', triggerCheckUpdate);
+    document.getElementById('btn-self-update').addEventListener('click', triggerSelfUpdate);
+    document.getElementById('btn-sync-compat').addEventListener('click', triggerSyncCompat);
     document.getElementById('btn-reinject').addEventListener('click', () => postAction('/api/reinject', 'btnReinject'));
     document.getElementById('btn-remove').addEventListener('click', () => postAction('/api/remove', 'btnRemove'));
     document.getElementById('btn-reset').addEventListener('click', () => postAction('/api/reset', 'btnReset'));

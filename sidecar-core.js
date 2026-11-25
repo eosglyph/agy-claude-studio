@@ -127,6 +127,11 @@
         ? i18nCore.normalizeLanguage
         : (v) => (typeof v === 'string' && v ? v : 'zh-CN');
 
+    const collectOptOut = (cfg) => [
+      ...(Array.isArray(cfg?.i18nOptOutSelectors) ? cfg.i18nOptOutSelectors : []),
+      ...(Array.isArray(cfg?.i18nIgnoreSelectors) ? cfg.i18nIgnoreSelectors : []),
+    ];
+
     const domTranslator =
       i18nCore && i18nLocales && typeof i18nCore.createDomTranslator === 'function'
         ? i18nCore.createDomTranslator(i18nLocales.resolveLocaleBundle, {
@@ -134,6 +139,7 @@
             names: SWARM_NAME_SELECTORS,
             controls: SWARM_CONTROL_SELECTORS,
             extraRules: getSwarmExtraRules,
+            optOut: collectOptOut(initialConfig),
           })
         : null;
 
@@ -160,8 +166,18 @@
       codeHash: CODE_HASH,
       sidecar: true,
       refreshConfig(next) {
-        if (next && typeof next === 'object' && Object.prototype.hasOwnProperty.call(next, 'language')) {
-          applyLang(next.language);
+        if (next && typeof next === 'object') {
+          if (domTranslator && typeof domTranslator.setExtraOptOut === 'function') {
+            if (
+              Object.prototype.hasOwnProperty.call(next, 'i18nOptOutSelectors') ||
+              Object.prototype.hasOwnProperty.call(next, 'i18nIgnoreSelectors')
+            ) {
+              domTranslator.setExtraOptOut(collectOptOut(next), doc);
+            }
+          }
+          if (Object.prototype.hasOwnProperty.call(next, 'language')) {
+            applyLang(next.language);
+          }
         }
       },
       getState() {

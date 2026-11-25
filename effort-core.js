@@ -139,13 +139,13 @@
   function parseModelLabelEffort(label) {
     const raw = stripContextWindowSuffix(label);
     const m = raw.match(
-      /^(.+?)\s*(?:\((None|Off|Minimal|Light|Low|Medium|High|Extra|XHigh|Max|Ultra)(?:\s+Thinking)?\)|\s+(None|Off|Minimal|Light|Low|Medium|High|Extra|XHigh|Max|Ultra))\s*$/i
+      /^(.+?)\s*(?:\((None|Off|Minimal|Light|Low|Medium|High|Extra\s+High|Extra|XHigh|Max|Ultra)(?:\s+Thinking)?\)|\s+(None|Off|Minimal|Light|Low|Medium|High|Extra\s+High|Extra|XHigh|Max|Ultra))\s*$/i
     );
     if (!m) return { base: raw, effort: '' };
-    const rawEff = (m[2] || m[3] || '').toLowerCase();
+    const rawEff = (m[2] || m[3] || '').toLowerCase().replace(/\s+/g, ' ');
     return {
       base: m[1].trim(),
-      effort: rawEff === 'extra' ? 'xhigh' : rawEff,
+      effort: rawEff === 'extra' || rawEff === 'extra high' ? 'xhigh' : rawEff,
     };
   }
 
@@ -161,9 +161,12 @@
 
   function resolveClaudeEffortSteps(modelOptions, selectedLabel, badgeEffort) {
     const parsed = parseModelLabelEffort(selectedLabel);
-    const rawBadge = String(badgeEffort || '').trim().toLowerCase();
-    const preferExtra = rawBadge === 'extra' || (!rawBadge && /\bextra\b/i.test(String(selectedLabel || '')));
-    const normBadge = preferExtra ? 'xhigh' : rawBadge;
+    const rawBadge = String(badgeEffort || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const preferExtraHigh =
+      rawBadge === 'extra high' || (!rawBadge && /\bextra\s+high\b/i.test(String(selectedLabel || '')));
+    const preferExtra =
+      !preferExtraHigh && (rawBadge === 'extra' || (!rawBadge && /\bextra\b/i.test(String(selectedLabel || ''))));
+    const normBadge = preferExtraHigh || preferExtra ? 'xhigh' : rawBadge;
     const currentEffort = (EFFORT_BY_ID[normBadge] ? normBadge : '') || parsed.effort || 'high';
     const baseName = parsed.base || 'Model';
 
@@ -178,8 +181,9 @@
       }
     }
 
+    const hasRealVariants = optionByEffort.size >= 2;
     let steps = [];
-    if (optionByEffort.size >= 2) {
+    if (hasRealVariants) {
       for (const [id, opt] of optionByEffort.entries()) {
         const meta = EFFORT_BY_ID[id] || {
           id,
@@ -192,7 +196,10 @@
           enDesc: '',
         };
         const step = { ...meta, option: opt };
-        if (preferExtra && id === 'xhigh') step.display = 'Extra';
+        if (id === 'xhigh') {
+          if (preferExtraHigh) step.display = 'Extra High';
+          else if (preferExtra) step.display = 'Extra';
+        }
         steps.push(step);
       }
       steps = orderEffortSteps(steps);
@@ -201,14 +208,17 @@
       const fallbackIds = currentEffort === 'max' ? ['low', 'medium', 'high', 'max'] : ['low', 'medium', 'high', 'xhigh'];
       steps = fallbackIds.map((id) => {
         const step = { ...EFFORT_BY_ID[id], option: optionByEffort.get(id) || null };
-        if (preferExtra && id === 'xhigh') step.display = 'Extra';
+        if (id === 'xhigh') {
+          if (preferExtraHigh) step.display = 'Extra High';
+          else if (preferExtra) step.display = 'Extra';
+        }
         return step;
       });
     }
 
     let selectedIdx = steps.findIndex((s) => s.id === currentEffort);
     if (selectedIdx < 0) selectedIdx = Math.max(0, steps.length - 1);
-    return { baseName, steps, selectedIdx };
+    return { baseName, steps, selectedIdx, hasRealVariants };
   }
 
   function dampTravel(x, span, stepCount) {

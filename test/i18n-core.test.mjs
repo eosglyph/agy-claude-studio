@@ -512,7 +512,7 @@ test('Swarm sidecar translator translates chrome, <select><option>, dynamic rule
     assert.equal(unreadDivider.textContent, '新消息');
     assert.equal(msgProse.textContent, 'Export GIF');
     assert.equal(msgMoreBtn.textContent, '显示更多');
-    assert.equal(orchTitle.textContent, '编排器设置');
+    assert.equal(orchTitle.textContent, '协作模式设置');
     assert.equal(orchModel.textContent, '规划模型');
     assert.equal(execModel.textContent, '执行模型');
     assert.equal(olderBtn.textContent, '没有更早的消息了');

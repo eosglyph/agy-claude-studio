@@ -93,8 +93,21 @@
   const hasOwn = Object.prototype.hasOwnProperty;
   const CJK_LATIN = /([\u3400-\u9fff])([A-Za-z])|([A-Za-z])([\u3400-\u9fff])/g;
 
-  // Never descend into opt-out plugin roots, usage-monitor widgets, or effort pills controlled by our runtime.
-  const OPT_OUT = '[data-ag-no-i18n], [data-ag-cs-effort], #ag-usage-monitor-capsule, #ag-usage-monitor-portal, [id^="ag-usage-monitor-"]';
+  // Universal third-party opt-out protocol (HTML standard + community attributes) + built-in protected roots.
+  const OPT_OUT_PROTOCOL = Object.freeze([
+    '[translate="no"]',
+    '.notranslate',
+    '[data-ag-no-i18n]',
+    '[data-no-i18n]',
+    '[data-agy-no-translate]',
+  ]);
+  const OPT_OUT = [
+    ...OPT_OUT_PROTOCOL,
+    '[data-ag-cs-effort]',
+    '#ag-usage-monitor-capsule',
+    '#ag-usage-monitor-portal',
+    '[id^="ag-usage-monitor-"]',
+  ].join(', ');
   // Code / editing surfaces: text is untouched, but nested toolbar buttons (e.g. "Copy code") are UI.
   const HARD = [
     'script',
@@ -159,6 +172,28 @@
     return parts.length ? base + ',' + parts.join(',') : base;
   }
 
+  function sanitizeExtraSelectors(extra, doc) {
+    if (!Array.isArray(extra) || !extra.length) return [];
+    const out = [];
+    const seen = new Set();
+    const probe = doc && typeof doc.createElement === 'function' ? doc.createElement('div') : null;
+    for (const item of extra) {
+      const s = typeof item === 'string' ? item.trim() : '';
+      if (!s || s.length > 160 || /[\r\n\0<>{};]/.test(s) || seen.has(s)) continue;
+      if (probe && typeof probe.matches === 'function') {
+        try {
+          probe.matches(s);
+        } catch {
+          continue;
+        }
+      }
+      seen.add(s);
+      out.push(s);
+      if (out.length >= 64) break;
+    }
+    return out;
+  }
+
   /**
    * Create a reversible multi-locale DOM translator modeled after Claudized-Antigravity.
    * Restores every modified Text node and attribute in-place before switching locales or detaching.
@@ -167,6 +202,8 @@
     const contentSel = joinSel(CONTENT, options && options.content);
     const namesSel = joinSel(NAMES, options && options.names);
     const controlsSel = joinSel(CONTROLS, options && options.controls);
+    let extraOptOut = sanitizeExtraSelectors(options && options.optOut);
+    let optOutSel = joinSel(OPT_OUT, extraOptOut);
     const resolveExtraRules = typeof options?.extraRules === 'function' ? options.extraRules : null;
     const texts = new Map();
     const attrs = new Map();
@@ -284,7 +321,7 @@
     // 0 = skip, 1 = names (relative times only), 2 = full UI chrome
     function zoneOf(el) {
       if (!el) return 0;
-      if (closestSel(el, OPT_OUT)) return 0;
+      if (closestSel(el, optOutSel)) return 0;
       const hard = closestSel(el, HARD);
       if (hard) {
         const ctl = closestSel(el, controlsSel);
@@ -328,7 +365,7 @@
     }
 
     function doAttrs(el, only) {
-      if (!bundle || !el || closestSel(el, OPT_OUT)) return;
+      if (!bundle || !el || closestSel(el, optOutSel)) return;
       let zone = -1;
       for (const name of only ? [only] : ATTRS) {
         const cur = typeof el.getAttribute === 'function' ? el.getAttribute(name) : null;
@@ -352,9 +389,9 @@
     }
 
     function walkControlsIn(el) {
-      if (!el || typeof el.querySelectorAll !== 'function' || closestSel(el, OPT_OUT)) return;
+      if (!el || typeof el.querySelectorAll !== 'function' || closestSel(el, optOutSel)) return;
       for (const ctl of el.querySelectorAll(controlsSel)) {
-        if (!closestSel(ctl, OPT_OUT)) walk(ctl);
+        if (!closestSel(ctl, optOutSel)) walk(ctl);
       }
     }
 
@@ -363,7 +400,7 @@
       if (root.nodeType === 3) return doText(root);
       if (root.nodeType !== 1 && root.nodeType !== 9) return;
       if (root.nodeType === 1) {
-        if (closestSel(root, OPT_OUT)) return;
+        if (closestSel(root, optOutSel)) return;
         const fenced = closestSel(root, HARD) || closestSel(root, contentSel);
         if (fenced && !(closestSel(root, controlsSel) && fenced.contains(closestSel(root, controlsSel)))) {
           if (matchesSel(root, FIELD)) doAttrs(root);
@@ -377,7 +414,7 @@
       const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
         acceptNode: (n) => {
           if (n.nodeType !== 1) return NodeFilter.FILTER_ACCEPT;
-          if (matchesSel(n, OPT_OUT)) return NodeFilter.FILTER_REJECT;
+          if (matchesSel(n, optOutSel)) return NodeFilter.FILTER_REJECT;
           if (matchesSel(n, HARD) || matchesSel(n, contentSel)) {
             if (matchesSel(n, FIELD)) doAttrs(n);
             contents.push(n);
@@ -554,7 +591,7 @@
       }
       if (typeof targetDoc.querySelectorAll === 'function') {
         for (const el of targetDoc.querySelectorAll('[aria-label],[placeholder],[title]')) {
-          if (closestSel(el, OPT_OUT) || zoneOf(el) !== 2) continue;
+          if (closestSel(el, optOutSel) || zoneOf(el) !== 2) continue;
           const recs = attrs.get(el) || {};
           for (const a of ['aria-label', 'placeholder', 'title']) {
             const v = el.getAttribute(a);
@@ -563,6 +600,27 @@
         }
       }
       return [...seen];
+    }
+
+    function setExtraOptOut(nextList, doc = activeDoc) {
+      const targetDoc = doc || activeDoc || (typeof document !== 'undefined' ? document : null);
+      const cleaned = sanitizeExtraSelectors(nextList, targetDoc);
+      const nextSel = joinSel(OPT_OUT, cleaned);
+      if (nextSel === optOutSel) return cleaned;
+      extraOptOut = cleaned;
+      optOutSel = nextSel;
+      if (bundle && targetDoc) {
+        // Revert any nodes now covered by opt-out selectors, and re-walk to restore any newly un-ignored nodes.
+        if (typeof targetDoc.querySelectorAll === 'function') {
+          for (const sel of cleaned) {
+            try {
+              for (const el of targetDoc.querySelectorAll(sel)) revertNode(el);
+            } catch {}
+          }
+        }
+        walk(targetDoc);
+      }
+      return cleaned;
     }
 
     function destroy() {
@@ -575,18 +633,20 @@
         return activeLang;
       },
       setLanguage,
+      setExtraOptOut,
       revertNode,
       translateNode,
       revert,
       destroy,
       missing,
-      stats: () => ({ lang: activeLang, texts: texts.size, attrs: attrs.size }),
+      stats: () => ({ lang: activeLang, texts: texts.size, attrs: attrs.size, extraOptOut: extraOptOut.length }),
       t: (text, el) => convert(String(text || '').trim(), 2, el || activeDoc?.body || null),
     };
   }
 
   return {
     LANG_OPTIONS,
+    OPT_OUT_PROTOCOL,
     normalizeLanguage,
     intlLocale,
     htmlLangAttr,

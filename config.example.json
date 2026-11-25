@@ -24,6 +24,8 @@
   "sidebarCompact": true,
   "placeholderStyle": "studio",
   "periodicSelector": true,
+  "orchestratorSwitch": true,
+  "i18nIgnoreSelectors": [],
   "autoRelaunchWithCdp": true,
   "exitOnHostClose": false
 }

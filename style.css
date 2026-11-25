@@ -1029,13 +1029,13 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card {
   overflow: visible !important;
 }
 
-/* Tier 1: Rounded input box */
+/* Tier 1: Rounded input box (+ on left, voice/mic + send/cancel on right inside pill) */
 html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card > div.relative.w-full {
   position: relative !important;
   background: var(--ag-cs-composer-bg) !important;
   border: 1px solid var(--ag-cs-border-2) !important;
   border-radius: 14px !important;
-  padding: 4px 38px 4px 8px !important;
+  padding: 4px 92px 4px 36px !important;
   box-sizing: border-box !important;
   box-shadow: var(--ag-cs-composer-shadow) !important;
   transition: border-color 150ms ease, box-shadow 150ms ease !important;
@@ -1068,7 +1068,7 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card:not(:has
   content: "";
   position: absolute;
   right: 12px;
-  bottom: 13px;
+  bottom: 16px;
   width: 15px;
   height: 15px;
   pointer-events: none;
@@ -1077,18 +1077,10 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card:not(:has
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='miter'%3E%3Cpath d='M8 3.75h5.25v7H3M6 7.75l-3 3 3 3'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
-/* Unwrap positioning on footer wrapper holding send/cancel so they anchor to .surface-composer-card */
-html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer > div .relative:not([data-testid="voice-live-pill"]) {
-  position: static !important;
-}
-
-/* Send button & Cancel button: pinned inside Tier 1 right edge with crisp ↵ glyph */
+/* Send button & Cancel button: stay inline inside the Tier-1 right action cluster */
 html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card [data-testid="send-button"],
 html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card [data-testid="input-cancel-button"] {
-  position: absolute !important;
-  bottom: 43px !important;
-  right: 8px !important;
-  z-index: 6 !important;
+  position: static !important;
   width: 26px !important;
   height: 26px !important;
   min-width: 26px !important;
@@ -1126,8 +1118,11 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card [data-te
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='miter'%3E%3Cpath d='M8 3.75h5.25v7H3M6 7.75l-3 3 3 3'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
-/* Tier 2: Footer controls directly on canvas below Tier 1 */
+/* Tier 2: Footer controls directly on canvas below Tier 1.
+   position: relative lets Tier-1 inline buttons (+ on left, mic/voice/send on right) anchor
+   precisely to the top edge of the footer (6px below Tier 1), immune to top/bottom HUD bars. */
 html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer {
+  position: relative !important;
   height: 28px !important;
   min-height: 28px !important;
   padding: 0 2px !important;
@@ -1149,15 +1144,16 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer > div:nth-
   display: none !important;
 }
 
-/* Reorder footer items to match Figure 1: [Perm] [+] [Env] [Mic/Voice] ... [Stats] [Model Effort] [CtxRing] */
+/* Claude layout footer order: [Stats (optional)] ... [✦] [Model Effort] [协作] [Perm/Turbo] [CtxRing] */
 html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-testid="permissions-selector-trigger"] {
-  order: 1 !important;
+  order: 9 !important;
   height: 26px !important;
   padding: 0 6px !important;
   border-radius: 6px !important;
   font-size: 12.5px !important;
   color: var(--secondary-foreground) !important;
   background: transparent !important;
+  flex-shrink: 0 !important;
 }
 html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-testid="permissions-selector-trigger"]:hover {
   background: var(--ag-cs-hover-wash) !important;
@@ -1167,9 +1163,12 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-test
   display: none !important;
 }
 
-/* "+" Add context button */
+/* "+" Add context button: pinned inside Tier 1 left edge (Claude layout) */
 html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer > div:nth-child(1) > button[aria-haspopup="menu"] {
-  order: 2 !important;
+  position: absolute !important;
+  left: 8px !important;
+  bottom: calc(100% + 18px) !important;
+  z-index: 6 !important;
   width: 24px !important;
   height: 24px !important;
   padding: 0 !important;
@@ -1190,12 +1189,19 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer > div:nth-
   order: 3 !important;
 }
 
-/* Mic & voice-live-pill: compact subtle ghost icons */
+/* Mic, Voice & Send/Cancel action cluster: pinned inside Tier 1 right edge (Claude layout) */
 html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer > div:nth-child(2) > div.flex {
-  order: 4 !important;
+  position: absolute !important;
+  right: 34px !important;
+  bottom: calc(100% + 18px) !important;
+  z-index: 6 !important;
   display: inline-flex !important;
   align-items: center !important;
   gap: 2px !important;
+}
+html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer > div:nth-child(2) > div.flex:has([data-testid="send-button"], [data-testid="input-cancel-button"]) {
+  right: 8px !important;
+  bottom: calc(100% + 17px) !important;
 }
 
 html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-testid="voice-live-pill"] {
@@ -1228,25 +1234,14 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-tool
   color: var(--muted-foreground) !important;
 }
 
-/* Left-align usage-monitor composer-mounted metrics right after [Perm][+][Env][Mic]
-   so right-side model/effort width changes never jitter the metrics horizontally.
-   Context ring mirrors to far right (.ag-cs-um-ctx-proxy at order: 8). */
-html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer #ag-usage-monitor-capsule {
-  order: 5 !important;
-  margin-left: 8px !important;
-  margin-right: 0 !important;
-  flex-shrink: 1 !important;
-  min-width: 0 !important;
-}
-
 /* Inline stats in conversation footer */
 .ag-cs-inline-stats {
-  order: 5;
+  order: 4;
   display: inline-flex;
   align-items: center;
   flex: 0 1 auto;
   min-width: 0;
-  margin-left: 8px;
+  margin-left: 2px;
   padding: 0 6px;
   height: 24px;
   border-radius: 6px;
@@ -1268,6 +1263,113 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer #ag-usage-
 .ag-cs-inline-stats strong {
   font-weight: 500;
   color: var(--secondary-foreground);
+}
+
+/* Orchestrator quick toggle chip — pinned between model selector and right context ring (0px jump!) */
+.ag-cs-orch-switch {
+  order: 8;
+  margin-left: 2px;
+  margin-right: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  height: 26px;
+  padding: 0 5.5px;
+  border-radius: 6px;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--secondary-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.ag-cs-orch-switch:hover {
+  background: var(--ag-cs-hover-wash) !important;
+  color: var(--foreground);
+}
+.ag-cs-orch-switch.is-active {
+  background: color-mix(in srgb, #d97757 12%, transparent) !important;
+  color: #d97757 !important;
+  font-weight: 600;
+}
+.ag-cs-orch-switch.is-active:hover {
+  background: color-mix(in srgb, #d97757 18%, transparent) !important;
+}
+.ag-cs-orch-switch.is-inline {
+  order: initial;
+  margin-left: 0;
+  margin-right: 2px;
+}
+.ag-cs-orch-ico {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  opacity: 0.78;
+}
+.ag-cs-orch-switch.is-active .ag-cs-orch-ico {
+  opacity: 1;
+}
+.ag-cs-orch-lbl {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  letter-spacing: 0.01em;
+}
+.ag-cs-orch-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.28;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+.ag-cs-orch-switch.is-active .ag-cs-orch-dot {
+  opacity: 1;
+  transform: scale(1.1);
+}
+.ag-cs-ps-orch-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid var(--ps-outline) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ps-text-var);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.ag-cs-ps-orch-toggle:hover {
+  background: var(--ps-hover) !important;
+  color: var(--ps-text);
+}
+.ag-cs-ps-orch-toggle.is-active {
+  border-color: var(--ps-accent) !important;
+  background: color-mix(in srgb, var(--ps-accent) 16%, transparent) !important;
+  color: var(--ps-text);
+  font-weight: 600;
+}
+.ag-cs-ps-orch-toggle .ag-cs-ps-orch-label {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+.ag-cs-ps-orch-toggle.is-active .ag-cs-orch-dot {
+  opacity: 1;
+  background: var(--ps-accent);
+  transform: scale(1.1);
 }
 
 /* Gemini Periodic Table trigger button immediately left of model selector */
@@ -1341,17 +1443,18 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-test
   display: none !important;
 }
 
-/* Effort level colors & interactive effort badge pill */
+/* Effort level colors & interactive effort badge pill.
+   Keep display: inline (NOT inline-flex) so Chromium's text-overflow: ellipsis on the parent
+   span truncates smoothly character-by-character instead of hiding the entire span atomically. */
 html[data-ag-cs-style] [data-ag-cs-effort] {
   opacity: 1 !important;
   font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 5px;
-  margin-left: 3px;
+  display: inline;
+  padding: 1px 4px;
+  margin-left: 2px;
   border-radius: 5px;
   cursor: pointer;
-  transition: background-color 120ms ease, transform 100ms ease, box-shadow 120ms ease;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 html[data-ag-cs-style] [data-ag-cs-effort]:hover {
   background: color-mix(in srgb, currentColor 16%, transparent);
@@ -1366,7 +1469,7 @@ html[data-ag-cs-style] [data-ag-cs-effort="extra"] { color: var(--ag-cs-effort-x
 
 /* Context meter mini ring on far right (conversation mode) */
 .ag-cs-context-ring {
-  order: 8;
+  order: 10;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1403,59 +1506,25 @@ html[data-ag-cs-style] [data-ag-cs-effort="extra"] { color: var(--ag-cs-effort-x
   box-shadow: 0 0 0 1px rgba(220, 60, 61, 0.35);
 }
 
-/* Live mirror of usage-monitor's context ring placed at far right edge when docked in composer footer */
-.ag-cs-um-ctx-proxy {
-  order: 8;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 6px;
-  border-radius: 6px;
-  border: 0;
-  background: transparent;
-  color: var(--secondary-foreground);
-  font-size: 12px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background-color 120ms ease, color 120ms ease;
+/* Native composer mode (composerRestyle = off): keep stats & ring inline on one clean row,
+   with native right cluster ([Perm][Mic][Send]) staying pinned to the far right. */
+html[data-ag-cs-composer="off"] .agy-composer-footer > div:nth-child(1) {
+  order: 0;
+  flex: 1 0 auto;
 }
-.ag-cs-um-ctx-proxy:hover {
-  background: var(--ag-cs-hover-wash);
-  color: var(--foreground);
+html[data-ag-cs-composer="off"] .agy-composer-footer > .ag-cs-inline-stats {
+  order: 1;
+  flex: 0 2 auto;
+  max-width: 220px;
+  margin-left: 4px;
 }
-.ag-cs-um-ctx-proxy.tone-good { color: #16a34a; }
-.ag-cs-um-ctx-proxy.tone-info { color: #2563eb; }
-.ag-cs-um-ctx-proxy.tone-warn { color: #d97706; }
-.ag-cs-um-ctx-proxy.tone-danger { color: #dc2626; }
-.dark .ag-cs-um-ctx-proxy.tone-good,
-html[data-theme="dark"] .ag-cs-um-ctx-proxy.tone-good { color: #4ade80; }
-.dark .ag-cs-um-ctx-proxy.tone-info,
-html[data-theme="dark"] .ag-cs-um-ctx-proxy.tone-info { color: #60a5fa; }
-.dark .ag-cs-um-ctx-proxy.tone-warn,
-html[data-theme="dark"] .ag-cs-um-ctx-proxy.tone-warn { color: #fbbf24; }
-.dark .ag-cs-um-ctx-proxy.tone-danger,
-html[data-theme="dark"] .ag-cs-um-ctx-proxy.tone-danger { color: #f87171; }
-.ag-cs-um-ctx-proxy svg {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  transform: rotate(-90deg);
+html[data-ag-cs-composer="off"] .agy-composer-footer > .ag-cs-hud-footer-chip,
+html[data-ag-cs-composer="off"] .agy-composer-footer > .ag-cs-context-ring {
+  order: 1;
+  margin-left: 2px;
 }
-.ag-cs-um-ctx-proxy .ag-cs-um-ring-track {
-  fill: none;
-  stroke: color-mix(in srgb, currentColor 22%, transparent);
-  stroke-width: 1.8;
-}
-.ag-cs-um-ctx-proxy .ag-cs-um-ring-fill {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 220ms ease, stroke 120ms ease;
+html[data-ag-cs-composer="off"] .agy-composer-footer > div:nth-child(2) {
+  order: 2;
 }
 
 /* Progressive narrow-footer collapse ladder via Antigravity's @container/input-footer */

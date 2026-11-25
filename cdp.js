@@ -104,6 +104,8 @@ const DEFAULT_CONFIG = {
   sidebarCompact: true,
   placeholderStyle: 'studio',
   periodicSelector: true,
+  orchestratorSwitch: true,
+  i18nIgnoreSelectors: [],
   autoRelaunchWithCdp: true,
   exitOnHostClose: false,
   pollIntervalMs: 2500,
@@ -136,13 +138,40 @@ const CONFIG_VALIDATORS = {
   sidebarCompact: 'boolean',
   placeholderStyle: ['studio', 'host'],
   periodicSelector: 'boolean',
+  orchestratorSwitch: 'boolean',
   autoRelaunchWithCdp: 'boolean',
   exitOnHostClose: 'boolean',
 };
 
+const I18N_COMPAT_FILE = path.join(__dirname, 'i18n-compat.json');
+const REMOTE_I18N_COMPAT_URL =
+  'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/i18n-compat.json';
+
+function sanitizeSelectorList(raw) {
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+    ? raw.split(/[\r\n,]+/)
+    : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    const s = typeof item === 'string' ? item.trim() : '';
+    if (!s || s.length > 160 || /[\r\n\0<>{};]/.test(s) || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= 50) break;
+  }
+  return out;
+}
+
 function validateConfigSetting(key, value) {
   if (key === 'pollIntervalMs') {
     return Number.isInteger(value) && value >= 250 && value <= 60000;
+  }
+  if (key === 'i18nIgnoreSelectors') {
+    if (!Array.isArray(value) || value.length > 50) return false;
+    return value.every((s) => typeof s === 'string' && s.trim().length > 0 && s.trim().length <= 160 && !/[\r\n\0<>{};]/.test(s));
   }
   if (!Object.prototype.hasOwnProperty.call(CONFIG_VALIDATORS, key)) return false;
   const rule = CONFIG_VALIDATORS[key];
@@ -182,7 +211,129 @@ function sanitizeConfig(raw) {
   } else if (out.palette !== 'obsidian' && out.palette !== 'claude' && out.palette !== 'host') {
     out.palette = 'obsidian';
   }
+  out.i18nIgnoreSelectors = sanitizeSelectorList(out.i18nIgnoreSelectors);
   return out;
+}
+
+function parseI18nCompatJson(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const protocol = sanitizeSelectorList(raw.protocol);
+  const plugins = [];
+  if (Array.isArray(raw.plugins)) {
+    for (const p of raw.plugins) {
+      if (!p || typeof p !== 'object') continue;
+      const id = String(p.id || '').trim();
+      const selectors = sanitizeSelectorList(p.selectors);
+      if (id && selectors.length) {
+        plugins.push({ id, name: String(p.name || id).trim(), selectors });
+      }
+      if (plugins.length >= 64) break;
+    }
+  }
+  return {
+    version: Number(raw.version) || 1,
+    updatedAt: String(raw.updatedAt || '').trim(),
+    protocol,
+    plugins,
+  };
+}
+
+function readI18nCompatData(pluginDataDir = PLUGIN_DATA_DIR) {
+  let bundled = { version: 1, updatedAt: '', protocol: [], plugins: [] };
+  try {
+    if (fs.existsSync(I18N_COMPAT_FILE)) {
+      const parsed = parseI18nCompatJson(JSON.parse(fs.readFileSync(I18N_COMPAT_FILE, 'utf8')));
+      if (parsed) bundled = parsed;
+    }
+  } catch {}
+
+  let remote = null;
+  const remoteFile = pluginDataDir ? path.join(pluginDataDir, 'i18n-compat-remote.json') : '';
+  try {
+    if (remoteFile && fs.existsSync(remoteFile)) {
+      remote = parseI18nCompatJson(JSON.parse(fs.readFileSync(remoteFile, 'utf8')));
+    }
+  } catch {}
+
+  const pluginMap = new Map();
+  for (const p of bundled.plugins) pluginMap.set(p.id, p);
+  if (remote) {
+    for (const p of remote.plugins) pluginMap.set(p.id, p);
+  }
+  const mergedProtocol = sanitizeSelectorList([
+    ...bundled.protocol,
+    ...(remote ? remote.protocol : []),
+  ]);
+  const mergedPlugins = [...pluginMap.values()];
+  const allSelectors = sanitizeSelectorList([
+    ...mergedProtocol,
+    ...mergedPlugins.flatMap((p) => p.selectors),
+  ]);
+
+  return {
+    version: remote ? Math.max(bundled.version, remote.version) : bundled.version,
+    updatedAt: (remote && remote.updatedAt) || bundled.updatedAt,
+    hasRemote: Boolean(remote),
+    protocol: mergedProtocol,
+    plugins: mergedPlugins,
+    selectors: allSelectors,
+  };
+}
+
+const BUILTIN_I18N_OPT_OUT_SET = new Set([
+  '[translate="no"]',
+  '.notranslate',
+  '[data-ag-no-i18n]',
+  '[data-no-i18n]',
+  '[data-agy-no-translate]',
+  '[data-ag-cs-effort]',
+  '#ag-usage-monitor-capsule',
+  '#ag-usage-monitor-portal',
+  '[id^="ag-usage-monitor-"]',
+]);
+
+function resolveExtraI18nOptOutSelectors(config = {}, pluginDataDir = PLUGIN_DATA_DIR) {
+  const compat = readI18nCompatData(pluginDataDir);
+  const userList = sanitizeSelectorList(config && config.i18nIgnoreSelectors);
+  return sanitizeSelectorList([...compat.selectors, ...userList]).filter(
+    (s) => !BUILTIN_I18N_OPT_OUT_SET.has(s)
+  );
+}
+
+async function syncRemoteI18nCompat({
+  url = REMOTE_I18N_COMPAT_URL,
+  pluginDataDir = PLUGIN_DATA_DIR,
+  fetchFn = typeof fetch === 'function' ? fetch : null,
+  timeoutMs = 8000,
+} = {}) {
+  if (!fetchFn) throw new Error('fetch is unavailable');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchFn(url, {
+      headers: { Accept: 'application/json', 'User-Agent': `agy-claude-studio/${PLUGIN_VERSION}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const parsed = parseI18nCompatJson(await res.json());
+    if (!parsed) throw new Error('Invalid i18n-compat.json payload');
+    if (pluginDataDir) {
+      const target = path.join(pluginDataDir, 'i18n-compat-remote.json');
+      atomicWriteFileSync(target, JSON.stringify(parsed, null, 2) + '\n');
+    }
+    return {
+      ok: true,
+      version: parsed.version,
+      updatedAt: parsed.updatedAt,
+      pluginCount: parsed.plugins.length,
+      selectorCount: sanitizeSelectorList([
+        ...parsed.protocol,
+        ...parsed.plugins.flatMap((p) => p.selectors),
+      ]).length,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function ensureMigratedPluginConfig({
@@ -544,7 +695,14 @@ function buildInjectExpression(customConfig) {
         }
         ${bundle}
         if (typeof globalThis.__agCsUiMain === 'function') {
-          const baseCfg = ${JSON.stringify({ ...config, binding: SETTING_BINDING, codeHash })};
+          const baseCfg = ${JSON.stringify(
+            (() => {
+              const extraOptOut = resolveExtraI18nOptOutSelectors(config);
+              const out = { ...config, binding: SETTING_BINDING, codeHash };
+              if (extraOptOut.length) out.i18nOptOutSelectors = extraOptOut;
+              return out;
+            })()
+          )};
           const ov = globalThis.__agCsOverrideConfig;
           const nextCfg =
             ov && typeof ov === 'object' && ov.codeHash === baseCfg.codeHash
@@ -586,7 +744,9 @@ function buildInjectExpression(customConfig) {
 function buildConfigScriptExpression(customConfig, expectedCodeHash) {
   const config = customConfig || readConfig();
   const expectedHash = expectedCodeHash || '';
+  const extraOptOut = resolveExtraI18nOptOutSelectors(config);
   const payload = { ...config, binding: SETTING_BINDING, codeHash: expectedHash };
+  if (extraOptOut.length) payload.i18nOptOutSelectors = extraOptOut;
   return `(() => {
     const nextCfg = ${JSON.stringify(payload)};
     globalThis.__agCsOverrideConfig = nextCfg;
@@ -1506,6 +1666,12 @@ module.exports = {
   CONFIG_FILE,
   DEFAULT_CONFIG,
   CONFIG_VALIDATORS,
+  I18N_COMPAT_FILE,
+  REMOTE_I18N_COMPAT_URL,
+  sanitizeSelectorList,
+  readI18nCompatData,
+  resolveExtraI18nOptOutSelectors,
+  syncRemoteI18nCompat,
   validateConfigSetting,
   writeFileAtomic,
   resolvePluginDataDir,

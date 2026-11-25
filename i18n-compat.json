@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-24",
+  "protocol": [
+    "[translate=\"no\"]",
+    ".notranslate",
+    "[data-ag-no-i18n]",
+    "[data-no-i18n]",
+    "[data-agy-no-translate]"
+  ],
+  "plugins": [
+    {
+      "id": "usage-monitor",
+      "name": "Antigravity Usage Monitor",
+      "selectors": [
+        "#ag-usage-monitor-capsule",
+        "#ag-usage-monitor-portal",
+        "[id^=\"ag-usage-monitor-\"]"
+      ]
+    }
+  ]
+}

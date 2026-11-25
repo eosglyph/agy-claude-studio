@@ -134,3 +134,77 @@ test('buildPeriodicSyncPrompt generates self-contained AI Studio sync prompts fo
     assert.equal(/[A-Za-z]:\\/.test(prompt), false, `${lang} contains no hardcoded drive path`);
   }
 });
+
+test('Orchestrator helpers map Gemini 4 elements and toggle cleanly between standard and Orchestrator modes', () => {
+  const options = [
+    { label: 'Gemini 4 Neon (Low)', modelId: 'gemini-4-neon-low', value: 1534 },
+    { label: 'Gemini 4 Neon (High)', modelId: 'gemini-4-neon-high', value: 1532 },
+    { label: 'Gemini 4 Carbon (High)', modelId: 'gemini-4-carbon-high', value: 1427 },
+    { label: 'Gemini 4 Argon (Medium)', modelId: 'gemini-4-argon-medium', value: 1418 },
+    { label: 'Gemini 4 Hydrogen (High)', modelId: 'gemini-4-hydrogen-high', value: 1525 },
+    { label: 'Orchestrator (Neon)', modelId: 'gemini-pro-orchestrator-neon', value: 1537 },
+    { label: 'Orchestrator (Carbon)', modelId: 'gemini-pro-orchestrator', value: 1667 },
+    { label: 'Orchestrator (Argon)', modelId: 'gemini-pro-orchestrator-argon', value: 1681 },
+  ];
+
+  // Toggle ON from Gemini 4 Neon (High) -> Orchestrator (Neon)
+  const onRes = periodicCore.computeOrchestratorToggleTarget(options, options[1], 'high');
+  assert.equal(onRes.available, true);
+  assert.equal(onRes.nextOrchestrator, true);
+  assert.equal(onRes.targetOption.modelId, 'gemini-pro-orchestrator-neon');
+
+  // Toggle OFF from Orchestrator (Neon) with preferredEffortId='high' -> Gemini 4 Neon (High)
+  const offRes = periodicCore.computeOrchestratorToggleTarget(options, options[5], 'high');
+  assert.equal(offRes.available, true);
+  assert.equal(offRes.nextOrchestrator, false);
+  assert.equal(offRes.targetOption.modelId, 'gemini-4-neon-high');
+
+  // Toggle ON from Hydrogen (no Orchestrator (Hydrogen)) -> falls back to default Orchestrator (Neon)
+  const fallbackRes = periodicCore.computeOrchestratorToggleTarget(options, options[4], 'high');
+  assert.equal(fallbackRes.nextOrchestrator, true);
+  assert.equal(fallbackRes.targetOption.modelId, 'gemini-pro-orchestrator-neon');
+
+  // groupModelOptions attaches orchestratorOption and marks tile selected when Orchestrator (Carbon) is active
+  const grouped = periodicCore.groupModelOptions(options, options[6]);
+  const cTile = grouped.tiles.find((t) => t.symbol === 'C');
+  const neTile = grouped.tiles.find((t) => t.symbol === 'Ne');
+  const hTile = grouped.tiles.find((t) => t.symbol === 'H');
+  assert.equal(cTile.orchestratorOption.modelId, 'gemini-pro-orchestrator');
+  assert.equal(cTile.isOrchestratorSelected, true);
+  assert.equal(cTile.isSelected, true);
+  assert.equal(neTile.orchestratorOption.modelId, 'gemini-pro-orchestrator-neon');
+  assert.equal(neTile.isOrchestratorSelected, false);
+  assert.equal(hTile.orchestratorOption, null);
+
+  // Orchestrator planner helpers preserve model + effort tier when toggling ON and carry effort changes back OFF
+  const planners = [
+    { label: 'Gemini 4 Neon (Low)', modelId: 'gemini-4-neon-low', value: 1534 },
+    { label: 'Gemini 4 Neon (Medium)', modelId: 'gemini-4-neon-medium', value: 1533 },
+    { label: 'Gemini 4 Neon (High)', modelId: 'gemini-4-neon-high', value: 1532 },
+    { label: 'Gemini 4 Neon (XHigh)', modelId: 'gemini-4-neon-xhigh', value: 1535 },
+    { label: 'Gemini 4 Carbon (High)', modelId: 'gemini-4-carbon-high', value: 1427 },
+  ];
+  const defaultPlanner = planners[3]; // Neon XHigh
+  assert.equal(
+    periodicCore.resolveOrchestratorPlanner(planners, { model: 0 }, defaultPlanner).value,
+    1535
+  );
+  assert.equal(
+    periodicCore.resolveOrchestratorPlanner(planners, { model: 1532 }, defaultPlanner).value,
+    1532
+  );
+  // Toggling ON from Neon High matches Neon High planner (1532) instead of jumping to XHigh (1535)
+  assert.equal(
+    periodicCore.findMatchingOrchestratorPlanner(planners, options[1], 'high').value,
+    1532
+  );
+  // Toggling OFF after dragging Orchestrator effort to Low returns Gemini 4 Neon (Low)
+  const offWithPlanner = periodicCore.computeOrchestratorToggleTarget(
+    options,
+    options[5],
+    'high',
+    null,
+    planners[0]
+  );
+  assert.equal(offWithPlanner.targetOption.value, 1534);
+});
