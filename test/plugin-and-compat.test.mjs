@@ -1641,3 +1641,767 @@ test('ui-runtime persists and restores Orchestrator planner effort when Antigrav
     for (const id of timers) clearTimeout(id);
   }
 });
+
+test('ui-runtime shows inline compact guide hint only when standalone compact pill is active and clears on typing, IME, or remove', async () => {
+  const timers = new Set();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      parentNode: null,
+      children,
+      childNodes: children,
+      isConnected: true,
+      _text: opts.text || '',
+      style: { _props: {}, setProperty(k, v) { this._props[k] = String(v); }, getPropertyValue(k) { return this._props[k] || ''; }, removeProperty(k) { delete this._props[k]; } },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get id() { return attrs.get('id') || ''; },
+      set id(v) { attrs.set('id', String(v)); },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      set innerHTML(v) { this._text = String(v ?? ''); children.length = 0; },
+      get childElementCount() { return children.length; },
+      get firstChild() { return children[0] || null; },
+      get lastElementChild() { return children[children.length - 1] || null; },
+      getAttribute(k) { return k === 'class' ? this.className : (attrs.has(k) ? attrs.get(k) : null); },
+      setAttribute(k, v) { if (k === 'class') this.className = v; else attrs.set(k, String(v)); },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      toggleAttribute(k, f) { if (f) attrs.set(k, ''); else attrs.delete(k); },
+      appendChild(child) {
+        if (child.parentElement) child.remove();
+        child.parentElement = this;
+        child.parentNode = this;
+        children.push(child);
+        return child;
+      },
+      insertBefore(child, ref) {
+        if (child.parentElement) child.remove();
+        child.parentElement = this;
+        child.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, child);
+        else children.push(child);
+        return child;
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+          this.parentNode = null;
+        }
+      },
+      addEventListener(ev, fn) { if (!listeners.has(ev)) listeners.set(ev, []); listeners.get(ev).push(fn); },
+      removeEventListener(ev, fn) {
+        const list = listeners.get(ev);
+        if (!list) return;
+        const idx = list.indexOf(fn);
+        if (idx >= 0) list.splice(idx, 1);
+      },
+      _listenerCount(ev) { return (listeners.get(ev) || []).length; },
+      dispatch(ev) { for (const fn of listeners.get(ev) || []) fn({ type: ev, target: this }); },
+      animate() { return { cancel() {} }; },
+      getBoundingClientRect() { return opts.rect || { left: 100, top: 600, right: 500, bottom: 636, width: 400, height: 36 }; },
+      matches(sel) { return matchesSelector(this, sel); },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches && cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (matchesSelector(c, sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const docEl = makeEl('html');
+  const head = docEl.appendChild(makeEl('head'));
+  const body = docEl.appendChild(makeEl('body', { className: 'theme-standalone' }));
+  const inputBox = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+  const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  const wrap = card.appendChild(makeEl('div', { className: 'relative w-full', rect: { left: 100, top: 600, right: 500, bottom: 636, width: 400, height: 36 } }));
+  const ed = wrap.appendChild(makeEl('div', { attrs: { contenteditable: 'true' }, rect: { left: 100, top: 600, right: 500, bottom: 636, width: 400, height: 36 } }));
+  const p = ed.appendChild(makeEl('p'));
+  const chip = p.appendChild(makeEl('span', {
+    attrs: { 'data-lexical-decorator': 'true' },
+    rect: { left: 112, top: 606, right: 194, bottom: 628, width: 82, height: 22 },
+  }));
+  const bdi = chip.appendChild(makeEl('bdi', {
+    rect: { left: 112, top: 606, right: 190, bottom: 628, width: 78, height: 22 },
+  }));
+  bdi.appendChild(makeEl('span', {
+    className: 'google-symbols',
+    attrs: { 'data-symbol-name': 'unfold_less', 'aria-hidden': 'true' },
+    text: 'unfold_less',
+  }));
+  bdi.appendChild(makeEl('span', { text: 'compact' }));
+
+  let lexNodes = [{ type: 'contextScopeItemMention', trigger: '/', value: '/compact' }];
+  const lexListeners = new Set();
+  let lexUnsubCalled = false;
+  ed.__lexicalEditor = {
+    getEditorState() {
+      return {
+        toJSON() {
+          return { root: { children: [{ type: 'paragraph', children: lexNodes }] } };
+        },
+      };
+    },
+    registerUpdateListener(fn) {
+      lexListeners.add(fn);
+      return () => {
+        lexUnsubCalled = true;
+        lexListeners.delete(fn);
+      };
+    },
+  };
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    readyState: 'complete',
+    visibilityState: 'visible',
+    title: 'Test - Antigravity',
+    createElement: (t) => makeEl(t),
+    getElementById: (id) => docEl.querySelector('#' + id),
+    querySelector: (s) => docEl.querySelector(s),
+    querySelectorAll: (s) => docEl.querySelectorAll(s),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+
+  const sandbox = {
+    document: doc,
+    navigator: { language: 'zh-CN' },
+    location: { protocol: 'https:', href: 'https://127.0.0.1:1161/', pathname: '/' },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ paddingRight: '8px', getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, language: 'zh-CN' }), sandbox);
+
+    const hint = wrap.querySelector('.ag-cs-compact-hint');
+    assert.ok(hint, 'Compact guide hint must render inside wrap without modifying contenteditable DOM');
+    assert.equal(ed.querySelector('.ag-cs-compact-hint'), null, 'Hint must stay outside Lexical contenteditable DOM');
+    assert.ok(hint.textContent.includes('可选：输入压缩要求'));
+    assert.equal(hint.style.left, '98px');
+
+    // Composition hides hint immediately, compositionend restores it when still empty
+    ed.dispatch('compositionstart');
+    assert.equal(wrap.querySelector('.ag-cs-compact-hint'), null, 'IME compositionstart must hide hint');
+    ed.dispatch('compositionend');
+    assert.ok(wrap.querySelector('.ag-cs-compact-hint'), 'IME compositionend restores hint when empty');
+
+    // Typing instruction text hides hint (via Lexical update listener cleanly)
+    lexNodes = [
+      { type: 'contextScopeItemMention', trigger: '/', value: '/compact' },
+      { type: 'text', text: '保留未完成规划' },
+    ];
+    for (const fn of lexListeners) fn();
+    await new Promise((r) => setTimeout(r, 25));
+    assert.equal(wrap.querySelector('.ag-cs-compact-hint'), null, 'Hint must disappear once user types compaction prompt');
+
+    // Clearing typed text brings hint back via Lexical listener, and REMOVE_EXPRESSION cleans up both hint & listener
+    lexNodes = [{ type: 'contextScopeItemMention', trigger: '/', value: '/compact' }];
+    for (const fn of lexListeners) fn();
+    await new Promise((r) => setTimeout(r, 25));
+    assert.ok(wrap.querySelector('.ag-cs-compact-hint'), 'Hint reappears when custom prompt is cleared');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(wrap.querySelector('.ag-cs-compact-hint'), null, 'REMOVE_EXPRESSION cleans up compact guide hint');
+    assert.equal(lexUnsubCalled, true, 'REMOVE_EXPRESSION unsubscribes Lexical compact listener');
+    assert.equal(ed._agCsCompactHintBound, undefined, 'REMOVE_EXPRESSION resets compact hint bound flag for clean reinject');
+    assert.equal(ed._listenerCount('input'), 0, 'REMOVE_EXPRESSION detaches DOM compact hint listeners');
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('ui-runtime clicks inner mention row (not outer option) when filling /compact and mounts guide hint', async () => {
+  const timers = new Set();
+  let mountMenu = null;
+  let outerOptionClicks = 0;
+  let innerRowClicks = 0;
+
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      parentNode: null,
+      children,
+      childNodes: children,
+      isConnected: true,
+      _text: opts.text || '',
+      style: {
+        _props: {},
+        setProperty(k, v) { this._props[k] = String(v); },
+        getPropertyValue(k) { return this._props[k] || ''; },
+        removeProperty(k) { delete this._props[k]; },
+      },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get id() { return attrs.get('id') || ''; },
+      set id(v) { attrs.set('id', String(v)); },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      set innerHTML(v) {
+        this._text = String(v ?? '');
+        children.length = 0;
+        if (this._text.includes('data-hud-compact-btn="1"')) {
+          const btn = makeEl('button', {
+            className: 'ag-cs-hud-compact-btn',
+            attrs: { 'data-hud-compact-btn': '1', type: 'button' },
+            text: '/compact',
+          });
+          this.appendChild(btn);
+        }
+      },
+      get childElementCount() { return children.length; },
+      get firstChild() { return children[0] || null; },
+      get lastElementChild() { return children[children.length - 1] || null; },
+      getAttribute(k) { return k === 'class' ? this.className : (attrs.has(k) ? attrs.get(k) : null); },
+      setAttribute(k, v) { if (k === 'class') this.className = v; else attrs.set(k, String(v)); },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      toggleAttribute(k, f) { if (f) attrs.set(k, ''); else attrs.delete(k); },
+      appendChild(child) {
+        if (child.parentElement) child.remove();
+        child.parentElement = this;
+        child.parentNode = this;
+        children.push(child);
+        return child;
+      },
+      insertBefore(child, ref) {
+        if (child.parentElement) child.remove();
+        child.parentElement = this;
+        child.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, child);
+        else children.push(child);
+        return child;
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+          this.parentNode = null;
+        }
+        this.isConnected = false;
+      },
+      focus() {},
+      addEventListener(ev, fn) { if (!listeners.has(ev)) listeners.set(ev, []); listeners.get(ev).push(fn); },
+      removeEventListener(ev, fn) {
+        const list = listeners.get(ev);
+        if (!list) return;
+        const idx = list.indexOf(fn);
+        if (idx >= 0) list.splice(idx, 1);
+      },
+      dispatch(ev, extra = {}) {
+        const eventObj = { type: ev, target: this, stopPropagation() {}, preventDefault() {}, ...extra };
+        for (const fn of listeners.get(ev) || []) fn(eventObj);
+      },
+      dispatchEvent(evObj) {
+        const t = evObj?.type || 'event';
+        for (const fn of listeners.get(t) || []) fn(evObj);
+        return true;
+      },
+      click() { this.dispatch('click'); },
+      animate() { return { cancel() {} }; },
+      getBoundingClientRect() { return opts.rect || { left: 100, top: 600, right: 500, bottom: 636, width: 400, height: 36 }; },
+      matches(sel) { return matchesSelector(this, sel); },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches && cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (matchesSelector(c, sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const docEl = makeEl('html');
+  const head = docEl.appendChild(makeEl('head'));
+  const body = docEl.appendChild(makeEl('body', { className: 'theme-standalone' }));
+  const inputBox = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+  const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  const wrap = card.appendChild(makeEl('div', { className: 'relative w-full', rect: { left: 100, top: 600, right: 500, bottom: 636, width: 400, height: 36 } }));
+  const ed = wrap.appendChild(makeEl('div', { attrs: { contenteditable: 'true' }, rect: { left: 100, top: 600, right: 500, bottom: 636, width: 400, height: 36 } }));
+  const footer = card.appendChild(makeEl('div', { className: 'agy-composer-footer' }));
+
+  let lexNodes = [];
+  const lexListeners = new Set();
+  ed.__lexicalEditor = {
+    getEditorState() {
+      return {
+        toJSON() {
+          return { root: { children: lexNodes.length ? [{ type: 'paragraph', children: lexNodes }] : [] } };
+        },
+      };
+    },
+    registerUpdateListener(fn) {
+      lexListeners.add(fn);
+      return () => lexListeners.delete(fn);
+    },
+  };
+
+  let menuPortal = null;
+  mountMenu = () => {
+    if (menuPortal) menuPortal.remove();
+    menuPortal = body.appendChild(makeEl('div', { attrs: { role: 'listbox', 'data-mention-menu': '' } }));
+    const listWrap = menuPortal.appendChild(makeEl('div'));
+    // Mimic Antigravity's exact tHb + qHb nested structure: outer [role="option"] with sibling section header
+    // (total height > 80 to also test height filtering) and inner cursor-pointer row holding React's onClickCapture.
+    const option = listWrap.appendChild(makeEl('div', {
+      attrs: { id: 'typeahead-item-0', role: 'option', 'aria-selected': 'true' },
+      rect: { left: 100, top: 500, right: 480, bottom: 590, width: 380, height: 90 },
+    }));
+    option.appendChild(makeEl('div', { attrs: { 'data-testid': 'menu-section-header' }, text: 'Commands' }));
+    option.addEventListener('click', () => {
+      outerOptionClicks += 1;
+    });
+
+    const row = option.appendChild(makeEl('div', {
+      className: 'flex w-full px-2 py-1 items-center gap-2 cursor-pointer',
+      rect: { left: 100, top: 530, right: 480, bottom: 562, width: 380, height: 32 },
+    }));
+    const iconOuter = row.appendChild(makeEl('span'));
+    iconOuter.appendChild(makeEl('span', {
+      className: 'google-symbols',
+      attrs: { 'data-symbol-name': 'unfold_less', 'aria-hidden': 'true' },
+      text: 'unfold_less',
+    }));
+    row.appendChild(makeEl('span', { attrs: { 'data-testid': 'menu-option-label' }, text: 'compact' }));
+    row.appendChild(makeEl('span', { attrs: { 'data-testid': 'menu-option-description' }, text: 'Compact the conversation now' }));
+
+    row.addEventListener('click', () => {
+      innerRowClicks += 1;
+      // Replace plain '/compact' text in editor with Lexical contextScopeItemMention chip (BDI + google-symbols)
+      ed.textContent = '';
+      const p = ed.appendChild(makeEl('p'));
+      const chip = p.appendChild(makeEl('span', {
+        attrs: { 'data-lexical-decorator': 'true' },
+        rect: { left: 112, top: 606, right: 194, bottom: 628, width: 82, height: 22 },
+      }));
+      const bdi = chip.appendChild(makeEl('bdi', {
+        rect: { left: 112, top: 606, right: 190, bottom: 628, width: 78, height: 22 },
+      }));
+      bdi.appendChild(makeEl('span', {
+        className: 'google-symbols',
+        attrs: { 'data-symbol-name': 'unfold_less', 'aria-hidden': 'true' },
+        text: 'unfold_less',
+      }));
+      bdi.appendChild(makeEl('span', { text: 'compact' }));
+      lexNodes = [{ type: 'contextScopeItemMention', trigger: '/', value: '/compact' }];
+      if (menuPortal) {
+        menuPortal.remove();
+        menuPortal = null;
+      }
+      for (const fn of lexListeners) fn();
+    });
+  };
+
+  class MockMouseEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      Object.assign(this, init);
+    }
+  }
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    readyState: 'complete',
+    visibilityState: 'visible',
+    title: 'Test - Antigravity',
+    createElement: (t) => makeEl(t),
+    getElementById: (id) => docEl.querySelector('#' + id),
+    querySelector: (s) => docEl.querySelector(s),
+    querySelectorAll: (s) => docEl.querySelectorAll(s),
+    execCommand: (cmd, _ui, val) => {
+      if (cmd === 'selectAll') return true;
+      if (cmd === 'insertText' && val === '/compact') {
+        ed.textContent = '/compact';
+        lexNodes = [{ type: 'text', text: '/compact' }];
+        // Delay menu mount slightly like Antigravity's async typeahead (~90ms)
+        const id = setTimeout(() => mountMenu(), 85);
+        timers.add(id);
+        return true;
+      }
+      return false;
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+
+  const sandbox = {
+    document: doc,
+    navigator: { language: 'zh-CN' },
+    location: { protocol: 'https:', href: 'https://127.0.0.1:1161/', pathname: '/' },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ paddingRight: '8px', getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MouseEvent: MockMouseEvent,
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, language: 'zh-CN', usageStatsEnabled: true, hudTopBar: true }),
+      sandbox
+    );
+
+    const hudCompactBtn = card.querySelector('[data-hud-compact-btn]');
+    assert.ok(hudCompactBtn, 'Top HUD bar /compact button must be rendered');
+    hudCompactBtn.click();
+
+    await new Promise((r) => setTimeout(r, 260));
+
+    assert.equal(innerRowClicks, 1, 'tryAutoSelectCompactMenu must click inner cursor-pointer row rather than outer [role="option"]');
+    assert.equal(outerOptionClicks, 0, 'Outer [role="option"] mock had no bubble trigger; inner row must handle conversion');
+    assert.ok(wrap.querySelector('.ag-cs-compact-hint'), 'Inline gray compact guide hint must appear right after chip conversion');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(wrap.querySelector('.ag-cs-compact-hint'), null, 'REMOVE_EXPRESSION cleans up compact guide hint');
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('compactPreset config validation, sanitization, and auto-fill after /compact chip conversion', async () => {
+  assert.equal(cdp.DEFAULT_CONFIG.compactPreset, 'empty');
+  assert.equal(cdp.DEFAULT_CONFIG.compactCustomText, '');
+  assert.equal(cdp.validateConfigSetting('compactPreset', 'clean'), true);
+  assert.equal(cdp.validateConfigSetting('compactPreset', 'dev'), true);
+  assert.equal(cdp.validateConfigSetting('compactPreset', 'custom'), true);
+  assert.equal(cdp.validateConfigSetting('compactPreset', 'invalid'), false);
+  assert.equal(cdp.validateConfigSetting('compactCustomText', '保留待办'), true);
+  assert.equal(cdp.validateConfigSetting('compactCustomText', 'a'.repeat(601)), false);
+  assert.equal(cdp.validateConfigSetting('compactCustomText', 'bad\0text'), false);
+
+  const sanitized = cdp.sanitizeConfig({ compactPreset: 'bogus', compactCustomText: 'hello\0world' });
+  assert.equal(sanitized.compactPreset, 'empty');
+  assert.equal(sanitized.compactCustomText, 'helloworld');
+
+  const timers = new Set();
+  const insertedTexts = [];
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      parentNode: null,
+      children,
+      childNodes: children,
+      isConnected: true,
+      _text: opts.text || '',
+      style: { _props: {}, setProperty(k, v) { this._props[k] = String(v); }, getPropertyValue(k) { return this._props[k] || ''; }, removeProperty(k) { delete this._props[k]; } },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get id() { return attrs.get('id') || ''; },
+      set id(v) { attrs.set('id', String(v)); },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      set innerHTML(v) {
+        this._text = String(v ?? '');
+        children.length = 0;
+        if (this._text.includes('data-hud-compact-btn="1"')) {
+          this.appendChild(makeEl('button', { className: 'ag-cs-hud-compact-btn', attrs: { 'data-hud-compact-btn': '1', type: 'button' }, text: '/compact' }));
+        }
+      },
+      get childElementCount() { return children.length; },
+      get firstChild() { return children[0] || null; },
+      get lastElementChild() { return children[children.length - 1] || null; },
+      getAttribute(k) { return k === 'class' ? this.className : (attrs.has(k) ? attrs.get(k) : null); },
+      setAttribute(k, v) { if (k === 'class') this.className = v; else attrs.set(k, String(v)); },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      toggleAttribute(k, f) { if (f) attrs.set(k, ''); else attrs.delete(k); },
+      appendChild(child) {
+        if (child.parentElement) child.remove();
+        child.parentElement = this;
+        child.parentNode = this;
+        children.push(child);
+        return child;
+      },
+      insertBefore(child, ref) {
+        if (child.parentElement) child.remove();
+        child.parentElement = this;
+        child.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, child);
+        else children.push(child);
+        return child;
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+          this.parentNode = null;
+        }
+        this.isConnected = false;
+      },
+      focus() {},
+      addEventListener(ev, fn) { if (!listeners.has(ev)) listeners.set(ev, []); listeners.get(ev).push(fn); },
+      removeEventListener() {},
+      dispatch(ev, extra = {}) {
+        const eventObj = { type: ev, target: this, stopPropagation() {}, preventDefault() {}, ...extra };
+        for (const fn of listeners.get(ev) || []) fn(eventObj);
+      },
+      dispatchEvent(evObj) {
+        const t = evObj?.type || 'event';
+        for (const fn of listeners.get(t) || []) fn(evObj);
+        return true;
+      },
+      click() { this.dispatch('click'); },
+      animate() { return { cancel() {} }; },
+      getBoundingClientRect() { return opts.rect || { left: 100, top: 600, right: 500, bottom: 636, width: 400, height: 36 }; },
+      matches(sel) { return matchesSelector(this, sel); },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches && cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (matchesSelector(c, sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const docEl = makeEl('html');
+  const head = docEl.appendChild(makeEl('head'));
+  const body = docEl.appendChild(makeEl('body', { className: 'theme-standalone' }));
+  const inputBox = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+  const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  const wrap = card.appendChild(makeEl('div', { className: 'relative w-full' }));
+  const ed = wrap.appendChild(makeEl('div', { attrs: { contenteditable: 'true' } }));
+  card.appendChild(makeEl('div', { className: 'agy-composer-footer' }));
+
+  let lexNodes = [];
+  const lexListeners = new Set();
+  ed.__lexicalEditor = {
+    getEditorState() {
+      return { toJSON() { return { root: { children: lexNodes.length ? [{ type: 'paragraph', children: lexNodes }] : [] } }; } };
+    },
+    registerUpdateListener(fn) {
+      lexListeners.add(fn);
+      return () => lexListeners.delete(fn);
+    },
+  };
+
+  let menuPortal = null;
+  const mountMenu = () => {
+    if (menuPortal) menuPortal.remove();
+    menuPortal = body.appendChild(makeEl('div', { attrs: { role: 'listbox', 'data-mention-menu': '' } }));
+    const option = menuPortal.appendChild(makeEl('div', { attrs: { role: 'option', 'aria-selected': 'true' } }));
+    const row = option.appendChild(makeEl('div', { className: 'cursor-pointer', rect: { left: 100, top: 530, right: 480, bottom: 562, width: 380, height: 32 } }));
+    row.appendChild(makeEl('span', { attrs: { 'data-testid': 'menu-option-label' }, text: 'compact' }));
+    row.addEventListener('click', () => {
+      ed.textContent = '';
+      const p = ed.appendChild(makeEl('p'));
+      const chip = p.appendChild(makeEl('span', { attrs: { 'data-lexical-decorator': 'true' } }));
+      chip.appendChild(makeEl('bdi', { text: 'compact' }));
+      p.appendChild(makeEl('span', { text: ' ' }));
+      lexNodes = [
+        { type: 'contextScopeItemMention', trigger: '/', value: '/compact' },
+        { type: 'text', text: ' ' },
+      ];
+      if (menuPortal) { menuPortal.remove(); menuPortal = null; }
+      for (const fn of lexListeners) fn();
+    });
+  };
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    readyState: 'complete',
+    visibilityState: 'visible',
+    title: 'Test - Antigravity',
+    createElement: (t) => makeEl(t),
+    getElementById: (id) => docEl.querySelector('#' + id),
+    querySelector: (s) => docEl.querySelector(s),
+    querySelectorAll: (s) => docEl.querySelectorAll(s),
+    execCommand: (cmd, _ui, val) => {
+      if (cmd === 'selectAll') return true;
+      if (cmd === 'insertText') {
+        insertedTexts.push(val);
+        if (val === '/compact') {
+          ed.textContent = '/compact';
+          lexNodes = [{ type: 'text', text: '/compact' }];
+          const id = setTimeout(() => mountMenu(), 30);
+          timers.add(id);
+          return true;
+        }
+        // Appending preset text after chip
+        lexNodes = [
+          { type: 'contextScopeItemMention', trigger: '/', value: '/compact' },
+          { type: 'text', text: ` ${val}` },
+        ];
+        const p = ed.querySelector('p') || ed;
+        p.appendChild(makeEl('span', { text: val }));
+        for (const fn of lexListeners) fn();
+        return true;
+      }
+      return false;
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+
+  const sandbox = {
+    document: doc,
+    navigator: { language: 'zh-CN' },
+    location: { protocol: 'https:', href: 'https://127.0.0.1:1161/', pathname: '/' },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ paddingRight: '8px', getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(
+      cdp.buildInjectExpression({
+        ...cdp.DEFAULT_CONFIG,
+        language: 'zh-CN',
+        usageStatsEnabled: true,
+        hudTopBar: true,
+        compactPreset: 'clean',
+      }),
+      sandbox
+    );
+
+    const hudCompactBtn = card.querySelector('[data-hud-compact-btn]');
+    assert.ok(hudCompactBtn, 'Top HUD bar /compact button must be rendered');
+    hudCompactBtn.click();
+
+    await new Promise((r) => setTimeout(r, 240));
+
+    assert.equal(insertedTexts[0], '/compact');
+    assert.ok(
+      insertedTexts[1] && insertedTexts[1].includes('丢弃已完成任务的琐碎过程与历史噪音') && !insertedTexts[1].startsWith(' '),
+      'Must insert clean preset text right after trailing space without double-spacing'
+    );
+    assert.equal(wrap.querySelector('.ag-cs-compact-hint'), null, 'Guide hint must stay hidden once preset text is filled');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});

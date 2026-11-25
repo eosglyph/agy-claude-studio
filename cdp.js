@@ -103,6 +103,8 @@ const DEFAULT_CONFIG = {
   sidebarRestyle: true,
   sidebarCompact: true,
   placeholderStyle: 'studio',
+  compactPreset: 'empty',
+  compactCustomText: '',
   periodicSelector: true,
   orchestratorSwitch: true,
   i18nIgnoreSelectors: [],
@@ -137,6 +139,7 @@ const CONFIG_VALIDATORS = {
   sidebarRestyle: 'boolean',
   sidebarCompact: 'boolean',
   placeholderStyle: ['studio', 'host'],
+  compactPreset: ['empty', 'clean', 'dev', 'custom'],
   periodicSelector: 'boolean',
   orchestratorSwitch: 'boolean',
   autoRelaunchWithCdp: 'boolean',
@@ -172,6 +175,9 @@ function validateConfigSetting(key, value) {
   if (key === 'i18nIgnoreSelectors') {
     if (!Array.isArray(value) || value.length > 50) return false;
     return value.every((s) => typeof s === 'string' && s.trim().length > 0 && s.trim().length <= 160 && !/[\r\n\0<>{};]/.test(s));
+  }
+  if (key === 'compactCustomText') {
+    return typeof value === 'string' && value.length <= 600 && !/\0/.test(value);
   }
   if (!Object.prototype.hasOwnProperty.call(CONFIG_VALIDATORS, key)) return false;
   const rule = CONFIG_VALIDATORS[key];
@@ -212,6 +218,11 @@ function sanitizeConfig(raw) {
     out.palette = 'obsidian';
   }
   out.i18nIgnoreSelectors = sanitizeSelectorList(out.i18nIgnoreSelectors);
+  if (!CONFIG_VALIDATORS.compactPreset.includes(out.compactPreset)) {
+    out.compactPreset = 'empty';
+  }
+  out.compactCustomText =
+    typeof out.compactCustomText === 'string' ? out.compactCustomText.replace(/\0/g, '').slice(0, 600) : '';
   return out;
 }
 
@@ -832,7 +843,7 @@ const REMOVE_EXPRESSION = `(() => {
     if (root.getAttribute('data-ag-cjk') === '1') root.removeAttribute('data-ag-cjk');
   }
   const nodes = document.querySelectorAll(
-    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
+    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
   );
   nodes.forEach((n) => n.remove());
   try {

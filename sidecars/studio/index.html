@@ -485,6 +485,60 @@
       line-height: 1.4;
       color: var(--muted-fg);
     }
+    .compact-preset-box {
+      padding: 0 0 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .compact-preset-input {
+      width: 100%;
+      min-height: 62px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--fg);
+      background: var(--control-bg);
+      border: 1px solid var(--border-col);
+      border-radius: 8px;
+      padding: 7px 9px;
+      outline: none;
+      transition: border-color 140ms ease;
+    }
+    .compact-preset-input:focus {
+      border-color: var(--brand-accent);
+    }
+    .compact-preset-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .compact-preset-hint {
+      flex: 1;
+      min-width: 0;
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      line-height: 1.35;
+    }
+    button.compact-preset-save {
+      width: auto;
+      min-height: 26px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      padding: 4px 11px;
+      font-size: 11px;
+      border-radius: 7px;
+      border: 1px solid var(--border-col);
+      background: var(--control-bg);
+      color: var(--fg);
+      cursor: pointer;
+    }
+    button.compact-preset-save:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
 
     /* Sleek Select */
     select {
@@ -1219,6 +1273,16 @@
           placeholderStyle: ['输入框引导语', '选择 Claude 风格引导语或保留原生提示', [['studio', 'Claude 风格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素周期表', '在模型名旁添加四角星按钮，点击打开元素周期表选模型'],
           orchestratorSwitch: ['Orchestrator 快捷开关', '在底栏模型名旁添加独立开关，一键在标准模型与 Orchestrator 编排模式间切换'],
+          compactPreset: [
+            '/compact 预设文案',
+            '点击 /compact 快捷按钮后自动填入的压缩要求（不会自动发送，可先改再回车）',
+            [
+              ['empty', '空白（手动输入）'],
+              ['clean', '精简降噪（推荐）'],
+              ['dev', '开发实战'],
+              ['custom', '自定义文案'],
+            ],
+          ],
           effortSliderStyle: ['思考强度滑块', '点击模型思考等级时弹出的滑块样式', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude 推理色阶', 'Claude 模式下按思考等级显示蓝紫渐变色'],
           smoothCaret: ['丝滑打字光标', '打字时让光标平滑跟随滑动，兼容多行与中文输入法'],
@@ -1349,6 +1413,16 @@
           placeholderStyle: ['輸入框引導語', '選擇 Claude 風格引導語或保留原生提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '在模型名旁加入四角星按鈕，點擊開啟元素週期表選模型'],
           orchestratorSwitch: ['Orchestrator 快捷開關', '在底列模型名旁加入獨立開關，一鍵切換標準模型與 Orchestrator 編排模式'],
+          compactPreset: [
+            '/compact 預設文案',
+            '點擊 /compact 快捷按鈕後自動填入的壓縮要求（不會自動送出，可先微調再按 Enter）',
+            [
+              ['empty', '空白（手動輸入）'],
+              ['clean', '精簡降噪（推薦）'],
+              ['dev', '開發實戰'],
+              ['custom', '自訂文案'],
+            ],
+          ],
           effortSliderStyle: ['思考強度滑桿', '點擊模型思考等級時彈出的滑桿樣式', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude 推理色階', 'Claude 模式下依思考等級顯示藍紫漸層色'],
           smoothCaret: ['絲滑打字游標', '打字時讓游標平滑跟隨滑動，相容多行與中文輸入法'],
@@ -1479,6 +1553,16 @@
           placeholderStyle: ['輸入框引導語', '揀 Claude 風格引導語定保留原版提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '喺模型名隔離加粒四角星，撳開元素週期表揀模型'],
           orchestratorSwitch: ['Orchestrator 快捷開關', '喺底欄模型名隔離加粒獨立開關，一鍵切換標準模型同 Orchestrator 編排模式'],
+          compactPreset: [
+            '/compact 預設文案',
+            '撳 /compact 快捷掣之後自動填入嘅壓縮要求（唔會自動送出，可以改完再按 Enter）',
+            [
+              ['empty', '空白（手動輸入）'],
+              ['clean', '精簡降噪（推薦）'],
+              ['dev', '開發實戰'],
+              ['custom', '自訂文案'],
+            ],
+          ],
           effortSliderStyle: ['思考強度滑桿', '撳模型思考等級時彈出邊款滑桿樣式', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude 推理色階', 'Claude 模式下按思考等級顯示藍紫漸變色'],
           smoothCaret: ['順滑打字光標', '打字時光標順滑跟住滑動，支援多行同中文輸入法'],
@@ -1609,6 +1693,16 @@
           placeholderStyle: ['Input Prompt Text', 'Show Claude-style prompt copy or keep the native prompt', [['studio', 'Claude Style'], ['host', 'Native']]],
           periodicSelector: ['Gemini 4 Periodic Table', 'Add a sparkle button beside model name to pick from the Periodic Table'],
           orchestratorSwitch: ['Orchestrator Quick Switch', 'Add a compact switch beside the model selector to toggle Orchestrator mode in one click'],
+          compactPreset: [
+            '/compact Preset Prompt',
+            'Optional compaction directive pre-filled after clicking /compact (never auto-sends)',
+            [
+              ['empty', 'Empty (Manual)'],
+              ['clean', 'Clean Focus (Recommended)'],
+              ['dev', 'Dev Deep-Keep'],
+              ['custom', 'Custom Prompt'],
+            ],
+          ],
           effortSliderStyle: ['Thinking Effort Slider', 'Slider style shown when clicking the model effort level', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude Effort Gradient', 'Color Claude slider & dot matrix with blue-violet gradient by level'],
           smoothCaret: ['Smooth Typing Caret', 'Glide the typing caret smoothly (multiline & IME friendly)'],
@@ -1739,6 +1833,16 @@
           placeholderStyle: ['入力欄ガイド文', 'Claude 風のガイド文または標準の案内文を選択', [['studio', 'Claude 風'], ['host', '標準']]],
           periodicSelector: ['Gemini 4 元素周期表', 'モデル名横に星ボタンを追加し、周期表からモデルを選択'],
           orchestratorSwitch: ['Orchestrator クイック切替', 'モデル名横にスイッチを追加し、通常モデルと Orchestrator をワンクリック切替'],
+          compactPreset: [
+            '/compact プリセット指示',
+            '/compact ボタン押下後に自動入力する圧縮指示（自動送信はせず、確認後に Enter）',
+            [
+              ['empty', '空（手動入力）'],
+              ['clean', 'ノイズ除去（おすすめ）'],
+              ['dev', '開発実践'],
+              ['custom', 'カスタム'],
+            ],
+          ],
           effortSliderStyle: ['推論強度スライダー', '推論レベルをクリックした際に開くスライダー形式', [['claude', 'Claude Code'], ['chatgpt', 'ChatGPT Codex']]],
           effortAccent: ['Claude 推論カラー', 'Claude モードで推論レベルに応じた青紫グラデを表示'],
           smoothCaret: ['スムーズカーソル', '入力時にカーソルを滑らかに追従（複数行・日本語入力対応）'],
@@ -1769,6 +1873,44 @@
       'hudCompact',
     ]);
 
+    const COMPACT_PRESET_COPY = {
+      'zh-CN': {
+        clean: '丢弃已完成任务的琐碎过程与历史噪音，保留核心业务逻辑框架、已确定的关键约束，以及当前进行中任务的全部细节和待办计划。',
+        dev: '压缩已完成任务的历史过程与冗余输出；完整保留当前进行中任务的实现细节、未完成待办、核心业务架构，以及关键文件路径与已踩过的坑。',
+        placeholder: '输入你希望点击 /compact 后自动填入的压缩要求…',
+        hint: '直接修改上方文字并点保存，会自动切为「自定义文案」',
+        saveBtn: '保存文案',
+      },
+      'zh-TW': {
+        clean: '略過已完成任務的瑣碎過程與歷史雜訊，保留核心業務邏輯框架、已確定的關鍵約束，以及目前進行中任務的全部細節與待辦計畫。',
+        dev: '壓縮已完成任務的歷史過程與冗餘輸出；完整保留目前進行中任務的實作細節、未完成待辦、核心業務架構，以及關鍵檔案路徑與踩過的坑。',
+        placeholder: '輸入點擊 /compact 後希望自動填入的壓縮要求…',
+        hint: '直接修改上方文字並點儲存，會自動切為「自訂文案」',
+        saveBtn: '儲存文案',
+      },
+      yue: {
+        clean: '丟走已完成任務嘅瑣碎過程同歷史雜訊，保留核心業務邏輯框架、已確定嘅關鍵約束，同埋而家做緊嘅任務全部細節同待辦計畫。',
+        dev: '壓縮已完成任務嘅歷史過程同冗餘輸出；完整保留而家做緊嘅任務實作細節、未完成待辦、核心業務架構，同埋關鍵檔案路徑同踩過嘅坑。',
+        placeholder: '輸入撳 /compact 之後想自動填入嘅壓縮要求…',
+        hint: '直接改上面段字再撳儲存，會自動轉做「自訂文案」',
+        saveBtn: '儲存文案',
+      },
+      en: {
+        clean: 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.',
+        dev: 'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.',
+        placeholder: 'Enter the compaction directive to pre-fill after clicking /compact…',
+        hint: 'Editing and saving switches automatically to Custom Prompt',
+        saveBtn: 'Save Prompt',
+      },
+      ja: {
+        clean: '完了済みタスクの冗長な経緯やログを省き、中核の業務ロジック構造、確定した制約、進行中タスクの詳細と未完了のTODOを保持してください。',
+        dev: '完了済みタスクの経緯と冗長な出力を圧縮し、進行中タスクの実装詳細、未完了TODO、中核アーキテクチャ、主要ファイルパスと既知の落とし穴を完全に残してください。',
+        placeholder: '/compact 押下後に自動入力する圧縮指示を入力…',
+        hint: '編集して保存すると自動的に「カスタム」に切り替わります',
+        saveBtn: '指示を保存',
+      },
+    };
+
     const GROUP_DEFS = [
       {
         id: 'basics',
@@ -1786,7 +1928,7 @@
         id: 'advanced',
         icon: '✨',
         titleKey: 'grpAdvanced',
-        keys: ['periodicSelector', 'orchestratorSwitch', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
+        keys: ['periodicSelector', 'orchestratorSwitch', 'compactPreset', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
       },
       {
         id: 'telemetry',
@@ -2668,22 +2810,91 @@
           } else {
             const sel = document.createElement('select');
             sel.disabled = dimmed;
+            const currentVal = key === 'compactPreset' ? (cfg.compactPreset || 'empty') : cfg[key];
             for (const [val, text] of options) {
               const opt = document.createElement('option');
               opt.value = val;
               opt.textContent = text;
-              if (cfg[key] === val) opt.selected = true;
+              if (currentVal === val) opt.selected = true;
               sel.appendChild(opt);
             }
             sel.addEventListener('change', () => saveOne(key, sel.value));
             row.appendChild(sel);
           }
           body.appendChild(row);
+
+          if (key === 'compactPreset') {
+            const presetMode = cfg.compactPreset || 'empty';
+            if (presetMode !== 'empty') {
+              const cpCopy = COMPACT_PRESET_COPY[currentConfig.language] || COMPACT_PRESET_COPY['zh-CN'];
+              const initialText =
+                presetMode === 'clean'
+                  ? cpCopy.clean
+                  : presetMode === 'dev'
+                  ? cpCopy.dev
+                  : String(cfg.compactCustomText || '');
+              const box = document.createElement('div');
+              box.className = 'compact-preset-box';
+              const ta = document.createElement('textarea');
+              ta.className = 'compact-preset-input';
+              ta.rows = 3;
+              ta.maxLength = 600;
+              ta.placeholder = cpCopy.placeholder;
+              ta.value = initialText;
+              const foot = document.createElement('div');
+              foot.className = 'compact-preset-foot';
+              const hint = document.createElement('span');
+              hint.className = 'compact-preset-hint';
+              hint.textContent = cpCopy.hint;
+              const saveBtn = document.createElement('button');
+              saveBtn.type = 'button';
+              saveBtn.className = 'compact-preset-save';
+              saveBtn.textContent = cpCopy.saveBtn;
+              saveBtn.disabled = presetMode !== 'custom' || ta.value.trim() === String(cfg.compactCustomText || '').trim();
+              const commitCustom = () => {
+                const nextText = ta.value.trim();
+                if (presetMode === 'custom' && nextText === String(cfg.compactCustomText || '').trim()) return;
+                saveMany({ compactPreset: 'custom', compactCustomText: nextText }, 'compactPreset');
+              };
+              ta.addEventListener('input', () => {
+                saveBtn.disabled = ta.value.trim() === initialText.trim() && presetMode === 'custom';
+              });
+              ta.addEventListener('keydown', (ev) => {
+                if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+                  ev.preventDefault();
+                  commitCustom();
+                }
+              });
+              saveBtn.addEventListener('click', commitCustom);
+              foot.appendChild(hint);
+              foot.appendChild(saveBtn);
+              box.appendChild(ta);
+              box.appendChild(foot);
+              body.appendChild(box);
+            }
+          }
         }
         sec.appendChild(body);
         container.appendChild(sec);
       }
       renderNotifySection({ rebuildCreds: !notifyDirty });
+    }
+
+    async function saveMany(updates, toastKey) {
+      try {
+        const res = await apiFetch('/api/config', {
+          method: 'POST',
+          body: JSON.stringify({ updates })
+        });
+        const data = await res.json();
+        if (data.config) currentConfig = data.config;
+        renderStaticChrome();
+        renderForm(currentConfig);
+        const t = getT();
+        showToast(data.ok ? t.savedToast(toastKey) : t.invalidToast(toastKey));
+      } catch (err) {
+        showToast(getT().saveErrToast(err.message));
+      }
     }
 
     async function saveOne(key, value) {

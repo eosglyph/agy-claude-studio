@@ -1845,23 +1845,412 @@
     };
   }
 
+  const lexCompactUnsubs = new Set();
+
+  function cleanCompactCmd(s) {
+    return String(s || '')
+      .replace(/[\u200B\uFEFF\s]+/g, '')
+      .replace(/^\/+/, '')
+      .toLowerCase();
+  }
+
+  function isIconLigatureNode(node) {
+    if (!node || node.nodeType !== 1) return false;
+    const tag = String(node.tagName || '').toUpperCase();
+    if (tag === 'SVG' || tag === 'STYLE' || tag === 'SCRIPT') return true;
+    if (typeof node.hasAttribute === 'function') {
+      if (node.hasAttribute('data-symbol-name')) return true;
+      if (node.getAttribute('aria-hidden') === 'true') return true;
+    }
+    if (node.classList && typeof node.classList.contains === 'function') {
+      if (
+        node.classList.contains('google-symbols') ||
+        node.classList.contains('material-symbols-outlined') ||
+        node.classList.contains('material-icons')
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function getNonIconText(root) {
+    if (!root) return '';
+    if (root.nodeType === 3) return String(root.nodeValue || '');
+    if (isIconLigatureNode(root)) return '';
+    const kids = root.childNodes || root.children || [];
+    if (!kids || kids.length === 0) {
+      return String(root.textContent || '');
+    }
+    let out = '';
+    for (let i = 0; i < kids.length; i++) {
+      out += getNonIconText(kids[i]);
+    }
+    return out;
+  }
+
+  function isCompactMentionNode(node) {
+    if (!node || typeof node !== 'object') return false;
+    if (node.type !== 'beautifulMention' && node.type !== 'contextScopeItemMention') return false;
+    if (cleanCompactCmd(node.value) === 'compact' && (!node.trigger || node.trigger === '/')) {
+      return true;
+    }
+    const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
+    return Boolean(rawData && /slashCommand/i.test(rawData) && /\bcompact\b/i.test(rawData));
+  }
+
+  function findStandaloneCompactChip(ed) {
+    if (!ed || ed._agCsComposing) return null;
+
+    const lex = ed.__lexicalEditor;
+    if (lex && typeof lex.getEditorState === 'function') {
+      try {
+        const root = lex.getEditorState()?.toJSON?.()?.root;
+        const paras = Array.isArray(root?.children) ? root.children : [];
+        const nonEmpty = paras.filter((p) => Array.isArray(p?.children) && p.children.length > 0);
+        if (nonEmpty.length !== 1) return null;
+        let compactMention = null;
+        for (const node of nonEmpty[0].children) {
+          if (isCompactMentionNode(node)) {
+            if (compactMention) return null;
+            compactMention = node;
+          } else if (node?.type === 'text' && cleanCompactCmd(node.text) === '') {
+            continue;
+          } else {
+            return null;
+          }
+        }
+        if (!compactMention) return null;
+      } catch {}
+    } else {
+      if (ed.querySelectorAll('p').length > 1) return null;
+      if (cleanCompactCmd(getNonIconText(ed)) !== 'compact') return null;
+    }
+
+    const decorators = Array.from(ed.querySelectorAll('[data-lexical-decorator="true"]'));
+    for (const d of decorators) {
+      if (cleanCompactCmd(getNonIconText(d)) === 'compact') return d;
+    }
+    const bdis = Array.from(ed.querySelectorAll('bdi'));
+    for (const b of bdis) {
+      if (cleanCompactCmd(getNonIconText(b)) === 'compact') return b;
+    }
+    const spans = Array.from(ed.querySelectorAll('span'));
+    for (const sp of spans) {
+      if (
+        cleanCompactCmd(getNonIconText(sp)) === 'compact' &&
+        sp.querySelector('[data-symbol-name], .google-symbols, svg')
+      ) {
+        return sp;
+      }
+    }
+    return null;
+  }
+
+  function removeCompactGuideHint(wrap) {
+    if (!wrap) return;
+    const old = wrap.querySelector('.ag-cs-compact-hint');
+    if (old) old.remove();
+  }
+
+  function syncCompactGuideHint(card, ui) {
+    if (!card || destroyed) return;
+    const ed = card.querySelector('[contenteditable="true"]');
+    const wrap = ed?.parentElement || null;
+    if (!ed || !wrap) return;
+
+    if (!ed._agCsCompactHintBound) {
+      ed._agCsCompactHintBound = true;
+      const onUpdate = () => syncCompactGuideHint(card, uiText(getLang()));
+      const onCompStart = () => {
+        ed._agCsComposing = true;
+        removeCompactGuideHint(wrap);
+      };
+      const onCompEnd = () => {
+        ed._agCsComposing = false;
+        onUpdate();
+      };
+      ed.addEventListener('compositionstart', onCompStart);
+      ed.addEventListener('compositionend', onCompEnd);
+      ed.addEventListener('input', onUpdate);
+      ed.addEventListener('keyup', onUpdate);
+      ed.addEventListener('focus', onUpdate);
+      ed.addEventListener('blur', onUpdate);
+      lexCompactUnsubs.add(() => {
+        try {
+          ed.removeEventListener('compositionstart', onCompStart);
+          ed.removeEventListener('compositionend', onCompEnd);
+          ed.removeEventListener('input', onUpdate);
+          ed.removeEventListener('keyup', onUpdate);
+          ed.removeEventListener('focus', onUpdate);
+          ed.removeEventListener('blur', onUpdate);
+        } catch {}
+        delete ed._agCsCompactHintBound;
+        delete ed._agCsComposing;
+      });
+    }
+
+    const lex = ed.__lexicalEditor;
+    if (lex && typeof lex.registerUpdateListener === 'function' && !ed._agCsLexCompactUnsub) {
+      try {
+        const unsub = lex.registerUpdateListener(() => {
+          if (destroyed) return;
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => syncCompactGuideHint(card, uiText(getLang())));
+          } else {
+            syncCompactGuideHint(card, uiText(getLang()));
+          }
+        });
+        if (typeof unsub === 'function') {
+          ed._agCsLexCompactUnsub = () => {
+            try {
+              unsub();
+            } catch {}
+            delete ed._agCsLexCompactUnsub;
+          };
+          lexCompactUnsubs.add(ed._agCsLexCompactUnsub);
+        } else {
+          ed._agCsLexCompactUnsub = true;
+        }
+      } catch {}
+    }
+
+    const chip = findStandaloneCompactChip(ed);
+    if (!chip) {
+      removeCompactGuideHint(wrap);
+      return;
+    }
+
+    let hint = wrap.querySelector('.ag-cs-compact-hint');
+    if (!hint) {
+      hint = document.createElement('span');
+      hint.className = 'ag-cs-compact-hint';
+      hint.setAttribute('aria-hidden', 'true');
+      hint.setAttribute('data-ag-no-i18n', '');
+      wrap.appendChild(hint);
+    }
+    const hintText =
+      ui?.compactGuideHint ||
+      'Optional: guide compaction (e.g. keep open plans, drop finished details) · Enter for default';
+    if (hint.textContent !== hintText) {
+      hint.textContent = hintText;
+    }
+
+    const chipRect = (() => {
+      const bdi = typeof chip.querySelector === 'function' ? chip.querySelector('bdi') : null;
+      if (bdi && typeof bdi.getBoundingClientRect === 'function') {
+        const br = bdi.getBoundingClientRect();
+        if (br && br.width > 0) return br;
+      }
+      return typeof chip.getBoundingClientRect === 'function'
+        ? chip.getBoundingClientRect()
+        : { left: 0, top: 0, right: 0, bottom: 0, height: 22 };
+    })();
+    const wrapRect = typeof wrap.getBoundingClientRect === 'function' ? wrap.getBoundingClientRect() : { left: 0, top: 0, right: 400 };
+    const edRect = typeof ed.getBoundingClientRect === 'function' ? ed.getBoundingClientRect() : wrapRect;
+    let padRight = 8;
+    try {
+      if (typeof getComputedStyle === 'function') {
+        padRight = parseFloat(getComputedStyle(ed)?.paddingRight) || 8;
+      }
+    } catch {}
+
+    const leftVal = `${Math.max(0, Math.round(chipRect.right - wrapRect.left + 8))}px`;
+    const topVal = `${Math.max(0, Math.round(chipRect.top - wrapRect.top))}px`;
+    const heightVal = `${Math.max(20, Math.round(chipRect.height || 22))}px`;
+    const rightVal = `${Math.max(12, Math.round(Math.max(0, wrapRect.right - edRect.right) + padRight + 6))}px`;
+
+    if (hint.style.left !== leftVal) hint.style.left = leftVal;
+    if (hint.style.top !== topVal) hint.style.top = topVal;
+    if (hint.style.height !== heightVal) hint.style.height = heightVal;
+    if (hint.style.lineHeight !== heightVal) hint.style.lineHeight = heightVal;
+    if (hint.style.right !== rightVal) hint.style.right = rightVal;
+  }
+
+  function tryAutoSelectCompactMenu(ed) {
+    if (!ed || !ed.isConnected || findStandaloneCompactChip(ed)) return true;
+    if (cleanCompactCmd(getNonIconText(ed)) !== 'compact') return false;
+    const candidates = Array.from(
+      new Set(
+        document.querySelectorAll(
+          '[data-mention-menu] [role="option"], [role="option"], [role="menuitem"], [role="listbox"] button, [role="listbox"] > div'
+        )
+      )
+    );
+    for (const el of candidates) {
+      if (!el || !el.isConnected) continue;
+      if (typeof el.getAttribute === 'function' && el.getAttribute('aria-disabled') === 'true') continue;
+      const labelEl = typeof el.querySelector === 'function' ? el.querySelector('[data-testid="menu-option-label"]') : null;
+      let isCompactOption = false;
+      if (labelEl) {
+        isCompactOption = cleanCompactCmd(getNonIconText(labelEl)) === 'compact';
+      } else {
+        const txt = getNonIconText(el).replace(/\s+/g, ' ').trim();
+        if (!txt || txt.length > 220) continue;
+        isCompactOption =
+          /\bcompact\b/i.test(txt) &&
+          (/compact the conversation/i.test(txt) ||
+            (/^compact\b/i.test(txt) &&
+              typeof el.matches === 'function' &&
+              el.matches('[role="option"], [role="listbox"] > div, [role="listbox"] button')));
+      }
+      if (!isCompactOption) continue;
+      const clickableTarget =
+        (labelEl && labelEl.parentElement && labelEl.parentElement !== el ? labelEl.parentElement : null) ||
+        (typeof el.querySelector === 'function'
+          ? el.querySelector('[class*="cursor-pointer"], button, a')
+          : null) ||
+        labelEl ||
+        el;
+      if (
+        typeof clickableTarget.getAttribute === 'function' &&
+        clickableTarget.getAttribute('aria-disabled') === 'true'
+      ) {
+        continue;
+      }
+      const rect = typeof clickableTarget.getBoundingClientRect === 'function' ? clickableTarget.getBoundingClientRect() : null;
+      if (rect && (rect.height <= 0 || rect.height >= 120)) continue;
+      try {
+        if (typeof clickableTarget.dispatchEvent === 'function' && typeof MouseEvent === 'function') {
+          clickableTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        }
+        if (typeof clickableTarget.click === 'function') {
+          clickableTarget.click();
+        } else if (typeof clickableTarget.dispatchEvent === 'function' && typeof MouseEvent === 'function') {
+          clickableTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        }
+        return true;
+      } catch {}
+    }
+    return false;
+  }
+
+  function resolveCompactPresetText(ui) {
+    const mode = cfg?.compactPreset || 'empty';
+    if (mode === 'clean') {
+      return String(
+        ui?.compactPresetClean ||
+          'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.'
+      ).trim();
+    }
+    if (mode === 'dev') {
+      return String(
+        ui?.compactPresetDev ||
+          'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.'
+      ).trim();
+    }
+    if (mode === 'custom') {
+      return String(cfg?.compactCustomText || '').trim();
+    }
+    return '';
+  }
+
+  function insertCompactPresetAfterChip(ed, card, presetText) {
+    if (!ed || !ed.isConnected || !presetText || !findStandaloneCompactChip(ed)) return false;
+    try {
+      ed.focus();
+      try {
+        if (typeof window !== 'undefined' && typeof window.getSelection === 'function' && typeof document.createRange === 'function') {
+          const sel = window.getSelection();
+          if (sel) {
+            const range = document.createRange();
+            const target = ed.lastElementChild || ed;
+            range.selectNodeContents(target);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+      } catch {}
+      const curTxt = getNonIconText(ed);
+      const payload = /\s$/.test(curTxt) ? presetText : ` ${presetText}`;
+      let inserted = false;
+      if (typeof document.execCommand === 'function') {
+        inserted = Boolean(document.execCommand('insertText', false, payload));
+      }
+      if (!inserted) {
+        if (typeof document.createTextNode === 'function') {
+          const target = ed.lastElementChild || ed;
+          target.appendChild(document.createTextNode(payload));
+        }
+        if (typeof InputEvent === 'function') {
+          ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: payload, inputType: 'insertText' }));
+        }
+      }
+      syncCompactGuideHint(card, uiText(getLang()));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function fillCompactCommand(scopeEl) {
     const scopedBox = scopeEl?.closest?.('[data-testid="agent-input-box"]') || scopeEl;
+    const card =
+      scopeEl?.closest?.('.surface-composer-card') ||
+      scopedBox?.querySelector?.('.surface-composer-card') ||
+      scopeEl;
     const ed =
       scopedBox?.querySelector?.('[contenteditable="true"]') ||
       document.querySelector('[data-testid="agent-input-box"] [contenteditable="true"]');
     if (!ed) return false;
     try {
+      const ui = uiText(getLang());
+      const presetText = resolveCompactPresetText(ui);
+      if (findStandaloneCompactChip(ed)) {
+        ed.focus();
+        if (presetText) {
+          insertCompactPresetAfterChip(ed, card, presetText);
+        } else {
+          syncCompactGuideHint(card, ui);
+        }
+        return true;
+      }
       ed.focus();
+      let inserted = false;
       if (typeof document.execCommand === 'function') {
         document.execCommand('selectAll', false, null);
-        const ok = document.execCommand('insertText', false, '/compact');
-        if (ok) return true;
+        inserted = Boolean(document.execCommand('insertText', false, '/compact'));
       }
-      ed.textContent = '/compact';
-      if (typeof InputEvent === 'function') {
-        ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: '/compact', inputType: 'insertText' }));
+      if (!inserted) {
+        ed.textContent = '/compact';
+        if (typeof InputEvent === 'function') {
+          ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: '/compact', inputType: 'insertText' }));
+        }
       }
+      const delays = [60, 100, 140, 200, 250];
+      let step = 0;
+      const schedulePresetOrHint = () => {
+        if (!presetText) {
+          const refreshHint = () => {
+            if (!destroyed && ed.isConnected) syncCompactGuideHint(card, uiText(getLang()));
+          };
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(refreshHint);
+          setTimeout(refreshHint, 40);
+          return;
+        }
+        const presetDelays = [40, 80, 140, 220];
+        let pStep = 0;
+        const tryInsertPreset = () => {
+          if (destroyed || !ed.isConnected) return;
+          if (insertCompactPresetAfterChip(ed, card, presetText)) return;
+          if (pStep < presetDelays.length) {
+            setTimeout(tryInsertPreset, presetDelays[pStep++]);
+          }
+        };
+        setTimeout(tryInsertPreset, presetDelays[pStep++]);
+      };
+      const runAttempt = () => {
+        if (destroyed || !ed.isConnected) return;
+        if (tryAutoSelectCompactMenu(ed)) {
+          schedulePresetOrHint();
+          return;
+        }
+        if (step < delays.length) {
+          setTimeout(runAttempt, delays[step++]);
+        }
+      };
+      setTimeout(runAttempt, delays[step++]);
       return true;
     } catch {
       return false;
@@ -3396,7 +3785,7 @@
       const lowCtxAttr = isLowCtx ? (ring.contextRemainingPct <= 10 ? 'danger' : 'warn') : '';
       if (lowCtxAttr) topBar.setAttribute('data-ctx-low', lowCtxAttr);
       else topBar.removeAttribute('data-ctx-low');
-      const ctxColor = ctxRemPctRound <= 10 ? '#dc3c3d' : ctxRemPctRound <= 30 ? '#fbb315' : '#257de0';
+      const ctxColor = ctxRemPctRound <= 10 ? '#dc3c3d' : ctxRemPctRound <= 30 ? 'var(--ag-cs-warn-fg, #9a5b13)' : '#257de0';
       const topKey = `${ctxRemPctRound}|${lowCtxAttr}|${ring.remainingTokens}|${totalW}|${ring.usedTokens}|${d.sysTokens || 0}|${d.toolsTokens || 0}|${chatMsgs}|${d.toolResultsTokens || 0}|${d.overheadTokens || 0}|${draftEst.tokens}|${Math.round(d.cacheHitPct || 0)}|${topSpeed}|${lang}`;
       if (topBar.getAttribute('data-ag-cs-top-key') !== topKey) {
         topBar.setAttribute('data-ag-cs-top-key', topKey);
@@ -5967,6 +6356,9 @@
         }
       }
 
+      // 1b. Inline ghost guidance hint when standalone /compact pill is active
+      syncCompactGuideHint(card, ui);
+
       // 2. Effort level accent badge inside [data-testid="model-selector-trigger"]
       const modelBtn = card.querySelector('[data-testid="model-selector-trigger"]');
       if (modelBtn) {
@@ -6166,6 +6558,7 @@
     const circ = 2 * Math.PI * r;
     const dash = ((pct / 100) * circ).toFixed(2);
     const color = ring.color;
+    const strokeColor = color === '#fbb315' ? 'var(--ag-cs-warn-fg, #b45309)' : color;
     const pctRound = ring.pctRound;
     const remStr = formatCompactK(ring.remainingTokens);
     const maxStr = formatCompactK(ring.maxTokens);
@@ -6180,7 +6573,7 @@
           ? 'danger'
           : 'warn'
         : '';
-    const ringKey = `${ring.mode}|${lowCtxRingAttr}|${pctRound}|${dash}|${color}|${ringTitle}`;
+    const ringKey = `${ring.mode}|${lowCtxRingAttr}|${pctRound}|${dash}|${strokeColor}|${ringTitle}`;
 
     if (!ringBtn) {
       ringBtn = document.createElement('button');
@@ -6190,7 +6583,7 @@
       ringBtn.setAttribute('data-ring-mode', ring.mode);
       if (lowCtxRingAttr) ringBtn.setAttribute('data-ctx-low', lowCtxRingAttr);
       ringBtn.setAttribute('title', ringTitle);
-      ringBtn.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="${r}" fill="none" stroke="var(--ag-cs-heat-empty)" stroke-width="2.2"/><circle class="ag-cs-ring-fill" cx="8" cy="8" r="${r}" fill="none" stroke="${color}" stroke-width="2.2" stroke-dasharray="${dash} ${circ.toFixed(2)}" stroke-linecap="round"/></svg><span>${pctRound}%</span>`;
+      ringBtn.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="${r}" fill="none" stroke="var(--ag-cs-heat-empty)" stroke-width="2.2"/><circle class="ag-cs-ring-fill" cx="8" cy="8" r="${r}" fill="none" stroke="${strokeColor}" stroke-width="2.2" stroke-dasharray="${dash} ${circ.toFixed(2)}" stroke-linecap="round"/></svg><span>${pctRound}%</span>`;
       ringBtn.addEventListener('click', (ev) => {
         ev.stopPropagation();
         const targetTab = cfg.ringMode === 'quota' ? 'quotas' : 'breakdown';
@@ -6207,7 +6600,7 @@
       const fillCircle = ringBtn.querySelector('.ag-cs-ring-fill');
       const pctSpan = ringBtn.querySelector('span');
       if (fillCircle) {
-        fillCircle.setAttribute('stroke', color);
+        fillCircle.setAttribute('stroke', strokeColor);
         fillCircle.setAttribute('stroke-dasharray', `${dash} ${circ.toFixed(2)}`);
       }
       if (pctSpan) pctSpan.textContent = `${pctRound}%`;
@@ -6245,7 +6638,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, #' +
+        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-studio-css, #ag-claude-style-css'
       )
@@ -6738,6 +7131,14 @@
         cleanupUsageMonitorFooterSplit,
         cleanupLegacyAuroraArtifacts,
         restoreGreetings,
+        () => {
+          for (const unsub of Array.from(lexCompactUnsubs)) {
+            try {
+              if (typeof unsub === 'function') unsub();
+            } catch {}
+          }
+          lexCompactUnsubs.clear();
+        },
         () => domTranslator && typeof domTranslator.destroy === 'function' && domTranslator.destroy(),
       ]) {
         try {
@@ -6760,7 +7161,7 @@
       });
       document
         .querySelectorAll(
-          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #' +
+          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, #' +
             SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());

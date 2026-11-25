@@ -101,6 +101,9 @@ html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark {
   --ag-cs-effort-xhigh: #b0bfff;
   --ag-cs-tip-bg: #f4f9ff;
   --ag-cs-tip-fg: #13161d;
+  --ag-cs-warn-fg: #c28d40;
+  --ag-cs-warn-border: rgba(217, 155, 56, 0.32);
+  --ag-cs-warn-bg: rgba(217, 155, 56, 0.08);
   --ag-cs-scroll: rgba(55, 59, 64, 0.9);
   --ag-cs-scroll-hover: rgba(105, 109, 115, 0.9);
 
@@ -202,6 +205,9 @@ html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.light {
   --ag-cs-effort-xhigh: #1f2e9e;
   --ag-cs-tip-bg: #131416;
   --ag-cs-tip-fg: #fbfcff;
+  --ag-cs-warn-fg: #9a5b13;
+  --ag-cs-warn-border: rgba(154, 91, 19, 0.26);
+  --ag-cs-warn-bg: rgba(154, 91, 19, 0.06);
   --ag-cs-scroll: rgba(209, 210, 213, 0.9);
   --ag-cs-scroll-hover: rgba(134, 135, 138, 0.8);
 }
@@ -291,6 +297,9 @@ html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark {
   --ag-cs-effort-xhigh: #f2b097;
   --ag-cs-tip-bg: #fdfdfd;
   --ag-cs-tip-fg: #191919;
+  --ag-cs-warn-fg: #c28d40;
+  --ag-cs-warn-border: rgba(217, 155, 56, 0.32);
+  --ag-cs-warn-bg: rgba(217, 155, 56, 0.08);
   --ag-cs-scroll: rgba(62, 62, 62, 0.9);
   --ag-cs-scroll-hover: rgba(113, 113, 113, 0.9);
 }
@@ -382,6 +391,9 @@ html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.light {
   --ag-cs-effort-xhigh: #a34c30;
   --ag-cs-tip-bg: #161616;
   --ag-cs-tip-fg: #ffffff;
+  --ag-cs-warn-fg: #9a5b13;
+  --ag-cs-warn-border: rgba(154, 91, 19, 0.26);
+  --ag-cs-warn-bg: rgba(154, 91, 19, 0.06);
   --ag-cs-scroll: rgba(213, 213, 213, 0.9);
   --ag-cs-scroll-hover: rgba(138, 138, 138, 0.8);
 }
@@ -416,8 +428,21 @@ html[data-ag-cs-style][data-ag-cs-palette="host"] {
   --ag-cs-effort-xhigh: var(--primary, #4d6bfe);
   --ag-cs-tip-bg: var(--foreground, #fff);
   --ag-cs-tip-fg: var(--background, #191919);
+  --ag-cs-warn-fg: #c28d40;
+  --ag-cs-warn-border: rgba(217, 155, 56, 0.32);
+  --ag-cs-warn-bg: rgba(217, 155, 56, 0.08);
   --ag-cs-scroll: rgba(128, 128, 128, 0.35);
   --ag-cs-scroll-hover: rgba(128, 128, 128, 0.55);
+}
+html[data-ag-cs-style][data-ag-cs-palette="host"]:has(> body.theme-light),
+html[data-ag-cs-style][data-ag-cs-palette="host"]:has(> body.light-theme),
+html[data-ag-cs-style][data-ag-cs-palette="host"]:has(> body.light),
+html[data-ag-cs-style][data-ag-cs-palette="host"] > body.theme-light,
+html[data-ag-cs-style][data-ag-cs-palette="host"] > body.light-theme,
+html[data-ag-cs-style][data-ag-cs-palette="host"] > body.light {
+  --ag-cs-warn-fg: #9a5b13;
+  --ag-cs-warn-border: rgba(154, 91, 19, 0.26);
+  --ag-cs-warn-bg: rgba(154, 91, 19, 0.06);
 }
 
 /* Categorical data palette for Models stacked chart */
@@ -1057,6 +1082,22 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card p[data-a
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 
+html[data-ag-cs-style] .surface-composer-card .ag-cs-compact-hint {
+  position: absolute !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  z-index: 1 !important;
+  display: block !important;
+  color: var(--placeholder, var(--muted-foreground, #8e94a0)) !important;
+  opacity: 0.78 !important;
+  font-family: var(--font-sans, system-ui, sans-serif) !important;
+  font-size: 13.5px !important;
+  line-height: 22px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
 html[data-ag-cs-style][data-ag-cs-composer="on"] .surface-composer-card [data-lexical-editor="true"] {
   min-height: 36px !important;
   font-size: 14px !important;
@@ -1497,8 +1538,8 @@ html[data-ag-cs-style] [data-ag-cs-effort="extra"] { color: var(--ag-cs-effort-x
   transform: rotate(-90deg);
 }
 .ag-cs-context-ring[data-ctx-low="warn"] {
-  background: rgba(251, 179, 21, 0.14);
-  color: #fbb315;
+  background: transparent;
+  color: var(--ag-cs-warn-fg, #9a5b13);
 }
 .ag-cs-context-ring[data-ctx-low="danger"] {
   background: rgba(220, 60, 61, 0.16);
@@ -2560,10 +2601,10 @@ html[data-ag-cs-style] #ag-cs-settings-sec [data-ag-cs-row="palette"] [role="gro
   cursor: pointer;
 }
 .ag-cs-hud-compact-btn[data-ctx-low="warn"] {
-  border-color: rgba(251, 179, 21, 0.55);
-  background: rgba(251, 179, 21, 0.16);
-  color: #fbbf24;
-  font-weight: 600;
+  border-color: var(--ag-cs-warn-border, rgba(154, 91, 19, 0.26));
+  background: var(--ag-cs-warn-bg, rgba(154, 91, 19, 0.06));
+  color: var(--ag-cs-warn-fg, #9a5b13);
+  font-weight: 500;
 }
 .ag-cs-hud-compact-btn[data-ctx-low="danger"] {
   border-color: rgba(220, 60, 61, 0.65);

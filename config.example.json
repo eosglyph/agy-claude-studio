@@ -23,6 +23,8 @@
   "sidebarRestyle": true,
   "sidebarCompact": true,
   "placeholderStyle": "studio",
+  "compactPreset": "empty",
+  "compactCustomText": "",
   "periodicSelector": true,
   "orchestratorSwitch": true,
   "i18nIgnoreSelectors": [],
