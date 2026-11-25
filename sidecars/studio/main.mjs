@@ -11,6 +11,7 @@ const require = createRequire(import.meta.url);
 const cdp = require('../../cdp.js');
 const lifecycle = require('../../lifecycle.js');
 const notifyCore = require('../../notify-core.js');
+const scriptsCore = require('../../scripts-core.js');
 const { updateConfigSetting, injectOnce } = require('../../inject.js');
 const { removeFromAllWindows } = require('../../remove.js');
 
@@ -508,6 +509,179 @@ function resolveNotifyDir() {
   return notifyCore.resolveNotifyDataDir(process.env, cdp.PLUGIN_DATA_DIR || null);
 }
 
+function resolveScriptsDir() {
+  return scriptsCore.resolveScriptsDataDir(process.env, cdp.PLUGIN_DATA_DIR || null);
+}
+
+function getScriptsApi({ dataDir = resolveScriptsDir() } = {}) {
+  const scripts = scriptsCore.readScriptsConfig(dataDir);
+  return { ok: true, scripts };
+}
+
+function upsertScriptApi(data, { dataDir = resolveScriptsDir() } = {}) {
+  const payload = data && typeof data === 'object' && data.script ? data.script : data;
+  return scriptsCore.upsertCustomScript(dataDir, payload);
+}
+
+function deleteScriptApi(data, { dataDir = resolveScriptsDir() } = {}) {
+  const id = data && typeof data === 'object' ? data.id : data;
+  return scriptsCore.deleteCustomScript(dataDir, id);
+}
+
+async function runScriptApi(data, { dataDir = resolveScriptsDir() } = {}) {
+  const id = data && typeof data === 'object' ? data.id : data;
+  return scriptsCore.runCustomScript(dataDir, id);
+}
+
+async function callConversationService(method, body, { env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null, timeoutMs = 4000 } = {}) {
+  const addr = String(env?.ANTIGRAVITY_LS_ADDRESS || '').trim();
+  const csrf = String(env?.ANTIGRAVITY_CSRF_TOKEN || '').trim();
+  if (!addr || !csrf || typeof fetchFn !== 'function') {
+    return { ok: false, reason: 'no_ls_env' };
+  }
+  const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const res = await fetchFn(`http://${addr}/product.v1.ConversationService/${method}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Connect-Protocol-Version': '1',
+        'x-antigravity-csrf-token': csrf,
+      },
+      body: JSON.stringify(body || {}),
+      signal: ctrl?.signal,
+    });
+    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    const json = await res.json();
+    return { ok: true, data: json };
+  } catch (err) {
+    return { ok: false, reason: err?.name === 'AbortError' ? 'timeout' : err?.message || 'fetch_failed' };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function getLiveTasksCdpFallback() {
+  const ports = cdp.readActivePorts();
+  for (const port of ports) {
+    let pages = [];
+    try {
+      pages = await cdp.listPages(port);
+    } catch {
+      continue;
+    }
+    for (const p of pages) {
+      if (!p?.webSocketDebuggerUrl || !cdp.isAntigravityPageTarget(p)) continue;
+      let sess = null;
+      try {
+        sess = await cdp.CdpSession.connect(p.webSocketDebuggerUrl);
+        const snap = await sess.evaluate(
+          `(() => {
+            const title = (document.title || '').replace(/\\s*-\\s*Antigravity$/i, '').trim() || 'Antigravity';
+            const stopBtn = document.querySelector('.surface-composer-card button[aria-label*="取消"], .surface-composer-card button[aria-label*="Cancel"], .surface-composer-card button[aria-label*="Stop"]');
+            const isRunning = Boolean(stopBtn && stopBtn.offsetParent !== null);
+            const rows = Array.from(document.querySelectorAll('[data-testid="conversation-row-sidebar"]')).slice(0, 5).map((r, i) => {
+              const txt = (r.innerText || '').trim().split(/\\r?\\n/).map(s => s.trim()).filter(Boolean);
+              const spinning = Boolean(r.querySelector('.animate-spin, [data-running="true"], svg.animate-spin'));
+              return {
+                id: 'dom_' + i,
+                title: txt[0] || 'Conversation',
+                runState: spinning ? 'RUN_STATE_RUNNING' : 'RUN_STATE_IDLE',
+                updateTime: null,
+                subagentCount: 0,
+              };
+            });
+            const running = rows.filter(r => r.runState === 'RUN_STATE_RUNNING');
+            if (isRunning && !running.length) {
+              running.push({ id: 'active_window', title, runState: 'RUN_STATE_RUNNING', updateTime: new Date().toISOString(), subagentCount: 0 });
+            }
+            const recent = rows.filter(r => r.runState !== 'RUN_STATE_RUNNING').slice(0, 3);
+            return { ok: true, available: true, source: 'cdp', running, recent, checkedAt: new Date().toISOString() };
+          })()`,
+          false
+        );
+        if (snap && snap.ok) return snap;
+      } catch {
+        // try next target
+      } finally {
+        sess?.close();
+      }
+    }
+  }
+  return { ok: true, available: false, source: 'none', running: [], recent: [], checkedAt: new Date().toISOString() };
+}
+
+async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null, allowCdpFallback = true } = {}) {
+  const listRes = await callConversationService(
+    'ListConversations',
+    { pageSize: 30, includeArchived: false },
+    { env, fetchFn }
+  );
+  if (!listRes.ok) {
+    if (allowCdpFallback) {
+      return getLiveTasksCdpFallback();
+    }
+    return {
+      ok: true,
+      available: false,
+      source: 'none',
+      reason: listRes.reason || 'unavailable',
+      running: [],
+      recent: [],
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
+  const convos = Array.isArray(listRes.data?.conversations) ? listRes.data.conversations : [];
+  const normalizeConvo = (c) => ({
+    id: String(c?.id || ''),
+    title: String(c?.annotations?.title || c?.state?.summary || 'Untitled Conversation').trim(),
+    runState: String(c?.state?.runState || 'RUN_STATE_IDLE'),
+    updateTime: c?.state?.updateTime || c?.metadata?.createTime || null,
+    createTime: c?.metadata?.createTime || null,
+    pinned: Boolean(c?.annotations?.pinned),
+    subagentCount: 0,
+    activeSubagentCount: 0,
+  });
+
+  const normalized = convos.map(normalizeConvo);
+  const running = normalized.filter(
+    (c) => c.runState === 'RUN_STATE_RUNNING' || c.runState === 'RUN_STATE_CANCELLING'
+  );
+  const recent = normalized
+    .filter((c) => c.runState !== 'RUN_STATE_RUNNING' && c.runState !== 'RUN_STATE_CANCELLING')
+    .slice(0, 3);
+
+  // Best-effort child subagent counts for up to 5 running conversations
+  await Promise.all(
+    running.slice(0, 5).map(async (item) => {
+      const subRes = await callConversationService(
+        'ListConversations',
+        { pageSize: 20, parentConversationId: item.id, includeArchived: false },
+        { env, fetchFn, timeoutMs: 2500 }
+      );
+      if (subRes.ok && Array.isArray(subRes.data?.conversations)) {
+        const subs = subRes.data.conversations;
+        item.subagentCount = subs.length;
+        item.activeSubagentCount = subs.filter(
+          (s) => s?.state?.runState === 'RUN_STATE_RUNNING' || s?.state?.runState === 'RUN_STATE_CANCELLING'
+        ).length;
+      }
+    })
+  );
+
+  return {
+    ok: true,
+    available: true,
+    source: 'conversation_service',
+    running,
+    recent,
+    totalCount: normalized.length,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
 function getNotifyConfigApi({ dataDir = resolveNotifyDir() } = {}) {
   const config = notifyCore.readNotifyConfig(dataDir);
   return {
@@ -641,6 +815,11 @@ async function startStudioSidecar() {
   app.api('/api/notify', guardApi(async () => getNotifyConfigApi()), 'GET');
   app.api('/api/notify', guardApi(async (data) => saveNotifyConfigApi(data)), 'POST');
   app.api('/api/notify/test', guardApi(async (data) => testNotifyApi(data)), 'POST');
+  app.api('/api/live-tasks', guardApi(async () => getLiveTasksApi()), 'GET');
+  app.api('/api/scripts', guardApi(async () => getScriptsApi()), 'GET');
+  app.api('/api/scripts', guardApi(async (data) => upsertScriptApi(data)), 'POST');
+  app.api('/api/scripts/delete', guardApi(async (data) => deleteScriptApi(data)), 'POST');
+  app.api('/api/scripts/run', guardApi(async (data) => runScriptApi(data)), 'POST');
   app.api('/api/relaunch', guardApi(async () => {
     const res = await relaunchDesktopHost();
     if (!res?.ok) {
@@ -735,9 +914,15 @@ export {
   performStudioSelfUpdate,
   syncI18nCompatWhitelist,
   resolveNotifyDir,
+  resolveScriptsDir,
   getNotifyConfigApi,
   saveNotifyConfigApi,
   testNotifyApi,
+  getScriptsApi,
+  upsertScriptApi,
+  deleteScriptApi,
+  runScriptApi,
+  getLiveTasksApi,
   getStudioStatus,
   applyConfigUpdate,
   resetStudioConfig,

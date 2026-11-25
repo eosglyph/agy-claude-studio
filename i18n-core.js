@@ -366,6 +366,36 @@
       node.nodeValue = next;
     }
 
+    // Handle React-interpolated pure-text elements (e.g. ["No ", "automations", " yet"] inside <p>).
+    function doSplitTextElement(el) {
+      if (!bundle || !el || !el.childNodes || el.childNodes.length < 2) return false;
+      const children = [];
+      let combined = '';
+      for (let i = 0; i < el.childNodes.length; i += 1) {
+        const ch = el.childNodes[i];
+        if (!ch || ch.nodeType !== 3) return false;
+        const rec = texts.get(ch);
+        if (rec && ch.nodeValue === rec.t) return false;
+        const val = typeof ch.nodeValue === 'string' ? ch.nodeValue : '';
+        children.push({ node: ch, val });
+        combined += val;
+      }
+      const trimmed = combined.trim();
+      if (!trimmed || trimmed.length > 300 || !/[A-Za-z]/.test(trimmed)) return false;
+      const zone = zoneOf(el);
+      if (!zone) return false;
+      const out = convert(trimmed, zone, el);
+      if (out == null || out === trimmed) return false;
+      const nextFirst = combined.replace(trimmed, () => out);
+      texts.set(children[0].node, { o: children[0].val, t: nextFirst });
+      children[0].node.nodeValue = nextFirst;
+      for (let i = 1; i < children.length; i += 1) {
+        texts.set(children[i].node, { o: children[i].val, t: '' });
+        children[i].node.nodeValue = '';
+      }
+      return true;
+    }
+
     function doAttrs(el, only) {
       if (!bundle || !el || closestSel(el, optOutSel)) return;
       let zone = -1;
@@ -409,6 +439,7 @@
           return walkControlsIn(root);
         }
         doAttrs(root);
+        doSplitTextElement(root);
       }
       const doc = activeDoc || root.ownerDocument || root;
       if (!doc || typeof doc.createTreeWalker !== 'function' || typeof NodeFilter === 'undefined') return;
@@ -428,7 +459,10 @@
       while (walker.nextNode()) {
         const n = walker.currentNode;
         if (n.nodeType === 3) doText(n);
-        else doAttrs(n);
+        else {
+          doAttrs(n);
+          doSplitTextElement(n);
+        }
       }
       for (const c of contents) walkControlsIn(c);
     }

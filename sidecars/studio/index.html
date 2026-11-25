@@ -843,6 +843,266 @@
       background: var(--control-bg);
       color: var(--fg);
     }
+
+    /* Live Running Tasks Card (Overview) */
+    .live-tasks-body {
+      padding: 9px 13px 11px;
+      border-top: 1px solid var(--divider-col);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .section.is-collapsed .live-tasks-body,
+    .section.is-collapsed .scripts-body {
+      display: none;
+    }
+    .live-task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .live-task-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 9px;
+      border-radius: 9px;
+      border: 1px solid var(--border-col);
+      background: var(--control-bg);
+    }
+    .live-task-row.is-running {
+      border-color: color-mix(in srgb, #2e9e66 42%, var(--border-col));
+      background: color-mix(in srgb, #2e9e66 7%, var(--control-bg));
+    }
+    .live-task-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      flex: 1;
+    }
+    .live-dot-pulse {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #2e9e66;
+      box-shadow: 0 0 0 0 rgba(46, 158, 102, 0.55);
+      animation: ag-live-pulse 1.8s ease-out infinite;
+    }
+    .live-dot-pulse.is-cancelling {
+      background: #d9822b;
+      box-shadow: 0 0 0 0 rgba(217, 130, 43, 0.55);
+    }
+    .live-dot-pulse.is-idle {
+      background: var(--muted-fg);
+      opacity: 0.45;
+      animation: none;
+      box-shadow: none;
+    }
+    @keyframes ag-live-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(46, 158, 102, 0.55); }
+      70% { box-shadow: 0 0 0 6px rgba(46, 158, 102, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(46, 158, 102, 0); }
+    }
+    .live-task-info {
+      min-width: 0;
+      flex: 1;
+    }
+    .live-task-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .live-task-sub {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      margin-top: 1px;
+    }
+    .live-task-tag {
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--border-col);
+      background: var(--card-bg);
+      color: var(--muted-fg);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .live-task-row.is-running .live-task-tag {
+      color: #2e9e66;
+      border-color: rgba(46, 158, 102, 0.35);
+      background: rgba(46, 158, 102, 0.1);
+    }
+    .live-task-empty {
+      font-size: 11.5px;
+      color: var(--muted-fg);
+      padding: 4px 2px;
+    }
+    .live-tasks-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 10.5px;
+      color: var(--muted-fg);
+    }
+
+    /* Custom Scripts Runner Card (Overview) */
+    .scripts-body {
+      padding: 9px 13px 11px;
+      border-top: 1px solid var(--divider-col);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .script-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .script-card {
+      border: 1px solid var(--border-col);
+      border-radius: 10px;
+      background: var(--control-bg);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .script-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .script-title-wrap {
+      min-width: 0;
+      flex: 1;
+    }
+    .script-name {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .script-meta {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+    .script-status-ok { color: #2e9e66; font-weight: 600; }
+    .script-status-err { color: #d65745; font-weight: 600; }
+    .script-btns {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    button.script-mini-btn {
+      width: auto;
+      min-height: 25px;
+      padding: 0 8px;
+      border-radius: 7px;
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--card-bg);
+    }
+    button.script-mini-btn.is-run {
+      border-color: color-mix(in srgb, var(--brand-accent) 45%, var(--border-col));
+      color: var(--brand-accent);
+      font-weight: 600;
+    }
+    button.script-mini-btn.is-del:hover {
+      border-color: rgba(214, 87, 69, 0.55);
+      color: #d65745;
+    }
+    .script-output-box {
+      border-top: 1px solid var(--divider-col);
+      padding-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .script-output-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: var(--muted-fg);
+    }
+    .script-output-pre {
+      margin: 0;
+      padding: 7px 8px;
+      border-radius: 7px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-col);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--fg);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .script-form-box {
+      border: 1px dashed var(--border-col);
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: var(--control-bg);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .script-form-box[hidden] {
+      display: none !important;
+    }
+    .script-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .script-field label {
+      font-size: 11px;
+      color: var(--muted-fg);
+      font-weight: 500;
+    }
+    .script-field input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--border-col);
+      border-radius: 7px;
+      background: var(--card-bg);
+      color: var(--fg);
+      font-size: 11.5px;
+      padding: 5px 8px;
+      outline: none;
+    }
+    .script-field input:focus {
+      border-color: var(--brand-accent);
+    }
+    .script-form-row2 {
+      display: grid;
+      grid-template-columns: 1fr 84px;
+      gap: 6px;
+    }
+    .script-form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -888,6 +1148,27 @@
       </div>
     </div>
 
+    <div class="section" id="live-tasks-section" data-group-id="liveTasks">
+      <button type="button" class="section-head" id="live-tasks-head" aria-expanded="true">
+        <span class="section-title" id="live-tasks-title">📡 实时运行状态</span>
+        <span class="section-head-right">
+          <span class="section-badge" id="live-tasks-badge">空闲</span>
+          <span class="section-chevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </span>
+      </button>
+      <div class="live-tasks-body">
+        <div class="live-task-list" id="live-tasks-list">
+          <div class="live-task-empty">…</div>
+        </div>
+        <div class="live-tasks-foot">
+          <span id="live-tasks-updated">—</span>
+          <button type="button" class="script-mini-btn" id="btn-live-tasks-refresh">刷新</button>
+        </div>
+      </div>
+    </div>
+
     <div class="section" id="overview-notify-card">
       <div class="overview-card-head">
         <span class="section-title" id="ov-notify-title">🔔 手机推送</span>
@@ -909,6 +1190,59 @@
           <button type="button" class="update-pill-btn" id="btn-ov-notify-config">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
             <span id="btn-ov-notify-config-lbl">配置渠道</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="scripts-section" data-group-id="scripts">
+      <button type="button" class="section-head" id="scripts-head" aria-expanded="true">
+        <span class="section-title" id="scripts-title">🛠️ 自定义脚本</span>
+        <span class="section-head-right">
+          <span class="section-badge" id="scripts-badge">0 个</span>
+          <span class="section-chevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </span>
+      </button>
+      <div class="scripts-body">
+        <div class="script-list" id="scripts-list"></div>
+        <div class="script-form-box" id="script-form-box" hidden>
+          <input type="hidden" id="script-field-id" />
+          <div class="script-field">
+            <label for="script-field-name" id="script-lbl-name">脚本名称</label>
+            <input type="text" id="script-field-name" placeholder="例如：AGY 更新巡检" />
+          </div>
+          <div class="script-field">
+            <label for="script-field-path" id="script-lbl-path">脚本路径</label>
+            <input type="text" id="script-field-path" placeholder="例如：D:\...\scripts\ops\check-agy-update.mjs" />
+          </div>
+          <div class="script-form-row2">
+            <div class="script-field">
+              <label for="script-field-cmd" id="script-lbl-cmd">启动命令（可选，留空自动识别）</label>
+              <input type="text" id="script-field-cmd" placeholder="node / python / pwsh" />
+            </div>
+            <div class="script-field">
+              <label for="script-field-timeout" id="script-lbl-timeout">超时(秒)</label>
+              <input type="number" id="script-field-timeout" min="5" max="300" value="60" />
+            </div>
+          </div>
+          <div class="script-field">
+            <label for="script-field-args" id="script-lbl-args">启动参数（可选，空格分隔）</label>
+            <input type="text" id="script-field-args" placeholder="例如：--bvid BV1xxx --push" />
+          </div>
+          <div class="script-field">
+            <label for="script-field-cwd" id="script-lbl-cwd">工作目录（可选，默认脚本所在目录）</label>
+            <input type="text" id="script-field-cwd" placeholder="留空自动使用脚本所在文件夹" />
+          </div>
+          <div class="script-form-actions">
+            <button type="button" class="script-mini-btn" id="btn-script-cancel">取消</button>
+            <button type="button" class="script-mini-btn is-run" id="btn-script-save">保存脚本</button>
+          </div>
+        </div>
+        <div class="update-card-actions">
+          <button type="button" class="update-pill-btn" id="btn-script-add">
+            <span id="btn-script-add-lbl">+ 添加脚本</span>
           </button>
         </div>
       </div>
@@ -2747,6 +3081,8 @@
       }
       renderOverviewNotifyCard();
       renderUpdateCard();
+      if (typeof renderLiveTasksCard === 'function') renderLiveTasksCard();
+      if (typeof renderScriptsCard === 'function') renderScriptsCard();
     }
 
     function isUsageMonitorAvailable() {
@@ -3246,15 +3582,548 @@
     document.getElementById('btn-reset').addEventListener('click', () => postAction('/api/reset', 'btnReset'));
     document.getElementById('btn-refresh').addEventListener('click', refreshStatus);
 
+    // ── Overview Extras: Live Running Tasks & Custom Scripts Runner ──
+    let liveTasksState = { available: true, running: [], recent: [], checkedAt: null, source: '' };
+    let customScripts = [];
+    const scriptRunOutputs = new Map();
+    const scriptRunningIds = new Set();
+
+    function getOverviewExtrasCopy(lang) {
+      if (lang === 'en') {
+        return {
+          liveTitle: '📡 Live Activity',
+          liveIdle: 'Idle',
+          liveRunningBadge: (n) => `${n} running`,
+          liveRunningTag: 'Running',
+          liveCancellingTag: 'Stopping',
+          liveIdleTag: 'Recent',
+          liveSubagents: (n) => `${n} subagent${n > 1 ? 's' : ''}`,
+          liveNoRunning: 'No active agent turns right now',
+          liveUnavailable: 'Live conversation API unavailable (will retry)',
+          liveRefresh: 'Refresh',
+          liveUpdatedAt: (t) => `Updated ${t}`,
+          scriptsTitle: '🛠️ Custom Scripts',
+          scriptsCount: (n) => `${n} script${n === 1 ? '' : 's'}`,
+          scriptsEmpty: 'Add local Node/Python/Shell scripts to run with one click (0 tokens).',
+          btnAdd: '+ Add Script',
+          btnRun: '▶ Run',
+          btnRunning: 'Running…',
+          btnEdit: 'Edit',
+          btnDel: 'Delete',
+          btnSave: 'Save Script',
+          btnCancel: 'Cancel',
+          btnCopy: 'Copy',
+          btnHide: 'Hide',
+          lblName: 'Name',
+          lblPath: 'Script Path',
+          lblCmd: 'Runner Command (optional, auto by ext)',
+          lblTimeout: 'Timeout (s)',
+          lblArgs: 'Arguments (optional, space-separated)',
+          lblCwd: 'Working Dir (optional)',
+          statusNever: 'Never run',
+          statusOk: (ms) => `OK · ${(ms / 1000).toFixed(1)}s`,
+          statusErr: (c) => `Exit ${c}`,
+          toastSaved: 'Script saved',
+          toastDeleted: 'Script deleted',
+          toastInvalid: 'Please enter a name and script path (or command)',
+          toastCopied: 'Output copied',
+        };
+      }
+      if (lang === 'ja') {
+        return {
+          liveTitle: '📡 実行中タスク',
+          liveIdle: '待機中',
+          liveRunningBadge: (n) => `${n} 件実行中`,
+          liveRunningTag: '実行中',
+          liveCancellingTag: '停止中',
+          liveIdleTag: '最近',
+          liveSubagents: (n) => `サブエージェント ${n}`,
+          liveNoRunning: '現在実行中のタスクはありません',
+          liveUnavailable: '会話ステータス API を取得できませんでした',
+          liveRefresh: '更新',
+          liveUpdatedAt: (t) => `${t} 更新`,
+          scriptsTitle: '🛠️ カスタムスクリプト',
+          scriptsCount: (n) => `${n} 件`,
+          scriptsEmpty: 'ローカルの Node / Python / Shell スクリプトを登録してワンクリック実行できます（0 Token）。',
+          btnAdd: '+ スクリプト追加',
+          btnRun: '▶ 実行',
+          btnRunning: '実行中…',
+          btnEdit: '編集',
+          btnDel: '削除',
+          btnSave: '保存',
+          btnCancel: 'キャンセル',
+          btnCopy: 'コピー',
+          btnHide: '閉じる',
+          lblName: 'スクリプト名',
+          lblPath: 'スクリプトパス',
+          lblCmd: '起動コマンド（任意・拡張子自動判定）',
+          lblTimeout: 'タイムアウト(秒)',
+          lblArgs: '起動引数（任意・スペース区切り）',
+          lblCwd: '作業ディレクトリ（任意）',
+          statusNever: '未実行',
+          statusOk: (ms) => `成功 · ${(ms / 1000).toFixed(1)}s`,
+          statusErr: (c) => `終了 ${c}`,
+          toastSaved: 'スクリプトを保存しました',
+          toastDeleted: 'スクリプトを削除しました',
+          toastInvalid: '名前とスクリプトパス（またはコマンド）を入力してください',
+          toastCopied: '出力をコピーしました',
+        };
+      }
+      const isTrad = lang === 'zh-TW' || lang === 'yue';
+      return {
+        liveTitle: isTrad ? '📡 即時運行狀態' : '📡 实时运行状态',
+        liveIdle: isTrad ? '空閒' : '空闲',
+        liveRunningBadge: (n) => (isTrad ? `${n} 個運行中` : `${n} 个运行中`),
+        liveRunningTag: isTrad ? '運行中' : '运行中',
+        liveCancellingTag: isTrad ? '停止中' : '停止中',
+        liveIdleTag: isTrad ? '最近' : '最近',
+        liveSubagents: (n) => (isTrad ? `+${n} 子代理` : `+${n} 子智能体`),
+        liveNoRunning: isTrad ? '目前沒有正在運行的任務' : '当前没有正在运行的任务',
+        liveUnavailable: isTrad ? '暫時無法讀取會話狀態，稍後自動重試' : '暂时无法读取会话状态，稍后自动重试',
+        liveRefresh: isTrad ? '重新整理' : '刷新',
+        liveUpdatedAt: (t) => (isTrad ? `更新於 ${t}` : `更新于 ${t}`),
+        scriptsTitle: isTrad ? '🛠️ 自訂腳本' : '🛠️ 自定义脚本',
+        scriptsCount: (n) => (isTrad ? `${n} 個` : `${n} 个`),
+        scriptsEmpty: isTrad
+          ? '可加入本機 Node / Python / Shell 小腳本，一鍵 0-Token 執行並查看輸出。'
+          : '可添加本机 Node / Python / Shell 小脚本，一键 0-Token 运行并直接查看输出。',
+        btnAdd: isTrad ? '+ 新增腳本' : '+ 添加脚本',
+        btnRun: isTrad ? '▶ 執行' : '▶ 运行',
+        btnRunning: isTrad ? '執行中…' : '运行中…',
+        btnEdit: isTrad ? '編輯' : '编辑',
+        btnDel: isTrad ? '刪除' : '删除',
+        btnSave: isTrad ? '儲存腳本' : '保存脚本',
+        btnCancel: isTrad ? '取消' : '取消',
+        btnCopy: isTrad ? '複製' : '复制',
+        btnHide: isTrad ? '收起' : '收起',
+        lblName: isTrad ? '腳本名稱' : '脚本名称',
+        lblPath: isTrad ? '腳本路徑' : '脚本路径',
+        lblCmd: isTrad ? '啟動命令（選填，留空自動辨識）' : '启动命令（可选，留空自动识别）',
+        lblTimeout: isTrad ? '逾時(秒)' : '超时(秒)',
+        lblArgs: isTrad ? '啟動參數（選填，空白分隔）' : '启动参数（可选，空格分隔）',
+        lblCwd: isTrad ? '工作目錄（選填，預設腳本所在資料夾）' : '工作目录（可选，默认脚本所在目录）',
+        statusNever: isTrad ? '未執行' : '未运行',
+        statusOk: (ms) => (isTrad ? `成功 · ${(ms / 1000).toFixed(1)}s` : `成功 · ${(ms / 1000).toFixed(1)}s`),
+        statusErr: (c) => (isTrad ? `失敗 (${c})` : `失败 (${c})`),
+        toastSaved: isTrad ? '腳本已儲存' : '脚本已保存',
+        toastDeleted: isTrad ? '腳本已刪除' : '脚本已删除',
+        toastInvalid: isTrad ? '請填寫腳本名稱與路徑（或命令）' : '请填写脚本名称和路径（或启动命令）',
+        toastCopied: isTrad ? '輸出已複製' : '输出已复制',
+      };
+    }
+
+    function formatRelTimeShort(iso, lang) {
+      if (!iso) return '';
+      const diffSec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+      if (!Number.isFinite(diffSec)) return '';
+      const isZh = lang === 'zh-CN' || lang === 'zh-TW' || lang === 'yue';
+      if (diffSec < 15) return isZh ? '刚刚' : lang === 'ja' ? 'たった今' : 'just now';
+      if (diffSec < 60) return isZh ? `${diffSec} 秒前` : `${diffSec}s ago`;
+      const mins = Math.floor(diffSec / 60);
+      if (mins < 60) return isZh ? `${mins} 分钟前` : `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return isZh ? `${hrs} 小时前` : `${hrs}h ago`;
+      return isZh ? `${Math.floor(hrs / 24)} 天前` : `${Math.floor(hrs / 24)}d ago`;
+    }
+
+    function renderLiveTasksCard() {
+      const lang = currentConfig?.language || 'zh-CN';
+      const c = getOverviewExtrasCopy(lang);
+      const sec = document.getElementById('live-tasks-section');
+      const head = document.getElementById('live-tasks-head');
+      if (sec && head) {
+        const isCollapsed = collapsedGroups.has('liveTasks');
+        sec.classList.toggle('is-collapsed', isCollapsed);
+        head.setAttribute('aria-expanded', String(!isCollapsed));
+      }
+      const titleEl = document.getElementById('live-tasks-title');
+      if (titleEl) titleEl.textContent = c.liveTitle;
+      const refBtn = document.getElementById('btn-live-tasks-refresh');
+      if (refBtn) refBtn.textContent = c.liveRefresh;
+
+      const running = Array.isArray(liveTasksState.running) ? liveTasksState.running : [];
+      const recent = Array.isArray(liveTasksState.recent) ? liveTasksState.recent : [];
+      const badgeEl = document.getElementById('live-tasks-badge');
+      if (badgeEl) {
+        badgeEl.textContent = running.length > 0 ? c.liveRunningBadge(running.length) : c.liveIdle;
+        badgeEl.classList.toggle('is-on', running.length > 0);
+      }
+
+      const listEl = document.getElementById('live-tasks-list');
+      if (listEl) {
+        listEl.innerHTML = '';
+        if (!liveTasksState.available) {
+          const empty = document.createElement('div');
+          empty.className = 'live-task-empty';
+          empty.textContent = c.liveUnavailable;
+          listEl.appendChild(empty);
+        } else {
+          if (running.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'live-task-empty';
+            empty.textContent = c.liveNoRunning;
+            listEl.appendChild(empty);
+          }
+          const renderItem = (item, isRun) => {
+            const row = document.createElement('div');
+            row.className = `live-task-row${isRun ? ' is-running' : ''}`;
+            const left = document.createElement('div');
+            left.className = 'live-task-left';
+            const dot = document.createElement('span');
+            dot.className = `live-dot-pulse${item.runState === 'RUN_STATE_CANCELLING' ? ' is-cancelling' : isRun ? '' : ' is-idle'}`;
+            const info = document.createElement('div');
+            info.className = 'live-task-info';
+            const title = document.createElement('div');
+            title.className = 'live-task-title';
+            title.textContent = item.title || 'Conversation';
+            title.title = item.title || '';
+            const sub = document.createElement('div');
+            sub.className = 'live-task-sub';
+            const subParts = [];
+            if (item.activeSubagentCount > 0) subParts.push(c.liveSubagents(item.activeSubagentCount));
+            else if (item.subagentCount > 0) subParts.push(c.liveSubagents(item.subagentCount));
+            const rel = formatRelTimeShort(item.updateTime, lang);
+            if (rel) subParts.push(rel);
+            sub.textContent = subParts.join(' · ') || (isRun ? c.liveRunningTag : '');
+            info.appendChild(title);
+            if (sub.textContent) info.appendChild(sub);
+            left.appendChild(dot);
+            left.appendChild(info);
+            const tag = document.createElement('span');
+            tag.className = 'live-task-tag';
+            tag.textContent = item.runState === 'RUN_STATE_CANCELLING' ? c.liveCancellingTag : isRun ? c.liveRunningTag : c.liveIdleTag;
+            row.appendChild(left);
+            row.appendChild(tag);
+            listEl.appendChild(row);
+          };
+          for (const item of running) renderItem(item, true);
+          for (const item of recent.slice(0, running.length > 0 ? 1 : 2)) renderItem(item, false);
+        }
+      }
+
+      const updEl = document.getElementById('live-tasks-updated');
+      if (updEl) {
+        if (liveTasksState.checkedAt) {
+          const d = new Date(liveTasksState.checkedAt);
+          const pad = (n) => String(n).padStart(2, '0');
+          updEl.textContent = c.liveUpdatedAt(`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+        } else {
+          updEl.textContent = '—';
+        }
+      }
+    }
+
+    async function loadLiveTasks() {
+      try {
+        const res = await apiFetch('/api/live-tasks', { method: 'GET' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.ok) {
+          liveTasksState = data;
+          renderLiveTasksCard();
+        }
+      } catch {}
+    }
+
+    function openScriptForm(script = null) {
+      const box = document.getElementById('script-form-box');
+      if (!box) return;
+      document.getElementById('script-field-id').value = script?.id || '';
+      document.getElementById('script-field-name').value = script?.name || '';
+      document.getElementById('script-field-path').value = script?.scriptPath || '';
+      document.getElementById('script-field-cmd').value = script?.command || '';
+      document.getElementById('script-field-args').value = Array.isArray(script?.args) ? script.args.join(' ') : '';
+      document.getElementById('script-field-cwd').value = script?.cwd || '';
+      document.getElementById('script-field-timeout').value = String(script?.timeoutSec || 60);
+      box.hidden = false;
+      document.getElementById('script-field-name').focus();
+    }
+
+    function closeScriptForm() {
+      const box = document.getElementById('script-form-box');
+      if (box) box.hidden = true;
+    }
+
+    function renderScriptsCard() {
+      const lang = currentConfig?.language || 'zh-CN';
+      const c = getOverviewExtrasCopy(lang);
+      const sec = document.getElementById('scripts-section');
+      const head = document.getElementById('scripts-head');
+      if (sec && head) {
+        const isCollapsed = collapsedGroups.has('scripts');
+        sec.classList.toggle('is-collapsed', isCollapsed);
+        head.setAttribute('aria-expanded', String(!isCollapsed));
+      }
+      const titleEl = document.getElementById('scripts-title');
+      if (titleEl) titleEl.textContent = c.scriptsTitle;
+      const badgeEl = document.getElementById('scripts-badge');
+      if (badgeEl) badgeEl.textContent = c.scriptsCount(customScripts.length);
+
+      const mapLbl = {
+        'btn-script-add-lbl': c.btnAdd,
+        'script-lbl-name': c.lblName,
+        'script-lbl-path': c.lblPath,
+        'script-lbl-cmd': c.lblCmd,
+        'script-lbl-timeout': c.lblTimeout,
+        'script-lbl-args': c.lblArgs,
+        'script-lbl-cwd': c.lblCwd,
+        'btn-script-save': c.btnSave,
+        'btn-script-cancel': c.btnCancel,
+      };
+      for (const [id, txt] of Object.entries(mapLbl)) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = txt;
+      }
+
+      const listEl = document.getElementById('scripts-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      if (!customScripts.length) {
+        const empty = document.createElement('div');
+        empty.className = 'live-task-empty';
+        empty.textContent = c.scriptsEmpty;
+        listEl.appendChild(empty);
+        return;
+      }
+
+      for (const sc of customScripts) {
+        const card = document.createElement('div');
+        card.className = 'script-card';
+        const top = document.createElement('div');
+        top.className = 'script-top';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'script-title-wrap';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'script-name';
+        nameEl.textContent = sc.name;
+        nameEl.title = sc.scriptPath || sc.command || sc.name;
+
+        const metaEl = document.createElement('div');
+        metaEl.className = 'script-meta';
+        if (sc.lastRunAt) {
+          const stSpan = document.createElement('span');
+          const ok = sc.lastExitCode === 0;
+          stSpan.className = ok ? 'script-status-ok' : 'script-status-err';
+          stSpan.textContent = ok ? c.statusOk(sc.lastDurationMs || 0) : c.statusErr(sc.lastExitCode);
+          metaEl.appendChild(stSpan);
+          const rel = formatRelTimeShort(sc.lastRunAt, lang);
+          if (rel) metaEl.appendChild(document.createTextNode(` · ${rel}`));
+          if (sc.lastSummary) metaEl.appendChild(document.createTextNode(` · ${sc.lastSummary}`));
+        } else {
+          const shortPath = (sc.scriptPath || sc.command || '').split(/[\\/]/).slice(-2).join('/');
+          metaEl.textContent = shortPath ? `${c.statusNever} · ${shortPath}` : c.statusNever;
+        }
+        wrap.appendChild(nameEl);
+        wrap.appendChild(metaEl);
+
+        const btns = document.createElement('div');
+        btns.className = 'script-btns';
+        const isRunning = scriptRunningIds.has(sc.id);
+
+        const runBtn = document.createElement('button');
+        runBtn.type = 'button';
+        runBtn.className = 'script-mini-btn is-run';
+        runBtn.disabled = isRunning;
+        runBtn.textContent = isRunning ? c.btnRunning : c.btnRun;
+        runBtn.addEventListener('click', () => void triggerRunScript(sc.id));
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'script-mini-btn';
+        editBtn.textContent = c.btnEdit;
+        editBtn.addEventListener('click', () => openScriptForm(sc));
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'script-mini-btn is-del';
+        delBtn.textContent = c.btnDel;
+        delBtn.addEventListener('click', () => void triggerDeleteScript(sc.id));
+
+        btns.appendChild(runBtn);
+        btns.appendChild(editBtn);
+        btns.appendChild(delBtn);
+
+        top.appendChild(wrap);
+        top.appendChild(btns);
+        card.appendChild(top);
+
+        const runOut = scriptRunOutputs.get(sc.id);
+        if (runOut) {
+          const outBox = document.createElement('div');
+          outBox.className = 'script-output-box';
+          const outHead = document.createElement('div');
+          outHead.className = 'script-output-head';
+          const outStat = document.createElement('span');
+          outStat.className = runOut.ok ? 'script-status-ok' : 'script-status-err';
+          outStat.textContent = runOut.ok ? c.statusOk(runOut.durationMs || 0) : c.statusErr(runOut.exitCode);
+          const outBtns = document.createElement('div');
+          outBtns.className = 'script-btns';
+          const copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'script-mini-btn';
+          copyBtn.textContent = c.btnCopy;
+          copyBtn.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(runOut.combined || '');
+              showToast(c.toastCopied);
+            } catch {}
+          });
+          const hideBtn = document.createElement('button');
+          hideBtn.type = 'button';
+          hideBtn.className = 'script-mini-btn';
+          hideBtn.textContent = c.btnHide;
+          hideBtn.addEventListener('click', () => {
+            scriptRunOutputs.delete(sc.id);
+            renderScriptsCard();
+          });
+          outBtns.appendChild(copyBtn);
+          outBtns.appendChild(hideBtn);
+          outHead.appendChild(outStat);
+          outHead.appendChild(outBtns);
+
+          const pre = document.createElement('pre');
+          pre.className = 'script-output-pre';
+          pre.textContent = runOut.combined || '(empty output)';
+          outBox.appendChild(outHead);
+          outBox.appendChild(pre);
+          card.appendChild(outBox);
+        }
+
+        listEl.appendChild(card);
+      }
+    }
+
+    async function loadScripts() {
+      try {
+        const res = await apiFetch('/api/scripts', { method: 'GET' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.ok && Array.isArray(data.scripts)) {
+          customScripts = data.scripts;
+          renderScriptsCard();
+        }
+      } catch {}
+    }
+
+    async function triggerSaveScript() {
+      const c = getOverviewExtrasCopy(currentConfig?.language || 'zh-CN');
+      const payload = {
+        id: document.getElementById('script-field-id').value.trim() || undefined,
+        name: document.getElementById('script-field-name').value.trim(),
+        scriptPath: document.getElementById('script-field-path').value.trim(),
+        command: document.getElementById('script-field-cmd').value.trim(),
+        args: document.getElementById('script-field-args').value.trim(),
+        cwd: document.getElementById('script-field-cwd').value.trim(),
+        timeoutSec: Number(document.getElementById('script-field-timeout').value) || 60,
+      };
+      if (!payload.name || (!payload.scriptPath && !payload.command)) {
+        showToast(c.toastInvalid);
+        return;
+      }
+      try {
+        const res = await apiFetch('/api/scripts', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data?.ok) {
+          customScripts = data.scripts || [];
+          closeScriptForm();
+          renderScriptsCard();
+          showToast(c.toastSaved);
+        } else {
+          showToast(data?.error || 'Error');
+        }
+      } catch (err) {
+        showToast(err?.message || 'Error');
+      }
+    }
+
+    async function triggerDeleteScript(id) {
+      const c = getOverviewExtrasCopy(currentConfig?.language || 'zh-CN');
+      try {
+        const res = await apiFetch('/api/scripts/delete', {
+          method: 'POST',
+          body: JSON.stringify({ id }),
+        });
+        const data = await res.json();
+        if (data?.ok) {
+          customScripts = data.scripts || [];
+          scriptRunOutputs.delete(id);
+          renderScriptsCard();
+          showToast(c.toastDeleted);
+        }
+      } catch {}
+    }
+
+    async function triggerRunScript(id) {
+      if (scriptRunningIds.has(id)) return;
+      scriptRunningIds.add(id);
+      renderScriptsCard();
+      try {
+        const res = await apiFetch('/api/scripts/run', {
+          method: 'POST',
+          body: JSON.stringify({ id }),
+        });
+        const data = await res.json();
+        const combined = [data?.stdout || '', data?.stderr ? `[stderr]\n${data.stderr}` : '']
+          .filter(Boolean)
+          .join('\n')
+          .trim() || data?.message || data?.error || '';
+        scriptRunOutputs.set(id, {
+          ok: Boolean(data?.ok),
+          exitCode: data?.exitCode ?? -1,
+          durationMs: data?.durationMs ?? 0,
+          combined,
+        });
+        await loadScripts();
+      } catch (err) {
+        scriptRunOutputs.set(id, {
+          ok: false,
+          exitCode: -1,
+          durationMs: 0,
+          combined: err?.message || String(err),
+        });
+      } finally {
+        scriptRunningIds.delete(id);
+        renderScriptsCard();
+      }
+    }
+
+    const liveTasksSecEl = document.getElementById('live-tasks-section');
+    const liveTasksHeadEl = document.getElementById('live-tasks-head');
+    if (liveTasksSecEl && liveTasksHeadEl) {
+      liveTasksHeadEl.addEventListener('click', () => toggleGroupCollapse('liveTasks', liveTasksSecEl, liveTasksHeadEl));
+    }
+    const scriptsSecEl = document.getElementById('scripts-section');
+    const scriptsHeadEl = document.getElementById('scripts-head');
+    if (scriptsSecEl && scriptsHeadEl) {
+      scriptsHeadEl.addEventListener('click', () => toggleGroupCollapse('scripts', scriptsSecEl, scriptsHeadEl));
+    }
+    document.getElementById('btn-live-tasks-refresh')?.addEventListener('click', () => void loadLiveTasks());
+    document.getElementById('btn-script-add')?.addEventListener('click', () => openScriptForm(null));
+    document.getElementById('btn-script-cancel')?.addEventListener('click', closeScriptForm);
+    document.getElementById('btn-script-save')?.addEventListener('click', () => void triggerSaveScript());
+
     renderStaticChrome();
     renderNotifySection({ rebuildCreds: true });
+    renderLiveTasksCard();
+    renderScriptsCard();
     void refreshStatus();
     void loadNotifyConfig({ force: true });
+    void loadLiveTasks();
+    void loadScripts();
     setInterval(() => {
       if (document.visibilityState !== 'hidden') {
         void refreshStatus();
       }
     }, 8000);
+    setInterval(() => {
+      if (document.visibilityState !== 'hidden' && activeTab === 'overview' && !collapsedGroups.has('liveTasks')) {
+        void loadLiveTasks();
+      }
+    }, 4000);
   </script>
 </body>
 </html>
