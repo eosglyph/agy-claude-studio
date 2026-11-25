@@ -206,7 +206,7 @@ $regPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeS
 $selfExe = Join-Path $installDir 'agy-claude-studio-installer.exe'
 New-Item -Path $regPath -Force | Out-Null
 Set-ItemProperty -Path $regPath -Name 'DisplayName' -Value 'Claude Studio (Antigravity 界面增强补丁)'
-Set-ItemProperty -Path $regPath -Name 'DisplayVersion' -Value '2.1.0'
+Set-ItemProperty -Path $regPath -Name 'DisplayVersion' -Value '2.2.0'
 Set-ItemProperty -Path $regPath -Name 'Publisher' -Value 'Claude Studio'
 Set-ItemProperty -Path $regPath -Name 'InstallLocation' -Value $installDir
 Set-ItemProperty -Path $regPath -Name 'DisplayIcon' -Value "$icoDest,0"
@@ -255,7 +255,7 @@ if ($UpdateStartMenuIcon) {
 }
 
 Write-Host ""
-Write-Host "安装 / 更新完成 (v2.1.0)！"
+Write-Host "安装 / 更新完成 (v2.2.0)！"
 Write-Host "  Antigravity:   $AntigravityExe"
 Write-Host "  安装目录:      $installDir"
 Write-Host "  启动脚本:      $vbsPath"

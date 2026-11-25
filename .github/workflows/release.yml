@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.1.0). Leave empty to use v<package.json version>.'
+        description: 'Release tag (e.g. v2.2.0). Leave empty to use v<package.json version>.'
         required: false
         type: string
       prerelease:
@@ -65,7 +65,7 @@ jobs:
           fi
 
           if [[ ! "$TAG" =~ ^v[0-9A-Za-z._-]+$ ]]; then
-            echo "::error::Invalid release tag '$TAG'. Expected a tag starting with 'v' (e.g. v2.1.0)."
+            echo "::error::Invalid release tag '$TAG'. Expected a tag starting with 'v' (e.g. v2.2.0)."
             exit 1
           fi
 
@@ -162,7 +162,8 @@ jobs:
           with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
               text = f.read().replace('\r\n', '\n')
 
-          pattern = re.compile(r'^##\s+\[?' + re.escape(tag) + r'\]?(?:\s+-\s+.*|\s*)$', re.MULTILINE)
+          clean_ver = tag.lstrip('vV')
+          pattern = re.compile(r'^##\s+\[?v?' + re.escape(clean_ver) + r'\]?(?:\s+-\s+.*|\s*)$', re.MULTILINE)
           m = pattern.search(text)
           if not m:
               sys.exit(1)

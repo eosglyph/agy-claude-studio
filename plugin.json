@@ -1,7 +1,7 @@
 {
   "name": "agy-claude-studio",
   "displayName": "Claude Studio",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "面向 Google Antigravity 的原生界面美学插件：Claude 暖灰与黑曜石纯色配色、独立毛玻璃质感、Gemini 4 元素周期表模型选择器、像素螃蟹 Clawd、Swarm 5 语言本地化，以及与 antigravity-usage-monitor 的右侧栏协同联动。",
   "logo": "assets/logo.svg",
   "author": "eosglyph (forked from 0DNANCY/agy-claude-style)",

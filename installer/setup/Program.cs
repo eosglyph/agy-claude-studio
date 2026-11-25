@@ -631,7 +631,7 @@ namespace AgyClaudeStudio.Installer
                 if (key == null) return;
                 string exePath = Path.Combine(installDir, SelfInstalledExeName);
                 key.SetValue("DisplayName", "Claude Studio (Antigravity 界面增强补丁)", RegistryValueKind.String);
-                key.SetValue("DisplayVersion", version ?? "2.1.0", RegistryValueKind.String);
+                key.SetValue("DisplayVersion", version ?? "2.2.0", RegistryValueKind.String);
                 key.SetValue("Publisher", "Claude Studio", RegistryValueKind.String);
                 key.SetValue("InstallLocation", installDir, RegistryValueKind.String);
                 key.SetValue("DisplayIcon", exePath + ",0", RegistryValueKind.String);

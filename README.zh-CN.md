@@ -4,12 +4,12 @@
 
 # Claude Studio
 
-**`agy-claude-studio`** — 面向 **Google Antigravity 2.33.1+** 的原生界面美学插件
+**`agy-claude-studio`** — 面向 **Google Antigravity 2.33.1+（全面适配 v2.35.x）** 的原生界面美学与效率插件
 
-Claude 暖灰与黑曜石纯色配色 · 独立毛玻璃质感 · Gemini 4 元素周期表选择器 · 60fps 思考强度滑块 · 像素螃蟹 Clawd · 右侧原生控制室
+Claude 暖灰与黑曜石配色 · 3-Tab 右侧控制室（对话 / 工具 / 设置） · 0-Token 手机推送 · Gemini 4 元素周期表直连同步 · 4 项原生技能 · 像素螃蟹 Clawd
 
 <p>
-  <img src="https://img.shields.io/badge/Antigravity-2.33.1%2B-18181b?style=flat-square" alt="Antigravity 2.33.1+" />
+  <img src="https://img.shields.io/badge/Antigravity-2.33.1%2B%20%7C%202.35.x-18181b?style=flat-square" alt="Antigravity 2.33.1+ / 2.35.x" />
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-18181b?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/badge/MCP_Tools-0_Tokens-2f855a?style=flat-square" alt="Zero Token MCP" />
   <img src="https://img.shields.io/badge/i18n-5_Languages-3b82f6?style=flat-square" alt="5 Languages" />
@@ -35,6 +35,11 @@ Claude 暖灰与黑曜石纯色配色 · 独立毛玻璃质感 · Gemini 4 元�
 
 <div align="center">
 
+#### v2.2 全局实景（Claude 暖灰主题 + 极简 3-Tab 侧边栏 + 实时运行状态）
+<img src="assets/screenshots/studio-overview.png" alt="Claude Studio v2.2 Full Workspace Overview" width="880" />
+
+<br/>
+
 #### Gemini 4 元素周期表模型选择器
 <img src="assets/screenshots/periodic-selector.png" alt="Gemini 4 Periodic Table Model Selector" width="760" />
 
@@ -45,16 +50,16 @@ Claude 暖灰与黑曜石纯色配色 · 独立毛玻璃质感 · Gemini 4 元�
 
 <br/>
 
-#### 右侧「Claude Studio」控制室 ×「用量监控」双栏协同
+#### 右侧「Claude Studio」工具页 ×「用量监控」双栏协同
 <table>
   <tr>
     <td align="center" width="50%">
       <img src="assets/screenshots/studio-panel.png" alt="Claude Studio Control Panel" width="308" /><br/>
-      <sub><b>Claude Studio 控制面板</b>：4 组可折叠配置 + 顶部一键跳转用量监控</sub>
+      <sub><b>Claude Studio 工具页（v2.2 极简版）</b>：一键刷新、手机推送快捷卡与本地脚本工具箱</sub>
     </td>
     <td align="center" width="50%">
       <img src="assets/screenshots/usage-monitor-pair.png" alt="Usage Monitor Companion" width="308" /><br/>
-      <sub><b>Usage Monitor 搭档面板</b>：切会话自动展开，底栏胶囊智能拆分不遮挡</sub>
+      <sub><b>Usage Monitor 搭档面板</b>：支持三态右侧栏常驻选择（Studio / 用量监控 / 关闭）与底栏胶囊智能拆分</sub>
     </td>
   </tr>
 </table>
@@ -68,23 +73,24 @@ Claude 暖灰与黑曜石纯色配色 · 独立毛玻璃质感 · Gemini 4 元�
 
 | 模块 | 能力一览 |
 | --- | --- |
-| **主题与材质** | 内置 `claude`（暖灰炭黑，默认）/ `obsidian`（黑曜石）/ `host`（宿主原生）三套深浅自适应纯色配色；独立 `glassEffect` 毛玻璃开关（浮层磨砂高光、看图悬浮胶囊、输入框聚焦柔光）。 |
-| **模型与推理交互** | **Gemini 4 元素周期表抽屉**：分类筛选、实时搜索、配额与档位直切、AI Studio 新元素同步提示词；**60fps 思考强度滑块**：支持 ChatGPT Codex 星云与 Claude Code 点阵双风格，完整适配 `2.33.1` `· 1M` / `(High Thinking)` 标签。 |
-| **工作台与排版** | Claude 风格紧凑输入框与侧边栏、兼容中文 IME 的丝滑插值光标、Studio 首页统计看板（热力图、30d/7d 堆叠图、书籍折算标尺）与可交互字符水波纹背景。 |
-| **原生插件与本地化** | 零工具 MCP 生命周期托管（`tools/list -> []`，**0 Token 占用**），具备 PID 复用防死锁保护与 `<2KB` 轻量配置热更新；右侧 Aux Pane 可视化控制室；覆盖主窗口与 **Swarm 蜂群侧栏（`/swarm`）** 的 5 语言热切（简中 / 繁中 / 粤语 / English / 日本語），自动避让代码区与第三方插件节点。 |
-| **像素螃蟹 Clawd** | 蹲守输入框右上角的 19 态双层像素小跟班，随会话状态切换思考/打字/构建/压缩/小憩，支持轻戳、连点挠痒、拖拽与自动避让排队卡片。 |
+| **3-Tab 侧边栏（`对话 \| 工具 \| 设置`）** | 清爽的扁平极简风格，顶栏内置 **一键升级**（同时支持 Git 克隆与插件包原地更新，保留全部本地数据）。**「对话」** 页实时展示工作区、Git 分支、计费口径上下文拆解、连接器，以及底部实时运行状态（等待首字、推理、命令、回复摘要预览与可展开子代理列表）。 |
+| **手机推送提醒（不耗对话额度）** | 任务跑完或出错自动发到手机，支持 **8 种渠道**：**Server酱**（支持约 28KB 完整 Markdown 正文推送）、**Bark（iOS）**、**ntfy**、**飞书**、**钉钉**、**企业微信**、**Telegram Bot** 与 **自定义 Webhook**；支持按耗时过滤（默认 3 分钟）、空闲/报错/取消规则，密钥单独保存在 `PLUGIN_DATA/notify.json`。 |
+| **模型、推理与 `/compact` 体验** | **Gemini 4 元素周期表** 支持直连 Google AI Studio 同步最新模型与配色；模型名旁提供 **协作模式（Orchestrator）快捷开关**，支持重启记忆与运行态防误触锁定；**60fps 思考强度滑块**；**`/compact` 快捷预设**（自动选中、内联提示与 4 套可定制预设，默认「精简降噪」）。 |
+| **本地工具箱与 4 项原生技能** | **「工具」** 页可管理并一键运行本地 Node / Python / Shell 脚本，全新安装自带 **Antigravity 更新日志查询脚本**（`scripts/fetch-agy-changelog.mjs`）。内置 **4 项原生技能**：`studio-setup`（30 秒引导配置）、`studio-doctor`（诊断与自然语言调参）、`studio-notify`（推送配置向导）、`studio-translation-protect`（管理翻译保护名单）。 |
+| **主题、本地化与免打扰协议** | `claude` / `obsidian` / `host` 三套配色、独立毛玻璃与左上角 Logo 着色；覆盖主窗口、**Swarm 侧栏（`/swarm`）** 与 **Antigravity v2.35.x** 的 5 语言热切（含插件市场按需谷歌翻译胶囊）；遵循标准免翻译属性并支持云端保护名单与自定义忽略规则。 |
+| **工作台与像素螃蟹 Clawd** | Claude 风格紧凑输入框与侧边栏、兼容中文 IME 的丝滑光标、Studio 首页看板与字符波纹背景，以及 19 态像素小跟班 **Clawd**（轻戳、挠痒、拖拽、打盹、自动避让卡片）。 |
 
 ---
 
 <a id="推荐搭档"></a>
 ## 推荐搭档：`antigravity-usage-monitor`
 
-`Claude Studio` 专注**视觉美学、交互效率与本地化**；实时速率（`tok/s`）、首字延迟、费用估算与多模型额度池推荐搭配独立插件 **[yuhuan-dev/antigravity-usage-monitor](https://github.com/yuhuan-dev/antigravity-usage-monitor)** 使用：
+`Claude Studio` 专注**视觉美学、交互效率、对话实时检视与本地化**；如需实时速率（`tok/s`）、首字延迟、费用估算与多模型额度池，推荐搭配独立插件 **[yuhuan-dev/antigravity-usage-monitor](https://github.com/yuhuan-dev/antigravity-usage-monitor)** 使用：
 
-- **零冲突共存**：内置轻量用量统计默认关闭（`usageStatsEnabled: false`），翻译引擎永久避让 `#ag-usage-monitor-*`。
+- **零冲突共存**：内置轻量 HUD 默认仅开启顶部精简栏（`usageStatsEnabled: true`、`hudTopBar: true`、`hudBottomBar: false`、`hudRimProgress: false`），搭配外部监控时可随时在设置中一键关闭；翻译引擎通过内置 `i18n-compat.json` 保护名单永久避让 `#ag-usage-monitor-*`。
 - **底栏智能拆分**：当 `usage-monitor` 停靠在输入框底栏时，自动将其上下文进度环镜像至最右侧，避免挤压或抖动。
-- **右侧栏联动**：检测到已安装 `usage-monitor` 后，控制室顶部「用量监控」快捷按钮自动激活，并支持切对话自动展开（`pinUsageMonitorPane: true`，每个对话仅拉起一次，绝不抢焦点）。
-- **协议边界清晰**：本项目为 MIT 协议，`antigravity-usage-monitor` 为 GPLv3 协议，二者严格解耦、各自独立安装。若未安装外部监控插件，也可在面板底部随时开启本项目自带的轻量用量统计。
+- **右侧栏三态常驻（`pinRightPane`）**：可在设置中按需选择 `关闭` / `Studio 对话面板`（默认） / `用量监控`；旧版 `pinUsageMonitorPane` 自动无感迁移，未安装 `usage-monitor` 时智能回退。
+- **协议边界清晰**：本项目为 MIT 协议，`antigravity-usage-monitor` 为 GPLv3 协议，二者严格解耦、各自独立安装。
 
 ---
 
@@ -92,7 +98,7 @@ Claude 暖灰与黑曜石纯色配色 · 独立毛玻璃质感 · Gemini 4 元�
 ## 快速安装
 
 ### 环境要求
-- **Google Antigravity Desktop `2.33.1+`**（Windows / macOS），启动时需开启 CDP 参数 `--remote-debugging-port=0`。
+- **Google Antigravity Desktop `2.33.1+`**（已完整适配至 `2.35.x`，支持 Windows / macOS），启动时需开启 CDP 参数 `--remote-debugging-port=0`。
 - **Node.js `>= 22`**（零第三方 npm 依赖，仅使用内置 `fetch`、`WebSocket` 与 `node:test`）。
 
 ### 最省心方式：直接发给 Antigravity 里的 Gemini（推荐）
@@ -101,7 +107,7 @@ Claude 暖灰与黑曜石纯色配色 · 独立毛玻璃质感 · Gemini 4 元�
 
 > **帮我安装这个 Antigravity 插件：`https://github.com/eosglyph/agy-claude-studio`**
 
-智能体会自动帮你克隆到原生插件目录、检查 CDP 启动配置并引导启用。
+安装启用后，还可以直接说 *「带我 30 秒完成 Claude Studio 初始偏好配置」*（触发 `studio-setup` 技能）或 *「帮我配置任务完成时的手机微信/iOS 推送提醒」*（触发 `studio-notify` 技能）。
 
 > **可选 · 截图同款双栏体验**：如果想一步到位配齐右侧「用量监控」搭档插件（独立开源，GPLv3），直接发这句：
 >
@@ -124,6 +130,9 @@ Claude 暖灰与黑曜石纯色配色 · 独立毛玻璃质感 · Gemini 4 元�
 
 <details>
 <summary><b>方式二：Windows / macOS 独立安装器（无需 Node.js）与伴随启动包</b></summary>
+
+- **预构建发布包**：可直接在 [GitHub Releases](https://github.com/eosglyph/agy-claude-studio/releases) 下载 `Claude-Studio-v<version>-Windows-x64.exe` 或 `Claude-Studio-v<version>-macOS-universal.dmg`。
+  > **macOS 说明**：macOS Universal `.dmg` 已通过 GitHub Actions CI 构建与自动化测试，目前尚待真实 Mac 硬件环境实机验证，欢迎 macOS 用户反馈实测体验。
 
 - **Windows 独立安装器**：
   ```bash
@@ -179,7 +188,7 @@ npm run remove                        # 停止守护并无损还原原生界面
 <a id="配置参考"></a>
 ## 配置参考
 
-所有选项均可在右侧 **Claude Studio** 面板实时调整并自动保存（完整模板见 [config.example.json](config.example.json)）。
+所有选项均可在右侧 **Claude Studio** 面板实时调整并自动保存（完整模板见 [config.example.json](config.example.json)）。手机推送配置与凭据单独隔离保存在本机 `PLUGIN_DATA/notify.json` 中，不会写入 `config.json` 也不会注入渲染进程。
 
 <details>
 <summary><b>展开查看全部配置项说明</b></summary>
@@ -189,17 +198,19 @@ npm run remove                        # 停止守护并无损还原原生界面
 | 基础设置 | `language` | `'zh-CN'` \| `'zh-TW'` \| `'yue'` \| `'en'` \| `'ja'` | `'zh-CN'` | 界面与控制面板语言 |
 | 基础设置 | `homeLayout` | `'studio'` \| `'classic'` \| `'off'` | `'studio'` | 新会话首页布局 |
 | 基础设置 | `palette` | `'claude'` \| `'obsidian'` \| `'host'` | `'claude'` | 纯色主题配色 |
-| 界面微调 | `glassEffect` | `boolean` | `true` | 独立毛玻璃质感与柔光细节 |
+| 界面微调 | `glassEffect` | `boolean` | `true` | 独立毛玻璃质感与失焦柔和环境光 |
 | 界面微调 | `sidebarRestyle` / `sidebarCompact` | `boolean` | `true` | 侧边栏重塑与紧凑间距 |
 | 界面微调 | `composerRestyle` / `placeholderStyle` | `boolean` / `'studio'` \| `'host'` | `true` / `'studio'` | 极简输入框与引导文案风格 |
-| 界面微调 | `logoInk` | `'accent'` \| `'foreground'` | `'accent'` | 首页 Logo 着色模式 |
-| 进阶交互 | `periodicSelector` | `boolean` | `true` | Gemini 4 元素周期表选择器 |
+| 界面微调 | `logoInk` | `'accent'` \| `'foreground'` | `'accent'` | 首页及左上角应用 Logo 着色模式 |
+| 进阶交互 | `periodicSelector` / `orchestratorSwitch` | `boolean` | `true` | Gemini 4 元素周期表选择器与协作模式快切 |
 | 进阶交互 | `effortSliderStyle` / `effortAccent` | `'chatgpt'` \| `'claude'` / `boolean` | `'chatgpt'` / `true` | 思考强度滑块风格与色阶 |
+| 进阶交互 | `compactPreset` / `compactCustomText` | `'empty'` \| `'clean'` \| `'dev'` \| `'custom'` / `string` | `'clean'` / `''` | `/compact` 压缩预设与自定义指令文案 |
 | 进阶交互 | `smoothCaret` / `mascot` / `homeRipple` | `boolean` / `'crab'` \| `'off'` / `boolean` | `true` / `'crab'` / `true` | 丝滑光标、Clawd 挂件、首页水波纹 |
-| 用量统计 | `pinUsageMonitorPane` | `boolean` | `true` | 切会话自动展开 `usage-monitor` 右侧栏 |
-| 用量统计 | `usageStatsEnabled` | `boolean` | `false` | 内置用量统计总开关（关闭时不覆盖子项偏好） |
-| 用量统计 | `inlineStats` / `ringMode` / `turnBadges` | `boolean` / `'context'` \| `'quota'` / `boolean` | `true` / `'context'` / `true` | *(总开关开启后生效)* 内置底栏统计、圆环与轮次徽章 |
-| 用量统计 | `hudTopBar` / `hudBottomBar` / `hudRimProgress` / `hudFooterChip` / `hudCompact` | `boolean` | `true` | *(总开关开启后生效)* 环绕进度条与紧凑排版 |
+| 翻译保护 | `pluginPageTranslate` / `i18nIgnoreSelectors` | `boolean` / `string[]` | `true` / `[]` | 插件市场按需谷歌翻译胶囊与自定义免翻译选择器 |
+| 侧栏与用量 | `pinRightPane` | `'off'` \| `'studio'` \| `'usage-monitor'` | `'studio'` | 切会话自动常驻右侧栏（自动迁移旧版 `pinUsageMonitorPane`） |
+| 侧栏与用量 | `usageStatsEnabled` | `boolean` | `true` | 内置用量统计总开关（关闭时不覆盖子项偏好） |
+| 侧栏与用量 | `inlineStats` / `ringMode` / `turnBadges` | `boolean` / `'context'` \| `'quota'` / `boolean` | `true` / `'context'` / `true` | *(总开关开启后生效)* 内置底栏统计、圆环与轮次徽章 |
+| 侧栏与用量 | `hudTopBar` / `hudBottomBar` / `hudRimProgress` | `boolean` | `true` / `false` / `false` | *(总开关开启后生效)* 顶部 HUD、底部统计条与环绕进度条 |
 | 运行时 | `autoRelaunchWithCdp` / `exitOnHostClose` / `pollIntervalMs` | `boolean` / `boolean` / `number` | `true` / `false` / `2500` | CDP 自动接管、宿主关闭退出与轮询间隔 |
 
 </details>
@@ -212,14 +223,14 @@ npm run remove                        # 停止守护并无损还原原生界面
 <details>
 <summary><b>1. 升级到 Antigravity 2.33.0+ 后没有自动注入？</b></summary>
 
-Antigravity 从 `2.33.0` 起默认不再开启 CDP 端口。请彻底退出 Antigravity（含系统托盘）后携带 `--remote-debugging-port=0` 启动，或直接使用右侧面板的一键重启 / `launch.bat` / `./launch.sh`。
+Antigravity 从 `2.33.0` 起默认不再开启 CDP 端口。请彻底退出 Antigravity（含系统托盘）后携带 `--remote-debugging-port=0` 启动，或直接使用右侧面板的一键重启 / `launch.bat` / `./launch.sh`；也可以直接对 Gemini 说 *「帮我诊断 Claude Studio」* 触发 `studio-doctor` 技能排查。
 
 </details>
 
 <details>
-<summary><b>2. 顶部「用量监控」按钮是灰色的？</b></summary>
+<summary><b>2. 右侧栏常驻设置中的「用量监控」选项不可用？</b></summary>
 
-该按钮用于一键跳转到独立插件 [yuhuan-dev/antigravity-usage-monitor](https://github.com/yuhuan-dev/antigravity-usage-monitor)。安装该插件后点击面板右上角「刷新状态」即可激活；如果不装额外插件，也可以在面板底部开启 **「开启内置用量统计」**。
+该选项对应独立搭档插件 [yuhuan-dev/antigravity-usage-monitor](https://github.com/yuhuan-dev/antigravity-usage-monitor)。安装该插件后在 Studio 面板刷新状态即可激活；如果不装额外插件，直接保持 `Studio 对话面板` 搭配内置轻量用量统计即可开箱使用。
 
 </details>
 
@@ -233,7 +244,7 @@ Antigravity 从 `2.33.0` 起默认不再开启 CDP 端口。请彻底退出 Anti
 <details>
 <summary><b>4. 如何彻底还原原生界面？</b></summary>
 
-点击右侧 **Claude Studio** 面板顶部的 **「还原原生」**，或在 Antigravity 插件管理中禁用 `Claude Studio` / 运行 `npm run remove`，即可无痕恢复原版。
+点击右侧 **Claude Studio** 面板的 **「还原原生」**，或在 Antigravity 插件管理中禁用 `Claude Studio` / 运行 `npm run remove`，即可无痕恢复原版。
 
 </details>
 
@@ -253,22 +264,25 @@ npm run build:macos      # 构建 macOS Universal .app 与 .dmg（需 macOS 环�
 
 ```text
 agy-claude-studio/
-├── plugin.json / mcp_config.json  # Antigravity 原生插件清单与零工具 MCP 托管配置
-├── plugin/mcp-host.js             # 原生插件生命周期宿主（含 PID 复用校验与热接管）
-├── sidecars/studio/               # 右侧 Aux Pane「Claude Studio」可视化控制面板
-├── cdp.js / lifecycle.js          # CDP 客户端、配置迁移、进程守护与宿主看门狗
-├── watcher-core.js / inject.js    # 多窗口热更新控制器与 CLI 注入入口
-├── style.css / ui-runtime.js      # 核心主题样式与运行时（首页、周期表、滑块、联动）
-├── sidecar-core.js                # Swarm 蜂群侧栏（/swarm）精简无损翻译运行时
-├── periodic-core.js               # Gemini 4 元素周期表模型目录与筛选核心
-├── effort-core.js                 # 双风格 60fps 思考强度滑块数学模型
-├── i18n-core.js / i18n-locales.js # 5 语言 DOM 本地化引擎与词典
-├── usage-core.js                  # 内置轨迹解析、Token 拆解与热力图引擎
-├── mascot-core.js / crab-assets.js# Clawd 状态机与 19 套像素双层精灵图
-├── ripple-core.js                 # 首页字符矩阵噪声与二维水波求解器
-├── installer/ & companion/        # Windows (C#) / macOS (Swift) 独立安装器与伴随脚本
-├── scripts/ & test/               # 构建打包脚本与 node:test 自动化测试套件
-└── assets/                        # 图标、横幅与实景展示图
+├── plugin.json / mcp_config.json / hooks.json  # 原生插件清单、零工具 MCP 宿主与 Stop Hook
+├── plugin/mcp-host.js                          # 原生插件生命周期宿主（含 PID 复用校验与热接管）
+├── sidecars/studio/                            # 右侧 3-Tab「Claude Studio」控制室（对话 / 工具 / 设置）
+├── skills/                                     # 4 项原生技能（setup / doctor / notify / translation-protect）
+├── cdp.js / lifecycle.js                       # CDP 客户端、配置迁移、进程守护与宿主看门狗
+├── watcher-core.js / inject.js                 # 多窗口热更新控制器与 CLI 注入入口
+├── style.css / ui-runtime.js                   # 核心主题样式与运行时（首页、周期表、滑块、/compact）
+├── sidecar-core.js                             # Swarm 蜂群侧栏（/swarm）精简无损翻译运行时
+├── periodic-core.js / periodic-sync.js         # Gemini 4 元素周期表目录与 AI Studio 直连同步
+├── effort-core.js                              # 双风格 60fps 思考强度滑块数学模型
+├── notify-core.js / scripts/notify-stop.mjs    # 0-Token 8 通道手机推送核心与 Stop Hook 入口
+├── scripts-core.js / scripts/fetch-agy-changelog.mjs # 本地脚本工具箱与 Antigravity 更新日志抓取器
+├── i18n-core.js / i18n-locales.js / i18n-compat.json # 5 语言本地化引擎、词典与免打扰保护名单
+├── usage-core.js                               # 内置轨迹解析、Token 拆解与热力图引擎
+├── mascot-core.js / crab-assets.js             # Clawd 状态机与 19 套像素双层精灵图
+├── ripple-core.js                              # 首页字符矩阵噪声与二维水波求解器
+├── installer/ & companion/                     # Windows (C#) / macOS (Swift) 独立安装器与伴随脚本
+├── scripts/ & test/                            # 构建打包脚本与 node:test 自动化测试套件
+└── assets/                                     # 图标、横幅与实景展示图
 ```
 
 </details>

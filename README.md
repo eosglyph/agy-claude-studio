@@ -4,12 +4,12 @@
 
 # Claude Studio
 
-**`agy-claude-studio`** — Native UI Aesthetics Plugin for **Google Antigravity 2.33.1+**
+**`agy-claude-studio`** — Native UI Aesthetics & Productivity Plugin for **Google Antigravity 2.33.1+ (v2.35.x Ready)**
 
-Claude Warm-Gray & Obsidian Palettes · Standalone Glassmorphism · Gemini 4 Periodic Table Selector · 60fps Effort Slider · Pixel Clawd Mascot · Native Aux Pane Studio
+Claude Warm-Gray & Obsidian Palettes · 3-Tab Studio Sidecar (`Chat | Tools | Settings`) · 0-Token Mobile Push · Gemini 4 Periodic Table & Direct Sync · 4 Native Skills · Pixel Clawd Mascot
 
 <p>
-  <img src="https://img.shields.io/badge/Antigravity-2.33.1%2B-18181b?style=flat-square" alt="Antigravity 2.33.1+" />
+  <img src="https://img.shields.io/badge/Antigravity-2.33.1%2B%20%7C%202.35.x-18181b?style=flat-square" alt="Antigravity 2.33.1+ / 2.35.x" />
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-18181b?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/badge/MCP_Tools-0_Tokens-2f855a?style=flat-square" alt="Zero Token MCP" />
   <img src="https://img.shields.io/badge/i18n-5_Languages-3b82f6?style=flat-square" alt="5 Languages" />
@@ -35,6 +35,11 @@ Claude Warm-Gray & Obsidian Palettes · Standalone Glassmorphism · Gemini 4 Per
 
 <div align="center">
 
+#### v2.2 Full Workspace Overview (Claude Warm-Gray + 3-Tab Sidecar + Live Activity)
+<img src="assets/screenshots/studio-overview.png" alt="Claude Studio v2.2 Full Workspace Overview" width="880" />
+
+<br/>
+
 #### Gemini 4 Periodic Table Model Selector
 <img src="assets/screenshots/periodic-selector.png" alt="Gemini 4 Periodic Table Model Selector" width="760" />
 
@@ -45,16 +50,16 @@ Claude Warm-Gray & Obsidian Palettes · Standalone Glassmorphism · Gemini 4 Per
 
 <br/>
 
-#### Native "Claude Studio" Aux Pane × "Usage Monitor" Synergy
+#### Native "Claude Studio" Tools Tab × "Usage Monitor" Synergy
 <table>
   <tr>
     <td align="center" width="50%">
       <img src="assets/screenshots/studio-panel.png" alt="Claude Studio Control Panel" width="308" /><br/>
-      <sub><b>Claude Studio Control Panel</b>: 4 collapsible setting groups + quick jump to Usage Monitor</sub>
+      <sub><b>Claude Studio Tools Tab (v2.2)</b>: 1-click apply, mobile push quick panel &amp; local script runner</sub>
     </td>
     <td align="center" width="50%">
       <img src="assets/screenshots/usage-monitor-pair.png" alt="Usage Monitor Companion" width="308" /><br/>
-      <sub><b>Usage Monitor Companion</b>: auto-expands per conversation with smart composer footer splitting</sub>
+      <sub><b>Usage Monitor Companion</b>: selectable right-pane pinning (<code>Studio</code> / <code>Usage Monitor</code> / <code>Off</code>) with smart footer splitting</sub>
     </td>
   </tr>
 </table>
@@ -68,23 +73,24 @@ Claude Warm-Gray & Obsidian Palettes · Standalone Glassmorphism · Gemini 4 Per
 
 | Module | Highlights |
 | --- | --- |
-| **Themes & Materials** | Three adaptive light/dark solid palettes — `claude` (warm gray/charcoal, default), `obsidian`, and `host` (native) — plus an independent `glassEffect` toggle for frosted popover highlights, floating image viewer pills, and soft composer focus glow. |
-| **Model & Reasoning UX** | **Gemini 4 Periodic Table Drawer**: category tabs, live search, quota & reasoning tier switcher, and AI Studio element-sync prompt generator; **60fps Effort Slider**: ChatGPT Codex nebula & Claude Code dot-matrix styles, fully compatible with Antigravity `2.33.1` `· 1M` / `(High Thinking)` badges. |
-| **Workspace & Typography** | Compact Claude-style composer & sidebar, CJK IME-friendly smooth interpolated caret, Studio home dashboard (26-week heatmap, 30d/7d stacked bar chart, book-length yardstick), and interactive ASCII wave ripple canvas. |
-| **Native Plugin & i18n** | Zero-tool MCP lifecycle host (`tools/list -> []`, **0 token overhead**) with PID-reuse deadlock protection and `<2KB` lightweight config hot-reload; visual right-side Aux Pane; 5-language live UI translation (Simplified Chinese / Traditional Chinese / Cantonese / English / Japanese) across both the main window and **Swarm sidecar (`/swarm`)**, automatically skipping code editors and third-party plugin nodes. |
-| **Pixel Mascot Clawd** | 19-state dual-layer pixel companion perched on the composer corner that reacts to thinking/typing/building/compacting/sleeping states, supports poking, rapid-click tickling, dragging, and auto-dodges takeover cards. |
+| **3-Tab Sidecar (`Chat \| Tools \| Settings`)** | Clean minimalist flat UI with a **1-click header upgrade** (works for both Git clones and non-Git plugin installs while preserving `PLUGIN_DATA/`). The **Chat** tab shows live workspace, Git branch, billed-aligned context breakdown, connectors, and real-time activity (waiting, reasoning, commands, streaming previews, and expandable subagents). |
+| **Mobile Push Alerts (Zero Tokens)** | Get pinged on your phone when long tasks finish or fail across **8 channels** — **ServerChan** (full Markdown up to ~28KB), **Bark (iOS)**, **ntfy**, **Feishu**, **DingTalk**, **WeCom**, **Telegram Bot**, and **custom Webhooks** — with duration filtering (default 3 min), idle/error/cancel rules, and isolated local credentials in `PLUGIN_DATA/notify.json`. |
+| **Model, Reasoning & `/compact` UX** | **Gemini 4 Periodic Table** with direct AI Studio metadata sync; **Orchestrator quick switch** beside the model selector with persisted effort and running-turn locking; **60fps Effort Slider**; and smart **`/compact` presets** (auto-select, inline hint, 4 customizable presets defaulting to `clean`). |
+| **Local Tools & 4 Native Skills** | **Tools** tab to manage and run local Node / Python / Shell scripts with live output, pre-seeded with the bundled **Antigravity changelog checker** (`scripts/fetch-agy-changelog.mjs`). Ships **4 native skills**: `studio-setup` (30s guided setup), `studio-doctor` (diagnostics & NL tuning), `studio-notify` (push wizard), and `studio-translation-protect` (manage i18n exclusions). |
+| **Themes, Localization & i18n Protocol** | `claude`, `obsidian`, and `host` palettes; standalone frosted glass with subtle unfocused glow; `logoInk` top-left icon tinting; 5-language live localization across main window, **Swarm (`/swarm`)**, and Antigravity **v2.35.x** (plus an on-demand Marketplace Google Translate pill); standard opt-out attributes + cloud protection list + custom ignore selectors. |
+| **Workspace & Pixel Mascot Clawd** | Compact Claude-style composer & sidebar, CJK IME-friendly smooth caret, Studio home dashboard & ASCII ripple canvas, and the 19-state pixel companion **Clawd** (poke, tickle, drag, nap, auto-dodge). |
 
 ---
 
 <a id="companion-plugin"></a>
 ## Companion Plugin: `antigravity-usage-monitor`
 
-`Claude Studio` focuses on **visual aesthetics, interaction craft, and localization**. For live token throughput (`tok/s`), TTFT latency, cost estimates, and multi-model quota pools, we recommend pairing it with the independent plugin **[yuhuan-dev/antigravity-usage-monitor](https://github.com/yuhuan-dev/antigravity-usage-monitor)**:
+`Claude Studio` focuses on **visual aesthetics, interaction craft, live workspace inspection, and localization**. For live token throughput (`tok/s`), TTFT latency, cost estimates, and multi-model quota pools, we recommend pairing it with the independent plugin **[yuhuan-dev/antigravity-usage-monitor](https://github.com/yuhuan-dev/antigravity-usage-monitor)**:
 
-- **Zero-conflict coexistence**: Built-in lightweight usage stats default to off (`usageStatsEnabled: false`), and the i18n engine permanently skips `#ag-usage-monitor-*` roots.
+- **Zero-conflict coexistence**: Built-in lightweight HUD defaults to a clean top bar (`usageStatsEnabled: true`, `hudTopBar: true`, `hudBottomBar: false`, `hudRimProgress: false`) and can be toggled off anytime in Settings. The i18n engine permanently skips `#ag-usage-monitor-*` via the built-in `i18n-compat.json` protection list.
 - **Smart footer splitting**: When `usage-monitor` is docked in the composer footer, its context progress ring is seamlessly mirrored to the far right without layout jitter or crowding.
-- **Aux Pane synergy**: Once `usage-monitor` is detected, the top "Usage Monitor" shortcut activates automatically, with optional once-per-conversation auto-pinning (`pinUsageMonitorPane: true`) that never steals focus.
-- **Clean license boundary**: This project is **MIT**-licensed while `antigravity-usage-monitor` is **GPLv3**-licensed — strictly decoupled and installed independently. If you prefer not to install a companion plugin, you can toggle the built-in lightweight usage HUD at the bottom of the Studio panel anytime.
+- **3-way right-pane pinning (`pinRightPane`)**: Choose `Off`, `Studio Chat Pane` (default), or `Usage Monitor` in Settings — legacy `pinUsageMonitorPane` configs migrate automatically, and installs without `usage-monitor` fall back gracefully.
+- **Clean license boundary**: This project is **MIT**-licensed while `antigravity-usage-monitor` is **GPLv3**-licensed — strictly decoupled and installed independently.
 
 ---
 
@@ -92,7 +98,7 @@ Claude Warm-Gray & Obsidian Palettes · Standalone Glassmorphism · Gemini 4 Per
 ## Quick Install
 
 ### Requirements
-- **Google Antigravity Desktop `2.33.1+`** (Windows / macOS) launched with `--remote-debugging-port=0`.
+- **Google Antigravity Desktop `2.33.1+`** (fully tested through `2.35.x`; Windows / macOS) launched with `--remote-debugging-port=0`.
 - **Node.js `>= 22`** (zero third-party npm dependencies; uses native `fetch`, `WebSocket`, and `node:test`).
 
 ### Fastest Way: Ask Gemini in Antigravity (Recommended)
@@ -101,9 +107,9 @@ No terminal needed — just paste this repository URL into any Antigravity chat 
 
 > **Help me install this Antigravity plugin: `https://github.com/eosglyph/agy-claude-studio`**
 
-The agent will clone it into your plugins directory, check CDP launch settings, and walk you through enabling it.
+Once installed, you can also ask Gemini to run the built-in **`studio-setup`** skill (*"Walk me through 30s Claude Studio setup"*) or **`studio-notify`** (*"Help me set up mobile push alerts"*).
 
-> **Optional · Full Dual-Pane Setup**: Want the exact dual-pane experience shown in the screenshots? Ask Gemini to install the standalone companion plugin (GPLv3) together:
+> **Optional · Full Dual-Pane Setup**: Want the exact dual-pane experience with the standalone companion plugin (GPLv3)? Ask Gemini:
 >
 > **Help me install `https://github.com/eosglyph/agy-claude-studio` along with the companion plugin `https://github.com/yuhuan-dev/antigravity-usage-monitor`**
 
@@ -126,6 +132,7 @@ The agent will clone it into your plugins directory, check CDP launch settings, 
 <summary><b>Option 2: Standalone Windows / macOS Installers (No Node.js Required) & Companion Launcher</b></summary>
 
 - **Pre-built Releases**: Grab `Claude-Studio-v<version>-Windows-x64.exe` or `Claude-Studio-v<version>-macOS-universal.dmg` directly from [GitHub Releases](https://github.com/eosglyph/agy-claude-studio/releases).
+  > **macOS note**: The Universal `.dmg` passes GitHub Actions CI builds and the automated test suite, and currently awaits real-hardware Mac verification — feedback from macOS users is very welcome.
 
 - **Build Windows standalone installer locally**:
   ```bash
@@ -181,7 +188,7 @@ npm run remove                        # Stop watcher and restore native UI clean
 <a id="configuration"></a>
 ## Configuration
 
-All settings can be toggled live in the right-side **Claude Studio** panel and persist automatically (full schema in [config.example.json](config.example.json)).
+All settings can be toggled live in the right-side **Claude Studio** panel and persist automatically (full schema in [config.example.json](config.example.json)). Mobile push settings and credentials are stored separately in local `PLUGIN_DATA/notify.json` and are never written to `config.json` or injected into renderer pages.
 
 <details>
 <summary><b>View all configuration keys</b></summary>
@@ -191,17 +198,19 @@ All settings can be toggled live in the right-side **Claude Studio** panel and p
 | Basic | `language` | `'zh-CN'` \| `'zh-TW'` \| `'yue'` \| `'en'` \| `'ja'` | `'zh-CN'` | UI & Studio panel language |
 | Basic | `homeLayout` | `'studio'` \| `'classic'` \| `'off'` | `'studio'` | New conversation home screen layout |
 | Basic | `palette` | `'claude'` \| `'obsidian'` \| `'host'` | `'claude'` | Solid color theme palette |
-| UI Polish | `glassEffect` | `boolean` | `true` | Frosted glassmorphism borders, image viewer pills & focus glow |
+| UI Polish | `glassEffect` | `boolean` | `true` | Frosted glassmorphism borders, image viewer pills & subtle ambient glow |
 | UI Polish | `sidebarRestyle` / `sidebarCompact` | `boolean` | `true` | Claude-style sidebar density & hover polish |
 | UI Polish | `composerRestyle` / `placeholderStyle` | `boolean` / `'studio'` \| `'host'` | `true` / `'studio'` | Minimalist composer & prompt placeholder copy |
-| UI Polish | `logoInk` | `'accent'` \| `'foreground'` | `'accent'` | Home logo tint mode |
-| Interaction | `periodicSelector` | `boolean` | `true` | Gemini 4 Periodic Table model selector |
+| UI Polish | `logoInk` | `'accent'` \| `'foreground'` | `'accent'` | Home & top-left app logo tint mode |
+| Interaction | `periodicSelector` / `orchestratorSwitch` | `boolean` | `true` | Gemini 4 Periodic Table selector & Orchestrator quick switch |
 | Interaction | `effortSliderStyle` / `effortAccent` | `'chatgpt'` \| `'claude'` / `boolean` | `'chatgpt'` / `true` | 60fps effort slider style & color scale |
+| Interaction | `compactPreset` / `compactCustomText` | `'empty'` \| `'clean'` \| `'dev'` \| `'custom'` / `string` | `'clean'` / `''` | `/compact` preset & custom prompt text |
 | Interaction | `smoothCaret` / `mascot` / `homeRipple` | `boolean` / `'crab'` \| `'off'` / `boolean` | `true` / `'crab'` / `true` | Smooth caret, Clawd mascot & home ripple field |
-| Usage HUD | `pinUsageMonitorPane` | `boolean` | `true` | Auto-open `usage-monitor` pane once per conversation |
-| Usage HUD | `usageStatsEnabled` | `boolean` | `false` | Master toggle for built-in HUD (preserves child prefs when off) |
-| Usage HUD | `inlineStats` / `ringMode` / `turnBadges` | `boolean` / `'context'` \| `'quota'` / `boolean` | `true` / `'context'` / `true` | *(Requires `usageStatsEnabled`)* Inline stats, context/quota ring & turn `#T` badges |
-| Usage HUD | `hudTopBar` / `hudBottomBar` / `hudRimProgress` / `hudFooterChip` / `hudCompact` | `boolean` | `true` | *(Requires `usageStatsEnabled`)* Rim progress bar & compact HUD layout |
+| Localization | `pluginPageTranslate` / `i18nIgnoreSelectors` | `boolean` / `string[]` | `true` / `[]` | Marketplace on-demand Google Translate pill & custom protected CSS selectors |
+| Usage & Pane | `pinRightPane` | `'off'` \| `'studio'` \| `'usage-monitor'` | `'studio'` | Auto-open right Aux Pane per conversation (migrates legacy `pinUsageMonitorPane`) |
+| Usage & Pane | `usageStatsEnabled` | `boolean` | `true` | Master toggle for built-in HUD (preserves child prefs when off) |
+| Usage & Pane | `inlineStats` / `ringMode` / `turnBadges` | `boolean` / `'context'` \| `'quota'` / `boolean` | `true` / `'context'` / `true` | *(Requires `usageStatsEnabled`)* Inline stats, context/quota ring & turn `#T` badges |
+| Usage & Pane | `hudTopBar` / `hudBottomBar` / `hudRimProgress` | `boolean` | `true` / `false` / `false` | *(Requires `usageStatsEnabled`)* Top HUD bar, bottom bar & rim progress bar |
 | Runtime | `autoRelaunchWithCdp` / `exitOnHostClose` / `pollIntervalMs` | `boolean` / `boolean` / `number` | `true` / `false` / `2500` | CDP relaunch behavior, host-exit lifecycle & polling interval |
 
 </details>
@@ -214,14 +223,14 @@ All settings can be toggled live in the right-side **Claude Studio** panel and p
 <details>
 <summary><b>1. Not auto-injecting after updating to Antigravity 2.33.0+?</b></summary>
 
-Starting in `2.33.0`, Antigravity disables the CDP port by default. Fully quit Antigravity (including the system tray) and launch it with `--remote-debugging-port=0`, or use the one-click relaunch button in the Studio panel / `launch.bat` / `./launch.sh`.
+Starting in `2.33.0`, Antigravity disables the CDP port by default. Fully quit Antigravity (including the system tray) and launch it with `--remote-debugging-port=0`, or use the one-click relaunch button in the Studio panel / `launch.bat` / `./launch.sh` — or simply ask Gemini *"Diagnose Claude Studio"* to run the `studio-doctor` skill.
 
 </details>
 
 <details>
-<summary><b>2. Why is the top "Usage Monitor" button disabled?</b></summary>
+<summary><b>2. Why is the "Usage Monitor" option unavailable in Right Pane Pinning?</b></summary>
 
-That shortcut opens the independent companion plugin [yuhuan-dev/antigravity-usage-monitor](https://github.com/yuhuan-dev/antigravity-usage-monitor). Once installed, click "Refresh Status" in the panel to activate it — or simply enable **Built-in Usage Stats** at the bottom of the Studio panel.
+That option pairs with the independent companion plugin [yuhuan-dev/antigravity-usage-monitor](https://github.com/yuhuan-dev/antigravity-usage-monitor). Once installed, refresh status in the Studio panel to activate it — or keep `pinRightPane` on **Studio Chat Pane** with the built-in lightweight HUD enabled.
 
 </details>
 
@@ -235,7 +244,7 @@ Native context menus are rendered by Electron via OS APIs (Win32 / NSMenu) outsi
 <details>
 <summary><b>4. How do I completely restore the native Antigravity UI?</b></summary>
 
-Click **Restore Native** at the top of the **Claude Studio** panel, disable `Claude Studio` in Antigravity Plugins, or run `npm run remove`. Zero host files are ever modified.
+Click **Restore Native** in the **Claude Studio** panel, disable `Claude Studio` in Antigravity Plugins, or run `npm run remove`. Zero host files are ever modified.
 
 </details>
 
@@ -255,22 +264,25 @@ npm run build:macos      # Build macOS Universal .app & .dmg (macOS only)
 
 ```text
 agy-claude-studio/
-├── plugin.json / mcp_config.json  # Native Antigravity plugin manifest & zero-tool MCP host config
-├── plugin/mcp-host.js             # Native lifecycle host (PID-reuse verification & hot takeover)
-├── sidecars/studio/               # Right Aux Pane "Claude Studio" visual control panel
-├── cdp.js / lifecycle.js          # CDP client, config migration, lockfile & host watchdog
-├── watcher-core.js / inject.js    # Multi-window hot-reload controller & CLI entry
-├── style.css / ui-runtime.js      # Core theme styles & UI runtime (home, periodic, slider, synergy)
-├── sidecar-core.js                # Lightweight reversible i18n runtime for Swarm sidecar (/swarm)
-├── periodic-core.js               # Gemini 4 Periodic Table catalog & filter engine
-├── effort-core.js                 # Dual-style 60fps reasoning effort slider model
-├── i18n-core.js / i18n-locales.js # 5-language DOM localization engine & dictionaries
-├── usage-core.js                  # Built-in trajectory parser, token breakdown & heatmap engine
-├── mascot-core.js / crab-assets.js# Clawd state machine & 19 dual-layer pixel sprite sets
-├── ripple-core.js                 # Home ASCII noise field & 2D wave solver
-├── installer/ & companion/        # Windows (C#) / macOS (Swift) installers & companion scripts
-├── scripts/ & test/               # Build pipelines & node:test automated test suite
-└── assets/                        # Icons, animated banners & UI screenshots
+├── plugin.json / mcp_config.json / hooks.json  # Native plugin manifest, 0-token MCP host & Stop hook
+├── plugin/mcp-host.js                          # Native lifecycle host (PID-reuse check & hot takeover)
+├── sidecars/studio/                            # 3-Tab right Aux Pane (Chat | Tools | Settings)
+├── skills/                                     # 4 native skills (setup, doctor, notify, translation-protect)
+├── cdp.js / lifecycle.js                       # CDP client, config migration, lockfile & host watchdog
+├── watcher-core.js / inject.js                 # Multi-window hot-reload controller & CLI entry
+├── style.css / ui-runtime.js                   # Core theme styles & UI runtime (home, periodic, slider, /compact)
+├── sidecar-core.js                             # Lightweight reversible i18n runtime for Swarm sidecar (/swarm)
+├── periodic-core.js / periodic-sync.js         # Gemini 4 Periodic Table catalog & direct AI Studio sync
+├── effort-core.js                              # Dual-style 60fps reasoning effort slider model
+├── notify-core.js / scripts/notify-stop.mjs    # 0-token 8-channel mobile push engine & Stop hook runner
+├── scripts-core.js / scripts/fetch-agy-changelog.mjs # Local scripts toolbox & Antigravity changelog fetcher
+├── i18n-core.js / i18n-locales.js / i18n-compat.json # 5-language i18n engine, dicts & opt-out protection list
+├── usage-core.js                               # Built-in trajectory parser, token breakdown & heatmap engine
+├── mascot-core.js / crab-assets.js             # Clawd state machine & 19 dual-layer pixel sprite sets
+├── ripple-core.js                              # Home ASCII noise field & 2D wave solver
+├── installer/ & companion/                     # Windows (C#) / macOS (Swift) installers & companion scripts
+├── scripts/ & test/                            # Build pipelines & node:test automated test suite
+└── assets/                                     # Icons, animated banners & UI screenshots
 ```
 
 </details>
