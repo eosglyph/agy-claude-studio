@@ -5813,7 +5813,7 @@
     syncBtn.type = 'button';
     const syncTip =
       ui.psSyncTooltip ||
-      '0-Token script sync directly from Google AI Studio for new elements, official light/dark colors, and pricing';
+      'Sync latest elements, colors, and pricing from Google AI Studio';
     syncBtn.setAttribute('title', syncTip);
     syncBtn.setAttribute('aria-label', syncTip);
     syncBtn.innerHTML =

@@ -339,16 +339,53 @@
       border-top: 1px solid var(--divider-col);
       display: flex;
       flex-direction: column;
+      gap: 9px;
+    }
+    .section.is-collapsed .overview-card-body {
+      display: none;
+    }
+    .ov-notify-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 10px;
     }
     .overview-notify-summary {
       font-size: 12px;
       color: var(--muted-fg);
       line-height: 1.45;
+      flex: 1;
+      min-width: 0;
     }
     .overview-notify-summary strong {
       color: var(--fg);
       font-weight: 600;
+    }
+    .ov-notify-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .ov-notify-dur-select {
+      height: 28px;
+      max-width: 152px;
+      min-width: 0;
+      padding: 0 24px 0 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-col);
+      background-color: var(--control-bg);
+      color: var(--fg);
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .ov-notify-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
     }
 
     button.section-head {
@@ -1214,28 +1251,36 @@
       </div>
     </div>
 
-    <div class="section" id="overview-notify-card">
-      <div class="overview-card-head">
+    <div class="section" id="overview-notify-card" data-group-id="ovNotify">
+      <button type="button" class="section-head" id="ov-notify-head" aria-expanded="true">
         <span class="section-title" id="ov-notify-title">🔔 手机推送</span>
         <span class="section-head-right">
           <span class="section-badge" id="ov-notify-badge">未开启</span>
+          <span class="section-chevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </span>
+      </button>
+      <div class="overview-card-body">
+        <div class="ov-notify-row">
+          <div class="overview-notify-summary" id="ov-notify-summary">…</div>
           <label class="switch" title="启用/暂停手机推送">
             <input type="checkbox" id="ov-notify-toggle" />
             <span class="switch-track"></span>
           </label>
-        </span>
-      </div>
-      <div class="overview-card-body">
-        <div class="overview-notify-summary" id="ov-notify-summary">…</div>
-        <div class="update-card-actions">
-          <button type="button" class="update-pill-btn" id="btn-ov-notify-test">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/></svg>
-            <span id="btn-ov-notify-test-lbl">发送测试</span>
-          </button>
-          <button type="button" class="update-pill-btn" id="btn-ov-notify-config">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-            <span id="btn-ov-notify-config-lbl">配置渠道</span>
-          </button>
+        </div>
+        <div class="ov-notify-foot">
+          <select class="ov-notify-dur-select" id="ov-notify-min-duration" aria-label="推送耗时门槛"></select>
+          <div class="ov-notify-actions">
+            <button type="button" class="update-pill-btn" id="btn-ov-notify-test">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/></svg>
+              <span id="btn-ov-notify-test-lbl">发送测试</span>
+            </button>
+            <button type="button" class="update-pill-btn" id="btn-ov-notify-config">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span id="btn-ov-notify-config-lbl">配置渠道</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1623,12 +1668,15 @@
         statsOnBadge: '已开启',
         statsOffBadge: '已关闭',
         notifyTitle: '🔔 手机推送',
-        notifyBadgeOff: '未开启',
-        notifyBadgeUnconfigured: '待填密钥',
-        notifyImmediate: '即时',
-        notifyOvSummaryUnconfigured: '长任务完成或异常时 0 Token 推送到手机（支持 Server酱 / Bark / ntfy / 飞书 / Telegram 等）',
-        notifyOvSummaryDisabled: (ch) => `已配置 ${ch}（已暂停）· 开启开关即可在长任务结束时推送手机`,
-        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `耗时 ≥ ${minSec}s` : '每轮结束'} · Stop Hook 0 Token`,
+        notifyBadgeOff: '已关闭',
+        notifyBadgeUnconfigured: '待配置',
+        notifyImmediate: '始终推送',
+        notifyOvSummaryUnconfigured: '任务跑完或出错时自动提醒到手机，点下方即可配置渠道。',
+        notifyOvSummaryDisabled: (ch) => `${ch} 已就绪，跑长任务或离开电脑前打开即可。`,
+        notifyOvSummaryActive: (ch, minSec, durText) =>
+          minSec > 0
+            ? `任务跑满 ${durText} 后自动提醒，短对话不打扰。`
+            : `每轮任务结束都会提醒，适合定时任务或离桌挂机。`,
         btnNotifyTest: '发送测试',
         btnNotifyConfig: '配置渠道',
         btnNotifySave: '保存设置',
@@ -1645,14 +1693,17 @@
           onlyIdle: ['仅后台全空闲时推送', '等待所有子代理与后台任务结束后再推送'],
           onError: ['异常报错立即推送', '任务报错中断时无视耗时与冷却立即告警'],
           skipCanceled: ['手动停止时不推送', '点击停止按钮终止对话时静默跳过'],
-          includeSummary: ['附带 0 Token 回复摘要', '本地读取末条回复首尾提炼摘要，绝不额外调用模型'],
+          includeSummary: ['附带回复摘要', '自动截取末条回复的首尾内容作为通知摘要'],
         },
         notifyDurOpts: [
-          ['0', '不限时长 (每轮)'],
-          ['10', '≥ 10 秒'],
-          ['15', '≥ 15 秒 (推荐)'],
-          ['30', '≥ 30 秒'],
-          ['60', '≥ 60 秒'],
+          ['0', '始终推送'],
+          ['15', '超过 15 秒'],
+          ['30', '超过 30 秒'],
+          ['60', '超过 1 分钟（推荐）'],
+          ['180', '超过 3 分钟'],
+          ['300', '超过 5 分钟'],
+          ['900', '超过 15 分钟'],
+          ['1800', '超过 30 分钟'],
         ],
         credLabels: {
           sendKey: ['SendKey', 'Server酱 / Server酱³ 密钥'],
@@ -1767,12 +1818,15 @@
         statsOnBadge: '已開啟',
         statsOffBadge: '已關閉',
         notifyTitle: '🔔 手機推播',
-        notifyBadgeOff: '未開啟',
-        notifyBadgeUnconfigured: '待填金鑰',
-        notifyImmediate: '即時',
-        notifyOvSummaryUnconfigured: '長任務完成或異常時 0 Token 推播至手機（支援 Server醬 / Bark / ntfy / 飛書 / Telegram 等）',
-        notifyOvSummaryDisabled: (ch) => `已設定 ${ch}（已暫停）· 開啟開關即可於任務結束時推播手機`,
-        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `耗時 ≥ ${minSec}s` : '每輪結束'} · Stop Hook 0 Token`,
+        notifyBadgeOff: '已關閉',
+        notifyBadgeUnconfigured: '待設定',
+        notifyImmediate: '始終推播',
+        notifyOvSummaryUnconfigured: '任務跑完或出錯時自動提醒到手機，點下方即可設定渠道。',
+        notifyOvSummaryDisabled: (ch) => `${ch} 已就緒，跑長任務或離開電腦前開啟即可。`,
+        notifyOvSummaryActive: (ch, minSec, durText) =>
+          minSec > 0
+            ? `任務跑滿 ${durText} 後自動提醒，短對話不打擾。`
+            : `每輪任務結束都會提醒，適合定時任務或離桌掛機。`,
         btnNotifyTest: '發送測試',
         btnNotifyConfig: '設定渠道',
         btnNotifySave: '儲存設定',
@@ -1789,14 +1843,17 @@
           onlyIdle: ['僅背景全空閒時推播', '等待所有子代理與背景任務完成後再統一推播'],
           onError: ['異常中斷立即推播', '執行異常終止時略過耗時與冷卻限制立即通知'],
           skipCanceled: ['手動停止時不推播', '點擊停止終止對話時靜默略過'],
-          includeSummary: ['附帶 0 Token 回覆摘要', '本機讀取末條回覆首尾萃取摘要，絕不額外呼叫模型'],
+          includeSummary: ['附帶回覆摘要', '自動擷取末條回覆的首尾內容作為通知摘要'],
         },
         notifyDurOpts: [
-          ['0', '不限時長 (每輪)'],
-          ['10', '≥ 10 秒'],
-          ['15', '≥ 15 秒 (推薦)'],
-          ['30', '≥ 30 秒'],
-          ['60', '≥ 60 秒'],
+          ['0', '始終推播'],
+          ['15', '超過 15 秒'],
+          ['30', '超過 30 秒'],
+          ['60', '超過 1 分鐘（推薦）'],
+          ['180', '超過 3 分鐘'],
+          ['300', '超過 5 分鐘'],
+          ['900', '超過 15 分鐘'],
+          ['1800', '超過 30 分鐘'],
         ],
         credLabels: {
           sendKey: ['SendKey', 'Server醬 / Server醬³ 金鑰'],
@@ -1911,12 +1968,15 @@
         statsOnBadge: '開咗',
         statsOffBadge: '已關閉',
         notifyTitle: '🔔 手機推送',
-        notifyBadgeOff: '未開啟',
-        notifyBadgeUnconfigured: '未填密鑰',
-        notifyImmediate: '即時',
-        notifyOvSummaryUnconfigured: '長任務完成或者出事時 0 Token 推送落手機（支援 Server醬 / Bark / ntfy / 飛書 / Telegram 等）',
-        notifyOvSummaryDisabled: (ch) => `已配好 ${ch}（暫停緊）· 開返開關就可以喺任務搞掂時推送手機`,
-        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `耗時 ≥ ${minSec}s` : '每輪結束'} · Stop Hook 0 Token`,
+        notifyBadgeOff: '已熄',
+        notifyBadgeUnconfigured: '待設定',
+        notifyImmediate: '每次都推',
+        notifyOvSummaryUnconfigured: '任務跑完或者出事時自動彈去手機，撳下面就可以配好渠道。',
+        notifyOvSummaryDisabled: (ch) => `${ch} 已經配好，跑長任務或者行開前開返就得。`,
+        notifyOvSummaryActive: (ch, minSec, durText) =>
+          minSec > 0
+            ? `任務跑夠 ${durText} 先會提醒，短對話唔會煩住你。`
+            : `每次任務搞掂都會提醒，啱晒定時任務或者離枱掛機。`,
         btnNotifyTest: '發送測試',
         btnNotifyConfig: '設定渠道',
         btnNotifySave: '儲存設定',
@@ -1933,14 +1993,17 @@
           onlyIdle: ['淨係背景全空閒先推', '等埋所有子代理同後台任務搞掂先一次過通知'],
           onError: ['出錯即刻通知', '任務出錯中斷時無視耗時同冷卻限制即刻推'],
           skipCanceled: ['手動停低唔推送', '撳停止按鈕中斷對話時自動跳過'],
-          includeSummary: ['附帶 0 Token 回覆摘要', '本機讀取最後回覆頭尾濃縮成摘要，完全唔使問模型'],
+          includeSummary: ['附帶回覆摘要', '自動截取最後一條回覆嘅頭尾做通知摘要'],
         },
         notifyDurOpts: [
-          ['0', '唔限時長 (每輪)'],
-          ['10', '≥ 10 秒'],
-          ['15', '≥ 15 秒 (推薦)'],
-          ['30', '≥ 30 秒'],
-          ['60', '≥ 60 秒'],
+          ['0', '每次都推'],
+          ['15', '超過 15 秒'],
+          ['30', '超過 30 秒'],
+          ['60', '超過 1 分鐘（推薦）'],
+          ['180', '超過 3 分鐘'],
+          ['300', '超過 5 分鐘'],
+          ['900', '超過 15 分鐘'],
+          ['1800', '超過 30 分鐘'],
         ],
         credLabels: {
           sendKey: ['SendKey', 'Server醬 / Server酱³ 密鑰'],
@@ -2056,11 +2119,14 @@
         statsOffBadge: 'Off',
         notifyTitle: '🔔 Mobile Push',
         notifyBadgeOff: 'Off',
-        notifyBadgeUnconfigured: 'Needs Key',
+        notifyBadgeUnconfigured: 'Setup needed',
         notifyImmediate: 'Always',
-        notifyOvSummaryUnconfigured: '0-token Stop Hook alerts to your phone on completion or errors (ServerChan / Bark / ntfy / Feishu / Telegram / Webhook).',
-        notifyOvSummaryDisabled: (ch) => `${ch} configured (paused) · Toggle on to receive alerts when long turns finish.`,
-        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `≥ ${minSec}s` : 'Every turn'} · 0-Token Stop Hook`,
+        notifyOvSummaryUnconfigured: 'Get a ping on your phone when long tasks finish or fail.',
+        notifyOvSummaryDisabled: (ch) => `${ch} is ready — flip on before stepping away or running long tasks.`,
+        notifyOvSummaryActive: (ch, minSec, durText) =>
+          minSec > 0
+            ? `Pings you after ${durText}+ runs; quick chats stay quiet.`
+            : `Pings after every turn — ideal for scheduled runs or stepping away.`,
         btnNotifyTest: 'Send Test',
         btnNotifyConfig: 'Configure',
         btnNotifySave: 'Save Push',
@@ -2077,14 +2143,17 @@
           onlyIdle: ['Notify Only When Idle', 'Wait for background tasks & subagents (fullyIdle) before notifying'],
           onError: ['Alert Immediately on Error', 'Send urgent notification on errors regardless of duration/cooldown'],
           skipCanceled: ['Skip Manual Cancel', 'Stay silent when you cancel a turn manually'],
-          includeSummary: ['Include 0-Token Summary', 'Extract head & tail from local transcript without calling the LLM'],
+          includeSummary: ['Include Reply Summary', 'Attach a brief excerpt from the latest reply'],
         },
         notifyDurOpts: [
-          ['0', 'Any duration'],
-          ['10', '≥ 10 sec'],
-          ['15', '≥ 15 sec (Recommended)'],
-          ['30', '≥ 30 sec'],
-          ['60', '≥ 60 sec'],
+          ['0', 'Always'],
+          ['15', 'Over 15s'],
+          ['30', 'Over 30s'],
+          ['60', 'Over 1 min (Recommended)'],
+          ['180', 'Over 3 min'],
+          ['300', 'Over 5 min'],
+          ['900', 'Over 15 min'],
+          ['1800', 'Over 30 min'],
         ],
         credLabels: {
           sendKey: ['SendKey', 'ServerChan / ServerChan³ key'],
@@ -2201,10 +2270,13 @@
         notifyTitle: '🔔 スマホ通知',
         notifyBadgeOff: 'オフ',
         notifyBadgeUnconfigured: '未設定',
-        notifyImmediate: '毎回',
-        notifyOvSummaryUnconfigured: '長時間タスク完了・エラー時に Token 消費ゼロでスマホへ通知（ServerChan / Bark / ntfy / Feishu / Telegram 対応）',
-        notifyOvSummaryDisabled: (ch) => `${ch} 設定済み（停止中）· スイッチをオンにすると完了時に通知します`,
-        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `≥ ${minSec}s` : '毎ターン'} · 0 Token Hook`,
+        notifyImmediate: '毎回通知',
+        notifyOvSummaryUnconfigured: '長時間タスクの完了やエラーをスマホへ通知します。下から設定できます。',
+        notifyOvSummaryDisabled: (ch) => `${ch} は設定済みです。離席時や長い作業の前にオンにしてください。`,
+        notifyOvSummaryActive: (ch, minSec, durText) =>
+          minSec > 0
+            ? `${durText} 以上のタスク完了時に通知します（短い応答は静かにスキップ）。`
+            : `毎ターン完了時に通知します（定期実行や離席時に便利）。`,
         btnNotifyTest: 'テスト送信',
         btnNotifyConfig: 'チャネル設定',
         btnNotifySave: '保存',
@@ -2221,14 +2293,17 @@
           onlyIdle: ['全バックグラウンド完了時のみ', 'サブエージェント等がすべて終了してから通知'],
           onError: ['エラー時は即時通知', '異常終了時は時間・クールダウン制限を無視して即時通知'],
           skipCanceled: ['手動キャンセル時はスキップ', 'ユーザーによる停止時は通知しません'],
-          includeSummary: ['0 Token 要約を含める', 'ローカルログの冒頭・末尾から要約を生成（LLM 不使用）'],
+          includeSummary: ['返信の要約を含める', '最新の返信から冒頭と末尾を抜粋して通知に添えます'],
         },
         notifyDurOpts: [
-          ['0', '指定なし (毎ターン)'],
-          ['10', '≥ 10 秒'],
-          ['15', '≥ 15 秒 (推奨)'],
-          ['30', '≥ 30 秒'],
-          ['60', '≥ 60 秒'],
+          ['0', '毎回通知'],
+          ['15', '15 秒以上'],
+          ['30', '30 秒以上'],
+          ['60', '1 分以上（推奨）'],
+          ['180', '3 分以上'],
+          ['300', '5 分以上'],
+          ['900', '15 分以上'],
+          ['1800', '30 分以上'],
         ],
         credLabels: {
           sendKey: ['SendKey', 'ServerChan / ServerChan³ キー'],
@@ -2616,8 +2691,50 @@
       return dict[ch] || ch;
     }
 
+    function formatNotifyDurHuman(sec, lang) {
+      const n = Number(sec || 0);
+      if (n <= 0) return '';
+      const isEn = lang === 'en';
+      const isJa = lang === 'ja';
+      const isTw = lang === 'zh-TW' || lang === 'yue';
+      if (n >= 60 && n % 60 === 0) {
+        const m = Math.round(n / 60);
+        if (isEn) return `${m} min`;
+        if (isJa) return `${m} 分`;
+        return isTw ? `${m} 分鐘` : `${m} 分钟`;
+      }
+      if (isEn) return `${n}s`;
+      return `${n} 秒`;
+    }
+
+    function populateNotifyDurSelect(sel, t, currentSec) {
+      if (!sel) return;
+      const lang = currentConfig?.language || 'zh-CN';
+      const targetVal = String(currentSec ?? 60);
+      sel.innerHTML = '';
+      let matched = false;
+      for (const [val, text] of t.notifyDurOpts) {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = text;
+        if (targetVal === val) {
+          opt.selected = true;
+          matched = true;
+        }
+        sel.appendChild(opt);
+      }
+      if (!matched) {
+        const opt = document.createElement('option');
+        opt.value = targetVal;
+        opt.textContent = `≥ ${formatNotifyDurHuman(Number(targetVal), lang) || `${targetVal}s`}`;
+        opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
     function getNotifyBadgeInfo(cfg) {
       const t = getT();
+      const lang = currentConfig?.language || 'zh-CN';
       const chName = getChannelLabel(cfg.channel);
       const useLocal = notifyLoaded || notifyDirty;
       const configured = useLocal
@@ -2634,14 +2751,24 @@
       if (!configured) {
         return { text: t.notifyBadgeUnconfigured, cls: 'is-warn', configured, enabled, chName, minSec };
       }
-      const durLabel = minSec > 0 ? `≥${minSec}s` : t.notifyImmediate;
-      return { text: `${chName} · ${durLabel}`, cls: 'is-ok', configured, enabled, chName, minSec };
+      const durText = formatNotifyDurHuman(minSec, lang);
+      const durLabel = minSec > 0 ? `≥${durText}` : t.notifyImmediate;
+      return { text: `${chName} · ${durLabel}`, cls: 'is-ok', configured, enabled, chName, minSec, durText };
     }
 
     function renderOverviewNotifyCard() {
       const t = getT();
+      const lang = currentConfig?.language || 'zh-CN';
       const cfg = notifyConfig;
       const badgeInfo = getNotifyBadgeInfo(cfg);
+
+      const sec = document.getElementById('overview-notify-card');
+      const head = document.getElementById('ov-notify-head');
+      if (sec && head) {
+        const isCollapsed = collapsedGroups.has('ovNotify');
+        sec.classList.toggle('is-collapsed', isCollapsed);
+        head.setAttribute('aria-expanded', String(!isCollapsed));
+      }
 
       const titleEl = document.getElementById('ov-notify-title');
       if (titleEl) titleEl.textContent = t.notifyTitle;
@@ -2659,10 +2786,20 @@
         if (sw) sw.title = t.notifyLabels?.enabled?.[0] || t.notifyTitle;
       }
 
+      const ovDurSel = document.getElementById('ov-notify-min-duration');
+      if (ovDurSel) {
+        populateNotifyDurSelect(ovDurSel, t, badgeInfo.minSec);
+        ovDurSel.title = t.notifyLabels?.minDuration?.[0] || '';
+      }
+
       const summaryEl = document.getElementById('ov-notify-summary');
       if (summaryEl) {
         if (badgeInfo.enabled && badgeInfo.configured) {
-          summaryEl.textContent = t.notifyOvSummaryActive(badgeInfo.chName, badgeInfo.minSec);
+          summaryEl.textContent = t.notifyOvSummaryActive(
+            badgeInfo.chName,
+            badgeInfo.minSec,
+            badgeInfo.durText || formatNotifyDurHuman(badgeInfo.minSec, lang)
+          );
         } else if (badgeInfo.configured) {
           summaryEl.textContent = t.notifyOvSummaryDisabled(badgeInfo.chName);
         } else {
@@ -2861,14 +2998,7 @@
 
       const durSel = document.getElementById('notify-min-duration');
       if (durSel) {
-        durSel.innerHTML = '';
-        for (const [val, text] of t.notifyDurOpts) {
-          const opt = document.createElement('option');
-          opt.value = val;
-          opt.textContent = text;
-          if (String(notifyConfig.minDurationSec ?? 15) === val) opt.selected = true;
-          durSel.appendChild(opt);
-        }
+        populateNotifyDurSelect(durSel, t, notifyConfig.minDurationSec ?? 60);
       }
 
       const idleEl = document.getElementById('notify-only-idle');
@@ -3562,6 +3692,19 @@
       notifyHeadEl.addEventListener('click', () => toggleGroupCollapse('notify', notifySecEl, notifyHeadEl));
     }
 
+    const ovNotifySecEl = document.getElementById('overview-notify-card');
+    const ovNotifyHeadEl = document.getElementById('ov-notify-head');
+    if (ovNotifySecEl && ovNotifyHeadEl) {
+      ovNotifyHeadEl.addEventListener('click', () => toggleGroupCollapse('ovNotify', ovNotifySecEl, ovNotifyHeadEl));
+    }
+
+    document.getElementById('ov-notify-min-duration').addEventListener('change', (e) => {
+      notifyConfig.minDurationSec = Number(e.currentTarget.value);
+      const settingsDurSel = document.getElementById('notify-min-duration');
+      if (settingsDurSel) settingsDurSel.value = String(notifyConfig.minDurationSec);
+      void persistNotifyConfig();
+    });
+
     document.getElementById('btn-ov-notify-config').addEventListener('click', () => {
       expandGroupAndScroll('notify', 'notify-section');
     });
@@ -3649,7 +3792,7 @@
           liveUpdatedAt: (t) => `Updated ${t}`,
           scriptsTitle: '🛠️ Custom Scripts',
           scriptsCount: (n) => `${n} script${n === 1 ? '' : 's'}`,
-          scriptsEmpty: 'Add local Node/Python/Shell scripts to run with one click (0 tokens).',
+          scriptsEmpty: 'Add local Node, Python, or Shell scripts to run with one click.',
           btnAdd: '+ Add Script',
           btnRun: '▶ Run',
           btnRunning: 'Running…',
@@ -3689,7 +3832,7 @@
           liveUpdatedAt: (t) => `${t} 更新`,
           scriptsTitle: '🛠️ カスタムスクリプト',
           scriptsCount: (n) => `${n} 件`,
-          scriptsEmpty: 'ローカルの Node / Python / Shell スクリプトを登録してワンクリック実行できます（0 Token）。',
+          scriptsEmpty: 'ローカルの Node / Python / Shell スクリプトを登録してワンクリックで実行できます。',
           btnAdd: '+ スクリプト追加',
           btnRun: '▶ 実行',
           btnRunning: '実行中…',
@@ -3730,8 +3873,8 @@
         scriptsTitle: isTrad ? '🛠️ 自訂腳本' : '🛠️ 自定义脚本',
         scriptsCount: (n) => (isTrad ? `${n} 個` : `${n} 个`),
         scriptsEmpty: isTrad
-          ? '可加入本機 Node / Python / Shell 小腳本，一鍵 0-Token 執行並查看輸出。'
-          : '可添加本机 Node / Python / Shell 小脚本，一键 0-Token 运行并直接查看输出。',
+          ? '可加入本機 Node / Python / Shell 小腳本，一鍵執行並查看輸出。'
+          : '可添加本机 Node / Python / Shell 小脚本，一键运行并查看输出。',
         btnAdd: isTrad ? '+ 新增腳本' : '+ 添加脚本',
         btnRun: isTrad ? '▶ 執行' : '▶ 运行',
         btnRunning: isTrad ? '執行中…' : '运行中…',
