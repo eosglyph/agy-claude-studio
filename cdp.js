@@ -314,7 +314,11 @@ async function syncRemoteI18nCompat({
       headers: { Accept: 'application/json', 'User-Agent': `agy-claude-studio/${PLUGIN_VERSION}` },
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
     const parsed = parseI18nCompatJson(await res.json());
     if (!parsed) throw new Error('Invalid i18n-compat.json payload');
     if (pluginDataDir) {

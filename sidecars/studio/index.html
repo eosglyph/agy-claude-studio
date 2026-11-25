@@ -17,6 +17,8 @@
       --divider-col: rgba(255, 255, 255, 0.07);
       --control-bg: rgba(255, 255, 255, 0.06);
       --control-hover: rgba(255, 255, 255, 0.1);
+      --tab-active-bg: rgba(255, 255, 255, 0.11);
+      --input-bg: rgba(0, 0, 0, 0.22);
       --badge-bg: rgba(217, 119, 87, 0.16);
       --brand-accent: #d97757;
       --brand-accent-hover: #e28466;
@@ -43,6 +45,8 @@
         --divider-col: rgba(15, 23, 42, 0.06);
         --control-bg: #f4f5f8;
         --control-hover: #eceef3;
+        --tab-active-bg: #ffffff;
+        --input-bg: #ffffff;
         --badge-bg: rgba(217, 119, 87, 0.12);
         --switch-off: rgba(15, 23, 42, 0.16);
         --ok: #1f9d4c;
@@ -63,6 +67,8 @@
       --divider-col: rgba(15, 23, 42, 0.06);
       --control-bg: #f4f5f8;
       --control-hover: #eceef3;
+      --tab-active-bg: #ffffff;
+      --input-bg: #ffffff;
       --badge-bg: rgba(217, 119, 87, 0.12);
       --switch-off: rgba(15, 23, 42, 0.16);
       --ok: #1f9d4c;
@@ -82,6 +88,8 @@
       --divider-col: rgba(255, 255, 255, 0.07);
       --control-bg: #1e2025;
       --control-hover: #272a31;
+      --tab-active-bg: rgba(255, 255, 255, 0.11);
+      --input-bg: rgba(0, 0, 0, 0.24);
       --badge-bg: rgba(217, 119, 87, 0.16);
       --switch-off: rgba(255, 255, 255, 0.18);
       --ok: #3fb950;
@@ -107,13 +115,13 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Header Card */
+    /* Compact Header Card + 2-Tab Bar */
     .header-card {
       background: var(--card-bg);
       border: 1px solid var(--border-col);
       border-radius: var(--radius);
-      padding: 12px;
-      margin-bottom: 12px;
+      padding: 11px 12px 10px;
+      margin-bottom: 10px;
       box-shadow: var(--shadow-sm);
     }
     .header-top {
@@ -121,7 +129,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      margin-bottom: 11px;
+      margin-bottom: 10px;
     }
     .brand {
       display: flex;
@@ -130,9 +138,9 @@
       min-width: 0;
     }
     .brand-badge {
-      width: 38px;
-      height: 38px;
-      border-radius: 11px;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
       background: linear-gradient(135deg, rgba(96, 165, 250, 0.16) 0%, rgba(167, 139, 250, 0.18) 55%, rgba(217, 119, 87, 0.16) 100%);
       border: 1px solid rgba(139, 92, 246, 0.32);
       display: grid;
@@ -141,8 +149,8 @@
       flex: 0 0 auto;
     }
     .brand-badge img {
-      width: 34px;
-      height: 34px;
+      width: 32px;
+      height: 32px;
       object-fit: contain;
       display: block;
     }
@@ -166,7 +174,7 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 10px;
+      padding: 4px 9px;
       border-radius: 999px;
       font-size: 11px;
       font-weight: 500;
@@ -191,7 +199,54 @@
     }
     .dot.ok { background: var(--ok); }
 
-    /* Balanced Action Grid (100% full width, centered, zero left bias) */
+    /* Segmented 2-Tab Switcher */
+    .tab-bar {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px;
+      padding: 3px;
+      border-radius: 9px;
+      background: var(--control-bg);
+      border: 1px solid var(--border-col);
+    }
+    button.tab-btn {
+      width: 100%;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted-fg);
+      font-size: 12px;
+      font-weight: 550;
+      gap: 6px;
+      box-shadow: none;
+    }
+    button.tab-btn:hover {
+      background: var(--control-hover);
+      border-color: transparent;
+      color: var(--fg);
+    }
+    button.tab-btn.is-active {
+      background: var(--tab-active-bg);
+      border-color: var(--border-col);
+      color: var(--fg);
+      font-weight: 650;
+      box-shadow: var(--shadow-sm);
+    }
+    .tab-panel[hidden] {
+      display: none !important;
+    }
+
+    /* Quick Action Grid inside Overview */
+    .overview-actions-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-col);
+      border-radius: var(--radius);
+      padding: 11px 12px;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow-sm);
+    }
     .actions {
       display: flex;
       flex-direction: column;
@@ -231,7 +286,7 @@
       transform: scale(0.985);
     }
     button.primary {
-      min-height: 35px;
+      min-height: 34px;
       background: linear-gradient(180deg, color-mix(in srgb, var(--brand-accent) 88%, #ffffff 12%) 0%, var(--brand-accent) 100%);
       border-color: var(--brand-accent);
       color: #ffffff;
@@ -256,13 +311,13 @@
       background: var(--warn-bg);
       border: 1px solid var(--warn-border);
       font-size: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .banner.show { display: block; }
     .banner-title { font-weight: 600; margin-bottom: 3px; }
     .banner-desc { font-size: 11.5px; color: var(--muted-fg); }
 
-    /* Section Cards (Collapsible) */
+    /* Section Cards (Collapsible & Overview Cards) */
     .section {
       background: var(--card-bg);
       border: 1px solid var(--border-col);
@@ -272,6 +327,30 @@
       box-shadow: var(--shadow-sm);
       overflow: hidden;
     }
+    .overview-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 13px;
+    }
+    .overview-card-body {
+      padding: 10px 13px 12px;
+      border-top: 1px solid var(--divider-col);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .overview-notify-summary {
+      font-size: 12px;
+      color: var(--muted-fg);
+      line-height: 1.45;
+    }
+    .overview-notify-summary strong {
+      color: var(--fg);
+      font-weight: 600;
+    }
+
     button.section-head {
       display: flex;
       align-items: center;
@@ -311,6 +390,7 @@
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .section-head-right {
       display: inline-flex;
@@ -327,11 +407,24 @@
       padding: 1px 7px;
       border-radius: 999px;
       white-space: nowrap;
+      max-width: 175px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .section-badge.is-compat {
       color: var(--brand-accent);
       background: var(--brand-accent-soft);
       border-color: rgba(217, 119, 87, 0.35);
+    }
+    .section-badge.is-ok {
+      color: var(--ok);
+      background: var(--ok-soft);
+      border-color: rgba(63, 185, 80, 0.35);
+    }
+    .section-badge.is-warn {
+      color: var(--warn);
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
     }
     .section-chevron {
       display: inline-flex;
@@ -421,6 +514,101 @@
       border-color: var(--brand-accent);
     }
 
+    /* Mobile Push Credential Fields */
+    .notify-creds-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      padding: 9px 0 11px;
+      border-top: 1px solid var(--divider-col);
+    }
+    .notify-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .notify-field-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .notify-field-label {
+      font-size: 12px;
+      font-weight: 550;
+      color: var(--fg);
+    }
+    .notify-field-hint {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+    }
+    .notify-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    input.notify-input {
+      width: 100%;
+      min-height: 31px;
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-col);
+      background: var(--input-bg);
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11.5px;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+    .notify-input-wrap.has-eye input.notify-input {
+      padding-right: 34px;
+    }
+    input.notify-input:focus {
+      outline: none;
+      border-color: var(--brand-accent);
+      box-shadow: 0 0 0 2px var(--brand-accent-soft);
+    }
+    button.notify-eye-btn {
+      position: absolute;
+      right: 4px;
+      width: 24px;
+      height: 24px;
+      min-height: 24px;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-fg);
+    }
+    button.notify-eye-btn:hover {
+      background: var(--control-hover);
+      border-color: transparent;
+      color: var(--fg);
+    }
+    .notify-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 0 8px;
+      border-top: 1px solid var(--divider-col);
+    }
+    .notify-dirty-hint {
+      font-size: 11px;
+      color: var(--warn);
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 140ms ease;
+    }
+    .notify-dirty-hint.is-visible {
+      opacity: 1;
+    }
+    .notify-footer-btns {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-shrink: 0;
+    }
+
     /* Modern Pill Toggle Switch */
     .switch {
       position: relative;
@@ -487,11 +675,11 @@
       padding: 2px 0 8px;
     }
     .update-card-body {
-      padding: 12px 13px 13px;
+      padding: 11px 13px 12px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      border-top: 1px solid var(--border-col);
+      gap: 11px;
+      border-top: 1px solid var(--divider-col);
     }
     .section.is-collapsed .update-card-body {
       display: none;
@@ -507,7 +695,7 @@
       line-height: 1.3;
     }
     .update-meta-v {
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 700;
       color: var(--fg);
       line-height: 1.35;
@@ -536,7 +724,7 @@
       flex-wrap: wrap;
       justify-content: flex-end;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       margin-top: 2px;
     }
     button.update-pill-btn {
@@ -599,13 +787,9 @@
       </div>
     </div>
 
-    <div class="actions">
-      <button class="primary" id="btn-reinject"></button>
-      <div class="actions-secondary">
-        <button id="btn-remove"></button>
-        <button id="btn-open-um" disabled></button>
-        <button id="btn-refresh"></button>
-      </div>
+    <div class="tab-bar" role="tablist">
+      <button type="button" class="tab-btn is-active" id="tab-btn-overview" data-tab="overview" role="tab" aria-selected="true">概览</button>
+      <button type="button" class="tab-btn" id="tab-btn-settings" data-tab="settings" role="tab" aria-selected="false">设置</button>
     </div>
   </div>
 
@@ -618,49 +802,189 @@
     </div>
   </div>
 
-  <div id="sections"></div>
+  <div id="panel-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-overview">
+    <div class="overview-actions-card">
+      <div class="actions">
+        <button class="primary" id="btn-reinject"></button>
+        <div class="actions-secondary">
+          <button id="btn-remove"></button>
+          <button id="btn-open-um" disabled></button>
+          <button id="btn-refresh"></button>
+        </div>
+      </div>
+    </div>
 
-  <div class="section" id="update-section" data-group-id="updates">
-    <button type="button" class="section-head" id="update-section-head" aria-expanded="true">
-      <span class="section-title" id="update-section-title">⚡ 版本更新</span>
-      <span class="section-head-right">
-        <span class="section-badge" id="update-section-badge">v2.1.0</span>
-        <span class="section-chevron" aria-hidden="true">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+    <div class="section" id="overview-notify-card">
+      <div class="overview-card-head">
+        <span class="section-title" id="ov-notify-title">🔔 手机推送</span>
+        <span class="section-head-right">
+          <span class="section-badge" id="ov-notify-badge">未开启</span>
+          <label class="switch" title="启用/暂停手机推送">
+            <input type="checkbox" id="ov-notify-toggle" />
+            <span class="switch-track"></span>
+          </label>
         </span>
-      </span>
-    </button>
-    <div class="update-card-body">
-      <div class="update-meta-block">
-        <div class="update-meta-k" id="compat-meta-k">免汉化白名单</div>
-        <div class="update-meta-v" id="compat-meta-v">…</div>
-        <div class="update-meta-sub" id="compat-meta-sub">…</div>
       </div>
-      <div class="update-meta-block">
-        <div class="update-meta-k" id="version-meta-k">当前版本</div>
-        <div class="update-meta-v" id="version-meta-v">…</div>
-        <div class="update-meta-sub" id="version-meta-sub">…</div>
+      <div class="overview-card-body">
+        <div class="overview-notify-summary" id="ov-notify-summary">…</div>
+        <div class="update-card-actions">
+          <button type="button" class="update-pill-btn" id="btn-ov-notify-test">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/></svg>
+            <span id="btn-ov-notify-test-lbl">发送测试</span>
+          </button>
+          <button type="button" class="update-pill-btn" id="btn-ov-notify-config">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span id="btn-ov-notify-config-lbl">配置渠道</span>
+          </button>
+        </div>
       </div>
-      <div class="update-card-actions">
-        <button type="button" class="update-pill-btn" id="btn-sync-compat">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-          <span id="btn-sync-compat-lbl"></span>
-        </button>
-        <button type="button" class="update-pill-btn" id="btn-check-update">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-          <span id="btn-check-update-lbl"></span>
-        </button>
-        <button type="button" class="update-pill-btn primary" id="btn-self-update" style="display:none">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
-          <span id="btn-self-update-lbl"></span>
-        </button>
+    </div>
+
+    <div class="section" id="update-section" data-group-id="updates">
+      <button type="button" class="section-head" id="update-section-head" aria-expanded="true">
+        <span class="section-title" id="update-section-title">⚡ 版本更新</span>
+        <span class="section-head-right">
+          <span class="section-badge" id="update-section-badge">v2.1.0</span>
+          <span class="section-chevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </span>
+      </button>
+      <div class="update-card-body">
+        <div class="update-meta-block">
+          <div class="update-meta-k" id="compat-meta-k">免汉化白名单</div>
+          <div class="update-meta-v" id="compat-meta-v">…</div>
+          <div class="update-meta-sub" id="compat-meta-sub">…</div>
+        </div>
+        <div class="update-meta-block">
+          <div class="update-meta-k" id="version-meta-k">当前版本</div>
+          <div class="update-meta-v" id="version-meta-v">…</div>
+          <div class="update-meta-sub" id="version-meta-sub">…</div>
+        </div>
+        <div class="update-card-actions">
+          <button type="button" class="update-pill-btn" id="btn-sync-compat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            <span id="btn-sync-compat-lbl"></span>
+          </button>
+          <button type="button" class="update-pill-btn" id="btn-check-update">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            <span id="btn-check-update-lbl"></span>
+          </button>
+          <button type="button" class="update-pill-btn primary" id="btn-self-update" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+            <span id="btn-self-update-lbl"></span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="footer-actions">
-    <button class="ghost-reset" id="btn-reset"></button>
+  <div id="panel-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-settings" hidden>
+    <div id="sections"></div>
+
+    <div class="section" id="notify-section" data-group-id="notify">
+      <button type="button" class="section-head" id="notify-section-head" aria-expanded="false">
+        <span class="section-title" id="notify-section-title">🔔 手机推送</span>
+        <span class="section-head-right">
+          <span class="section-badge" id="notify-section-badge">未开启</span>
+          <span class="section-chevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </span>
+      </button>
+      <div class="section-body" id="notify-section-body">
+        <div class="row">
+          <div class="row-label">
+            <div class="row-name" id="notify-enabled-name"></div>
+            <div class="row-desc" id="notify-enabled-desc"></div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="notify-enabled" />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            <div class="row-name" id="notify-channel-name"></div>
+            <div class="row-desc" id="notify-channel-desc"></div>
+          </div>
+          <select id="notify-channel"></select>
+        </div>
+
+        <div class="notify-creds-panel" id="notify-creds-box"></div>
+
+        <div class="row">
+          <div class="row-label">
+            <div class="row-name" id="notify-min-dur-name"></div>
+            <div class="row-desc" id="notify-min-dur-desc"></div>
+          </div>
+          <select id="notify-min-duration"></select>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            <div class="row-name" id="notify-only-idle-name"></div>
+            <div class="row-desc" id="notify-only-idle-desc"></div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="notify-only-idle" />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            <div class="row-name" id="notify-on-error-name"></div>
+            <div class="row-desc" id="notify-on-error-desc"></div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="notify-on-error" />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            <div class="row-name" id="notify-skip-canceled-name"></div>
+            <div class="row-desc" id="notify-skip-canceled-desc"></div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="notify-skip-canceled" />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            <div class="row-name" id="notify-include-summary-name"></div>
+            <div class="row-desc" id="notify-include-summary-desc"></div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="notify-include-summary" />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="notify-footer">
+          <span class="notify-dirty-hint" id="notify-dirty-hint"></span>
+          <div class="notify-footer-btns">
+            <button type="button" class="update-pill-btn" id="btn-notify-test">
+              <span id="btn-notify-test-lbl"></span>
+            </button>
+            <button type="button" class="update-pill-btn primary" id="btn-notify-save">
+              <span id="btn-notify-save-lbl"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="ghost-reset" id="btn-reset"></button>
+    </div>
   </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -692,9 +1016,100 @@
       ],
     };
 
+    const NOTIFY_CHANNELS_I18N = {
+      'zh-CN': {
+        serverchan: 'Server酱 (微信)',
+        bark: 'Bark (iOS)',
+        ntfy: 'ntfy (iOS / Android)',
+        feishu: '飞书群机器人',
+        dingtalk: '钉钉群机器人',
+        wecom: '企业微信机器人',
+        telegram: 'Telegram Bot',
+        webhook: '自定义 Webhook',
+      },
+      'zh-TW': {
+        serverchan: 'Server醬 (微信)',
+        bark: 'Bark (iOS)',
+        ntfy: 'ntfy (iOS / Android)',
+        feishu: '飛書群機器人',
+        dingtalk: '釘釘群機器人',
+        wecom: '企業微信機器人',
+        telegram: 'Telegram Bot',
+        webhook: '自訂 Webhook',
+      },
+      yue: {
+        serverchan: 'Server醬 (微信)',
+        bark: 'Bark (iOS)',
+        ntfy: 'ntfy (iOS / Android)',
+        feishu: '飛書群機械人',
+        dingtalk: '釘釘群機械人',
+        wecom: '企業微信機械人',
+        telegram: 'Telegram Bot',
+        webhook: '自訂 Webhook',
+      },
+      en: {
+        serverchan: 'ServerChan (WeChat)',
+        bark: 'Bark (iOS)',
+        ntfy: 'ntfy (iOS / Android)',
+        feishu: 'Feishu / Lark Bot',
+        dingtalk: 'DingTalk Bot',
+        wecom: 'WeCom Bot',
+        telegram: 'Telegram Bot',
+        webhook: 'Custom Webhook',
+      },
+      ja: {
+        serverchan: 'ServerChan (WeChat)',
+        bark: 'Bark (iOS)',
+        ntfy: 'ntfy (iOS / Android)',
+        feishu: 'Feishu / Lark Bot',
+        dingtalk: 'DingTalk Bot',
+        wecom: 'WeCom Bot',
+        telegram: 'Telegram Bot',
+        webhook: 'カスタム Webhook',
+      },
+    };
+
+    const NOTIFY_CRED_SCHEMAS = {
+      serverchan: [
+        { key: 'sendKey', secret: true, placeholder: 'SCT... / sctp123t...' },
+        { key: 'apiUrl', secret: false, placeholder: 'https://... (Optional)' },
+      ],
+      bark: [
+        { key: 'deviceKey', secret: true, placeholder: 'Your Bark Device Key' },
+        { key: 'serverUrl', secret: false, placeholder: 'https://api.day.app' },
+        { key: 'group', secret: false, placeholder: 'Claude Studio' },
+        { key: 'sound', secret: false, placeholder: 'minuet (Optional)' },
+      ],
+      ntfy: [
+        { key: 'topic', secret: false, placeholder: 'my-antigravity-alerts' },
+        { key: 'serverUrl', secret: false, placeholder: 'https://ntfy.sh' },
+        { key: 'token', secret: true, placeholder: 'tk_... (Optional)' },
+      ],
+      feishu: [
+        { key: 'webhookUrl', secret: true, placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...' },
+      ],
+      dingtalk: [
+        { key: 'webhookUrl', secret: true, placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=...' },
+      ],
+      wecom: [
+        { key: 'webhookUrl', secret: true, placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...' },
+      ],
+      telegram: [
+        { key: 'botToken', secret: true, placeholder: '123456789:ABCdef...' },
+        { key: 'chatId', secret: false, placeholder: '123456789 or -100...' },
+        { key: 'apiBase', secret: false, placeholder: 'https://api.telegram.org' },
+      ],
+      webhook: [
+        { key: 'webhookUrl', secret: true, placeholder: 'https://example.com/notify' },
+        { key: 'authHeader', secret: true, placeholder: 'Bearer ... (Optional)' },
+      ],
+    };
+
     const TEXTS = {
       'zh-CN': {
         brandTitle: 'Claude Studio',
+        tabOverview: '概览',
+        tabSettings: '设置',
         loading: '正在加载…',
         checking: '检测中',
         connected: (port, n) => `CDP :${port} · ${n} 个窗口`,
@@ -720,14 +1135,13 @@
         btnSyncCompat: '同步白名单',
         btnOpenRelease: '查看发布页 →',
         updateAvailableTitle: (v) => `发现新版本 v${v}`,
-        updateAvailableGit: '检测到 Git 原生插件目录，可点击下方按钮原地拉取更新并热生效。',
-        updateAvailableManual: '当前非 Git 克隆目录（或存在本地修改），请前往发布页下载最新安装包。',
         updateUpToDate: (v) => `当前已是最新版本 (v${v})`,
         updateChecking: '正在检查新版本…',
         updateRunning: '正在拉取更新并刷新窗口…',
         updateDone: (v) => `已更新至 v${v} 并重新注入`,
         updateFail: (e) => `更新检查失败：${e}`,
         compatSynced: (p, s) => `已同步防汉化白名单（${p} 个插件 · ${s} 条规则）`,
+        compatBundledFallback: (p, s) => `云端白名单尚未发布，已启用内置白名单（${p} 个插件 · ${s} 条规则）`,
         compatSyncFail: (e) => `白名单同步失败：${e}`,
         btnOpenUm: '用量监控',
         openUmNotFound: '当前窗口未检测到正在运行的「用量监控」面板',
@@ -741,8 +1155,58 @@
         grpLayout: '界面微调',
         grpAdvanced: '进阶交互',
         grpTelemetry: '用量统计',
+        grpNotify: '🔔 手机推送',
         countBadge: (n) => `${n} 项`,
+        activeRatioBadge: (on, total) => `${on}/${total} 开启`,
+        statsOnBadge: '已开启',
         statsOffBadge: '已关闭',
+        notifyTitle: '🔔 手机推送',
+        notifyBadgeOff: '未开启',
+        notifyBadgeUnconfigured: '待填密钥',
+        notifyImmediate: '即时',
+        notifyOvSummaryUnconfigured: '长任务完成或异常时 0 Token 推送到手机（支持 Server酱 / Bark / ntfy / 飞书 / Telegram 等）',
+        notifyOvSummaryDisabled: (ch) => `已配置 ${ch}（已暂停）· 开启开关即可在长任务结束时推送手机`,
+        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `耗时 ≥ ${minSec}s` : '每轮结束'} · Stop Hook 0 Token`,
+        btnNotifyTest: '发送测试',
+        btnNotifyConfig: '配置渠道',
+        btnNotifySave: '保存设置',
+        notifyDirtyHint: '有未保存的编辑',
+        notifySavedToast: '推送设置已保存（仅存本地 notify.json）',
+        notifyNeedConfigToast: '请先选择推送渠道并填写密钥/Webhook，再开启开关',
+        notifyTestSending: '正在发送测试推送…',
+        notifyTestOk: (ms) => `测试推送发送成功 (${ms}ms)`,
+        notifyTestFail: (e) => `测试推送失败：${e}`,
+        notifyLabels: {
+          enabled: ['开启手机推送', '通过 Antigravity Stop Hook 在本地完成推送，完全不消耗模型 Token'],
+          channel: ['推送渠道', '选择接收通知的平台或自定义 Webhook'],
+          minDuration: ['最小任务耗时', '低于该耗时的快速问答不打扰；执行异常会强制推送'],
+          onlyIdle: ['仅后台全空闲时推送', '等待所有子代理与后台任务结束后再推送'],
+          onError: ['异常报错立即推送', '任务报错中断时无视耗时与冷却立即告警'],
+          skipCanceled: ['手动停止时不推送', '点击停止按钮终止对话时静默跳过'],
+          includeSummary: ['附带 0 Token 回复摘要', '本地读取末条回复首尾提炼摘要，绝不额外调用模型'],
+        },
+        notifyDurOpts: [
+          ['0', '不限时长 (每轮)'],
+          ['10', '≥ 10 秒'],
+          ['15', '≥ 15 秒 (推荐)'],
+          ['30', '≥ 30 秒'],
+          ['60', '≥ 60 秒'],
+        ],
+        credLabels: {
+          sendKey: ['SendKey', 'Server酱 / Server酱³ 密钥'],
+          apiUrl: ['自定义 URL', '可选，留空自动识别 Server酱³'],
+          deviceKey: ['Device Key', 'Bark 客户端密钥'],
+          serverUrl: ['服务器地址', '自建可修改，默认官方地址'],
+          group: ['通知分组', '可选'],
+          sound: ['铃声名称', '可选'],
+          topic: ['Topic 主题名', '手机端订阅的唯一主题'],
+          token: ['Access Token', '私有主题鉴权令牌（可选）'],
+          webhookUrl: ['Webhook URL', '群机器人或接口回调地址'],
+          botToken: ['Bot Token', '从 @BotFather 获取'],
+          chatId: ['Chat ID', '个人用户 ID 或群组 ID'],
+          apiBase: ['API 地址', '反代可修改，默认官方接口'],
+          authHeader: ['Authorization', '可选请求头，如 Bearer xxx'],
+        },
         items: {
           language: ['界面语言', '切换全局界面语言，自动保留代码与对话原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           homeLayout: ['首页布局', '新会话首页样式：用量看板 / 经典居中 / 原生', [['studio', '用量看板'], ['classic', '经典居中'], ['off', '原生首页']]],
@@ -774,6 +1238,8 @@
       },
       'zh-TW': {
         brandTitle: 'Claude Studio',
+        tabOverview: '概覽',
+        tabSettings: '設定',
         loading: '載入中…',
         checking: '偵測中',
         connected: (port, n) => `CDP :${port} · ${n} 個視窗`,
@@ -794,6 +1260,19 @@
         btnRemove: '還原原生',
         btnReset: '重設預設',
         btnRefresh: '重新整理',
+        btnCheckUpdate: '檢查更新',
+        btnSelfUpdate: '一鍵更新',
+        btnSyncCompat: '同步白名單',
+        btnOpenRelease: '查看發佈頁 →',
+        updateAvailableTitle: (v) => `發現新版本 v${v}`,
+        updateUpToDate: (v) => `目前已是最新版本 (v${v})`,
+        updateChecking: '正在檢查新版本…',
+        updateRunning: '正在拉取更新並重新整理…',
+        updateDone: (v) => `已更新至 v${v} 並重新注入`,
+        updateFail: (e) => `更新檢查失敗：${e}`,
+        compatSynced: (p, s) => `已同步防漢化白名單（${p} 個外掛 · ${s} 條規則）`,
+        compatBundledFallback: (p, s) => `雲端白名單尚未發佈，已啟用內建白名單（${p} 個外掛 · ${s} 條規則）`,
+        compatSyncFail: (e) => `白名單同步失敗：${e}`,
         btnOpenUm: '用量監控',
         openUmNotFound: '目前視窗未偵測到執行中的「用量監控」面板',
         umNotInstalled: '未偵測到 usage-monitor 外掛，安裝後即可自動常駐右側監控面板',
@@ -806,8 +1285,58 @@
         grpLayout: '介面微調',
         grpAdvanced: '進階互動',
         grpTelemetry: '用量統計',
+        grpNotify: '🔔 手機推播',
         countBadge: (n) => `${n} 項`,
+        activeRatioBadge: (on, total) => `${on}/${total} 開啟`,
+        statsOnBadge: '已開啟',
         statsOffBadge: '已關閉',
+        notifyTitle: '🔔 手機推播',
+        notifyBadgeOff: '未開啟',
+        notifyBadgeUnconfigured: '待填金鑰',
+        notifyImmediate: '即時',
+        notifyOvSummaryUnconfigured: '長任務完成或異常時 0 Token 推播至手機（支援 Server醬 / Bark / ntfy / 飛書 / Telegram 等）',
+        notifyOvSummaryDisabled: (ch) => `已設定 ${ch}（已暫停）· 開啟開關即可於任務結束時推播手機`,
+        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `耗時 ≥ ${minSec}s` : '每輪結束'} · Stop Hook 0 Token`,
+        btnNotifyTest: '發送測試',
+        btnNotifyConfig: '設定渠道',
+        btnNotifySave: '儲存設定',
+        notifyDirtyHint: '有尚未儲存的變更',
+        notifySavedToast: '推播設定已儲存（僅存本機 notify.json）',
+        notifyNeedConfigToast: '請先選擇推播渠道並填寫金鑰或 Webhook，再開啟開關',
+        notifyTestSending: '正在發送測試推播…',
+        notifyTestOk: (ms) => `測試推播發送成功 (${ms}ms)`,
+        notifyTestFail: (e) => `測試推播失敗：${e}`,
+        notifyLabels: {
+          enabled: ['開啟手機推播', '透過 Antigravity Stop Hook 於本機完成推播，完全不消耗模型 Token'],
+          channel: ['推播渠道', '選擇接收通知的平台或自訂 Webhook'],
+          minDuration: ['最短任務耗時', '低於此耗時的快速問答不打擾；發生異常會立即推播'],
+          onlyIdle: ['僅背景全空閒時推播', '等待所有子代理與背景任務完成後再統一推播'],
+          onError: ['異常中斷立即推播', '執行異常終止時略過耗時與冷卻限制立即通知'],
+          skipCanceled: ['手動停止時不推播', '點擊停止終止對話時靜默略過'],
+          includeSummary: ['附帶 0 Token 回覆摘要', '本機讀取末條回覆首尾萃取摘要，絕不額外呼叫模型'],
+        },
+        notifyDurOpts: [
+          ['0', '不限時長 (每輪)'],
+          ['10', '≥ 10 秒'],
+          ['15', '≥ 15 秒 (推薦)'],
+          ['30', '≥ 30 秒'],
+          ['60', '≥ 60 秒'],
+        ],
+        credLabels: {
+          sendKey: ['SendKey', 'Server醬 / Server醬³ 金鑰'],
+          apiUrl: ['自訂 URL', '選填，留空自動辨識 Server醬³'],
+          deviceKey: ['Device Key', 'Bark 用戶端金鑰'],
+          serverUrl: ['伺服器位址', '自建可修改，預設官方位址'],
+          group: ['通知分組', '選填'],
+          sound: ['提示音效', '選填'],
+          topic: ['Topic 主題名稱', '手機端訂閱的唯一主題'],
+          token: ['Access Token', '私有主題權杖（選填）'],
+          webhookUrl: ['Webhook URL', '群機器人或介面回呼網址'],
+          botToken: ['Bot Token', '從 @BotFather 取得'],
+          chatId: ['Chat ID', '個人用戶 ID 或群組 ID'],
+          apiBase: ['API 位址', '反向代理可修改，預設官方介面'],
+          authHeader: ['Authorization', '選填請求標頭，如 Bearer xxx'],
+        },
         items: {
           language: ['介面語言', '切換全域介面語言，自動保留程式碼與對話原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           homeLayout: ['首頁版面', '新對話首頁樣式：用量看板 / 經典置中 / 原生', [['studio', '用量看板'], ['classic', '經典置中'], ['off', '原生首頁']]],
@@ -839,6 +1368,8 @@
       },
       yue: {
         brandTitle: 'Claude Studio',
+        tabOverview: '概覽',
+        tabSettings: '設定',
         loading: '載入緊…',
         checking: '檢查緊',
         connected: (port, n) => `CDP :${port} · ${n} 個視窗`,
@@ -859,6 +1390,19 @@
         btnRemove: '還原原版',
         btnReset: '重設預設',
         btnRefresh: '刷新狀態',
+        btnCheckUpdate: '檢查更新',
+        btnSelfUpdate: '一鍵更新',
+        btnSyncCompat: '同步白名單',
+        btnOpenRelease: '去發佈頁 →',
+        updateAvailableTitle: (v) => `搵到新版本 v${v}`,
+        updateUpToDate: (v) => `已經係最新版本 (v${v})`,
+        updateChecking: '檢查緊新版本…',
+        updateRunning: '拉緊更新並刷新視窗…',
+        updateDone: (v) => `已更新至 v${v} 並重新套用`,
+        updateFail: (e) => `檢查更新失敗：${e}`,
+        compatSynced: (p, s) => `已同步免漢化白名單（${p} 個插件 · ${s} 條規則）`,
+        compatBundledFallback: (p, s) => `雲端白名單仲未發佈，已用返內置白名單（${p} 個插件 · ${s} 條規則）`,
+        compatSyncFail: (e) => `白名單同步失敗：${e}`,
         btnOpenUm: '用量監控',
         openUmNotFound: '目前視窗未搵到運行緊嘅「用量監控」面板',
         umNotInstalled: '未搵到 usage-monitor 插件，裝咗之後先可以自動長駐右邊監控面板',
@@ -871,8 +1415,58 @@
         grpLayout: '介面微調',
         grpAdvanced: '進階互動',
         grpTelemetry: '用量統計',
+        grpNotify: '🔔 手機推送',
         countBadge: (n) => `${n} 項`,
+        activeRatioBadge: (on, total) => `${on}/${total} 開緊`,
+        statsOnBadge: '開咗',
         statsOffBadge: '已關閉',
+        notifyTitle: '🔔 手機推送',
+        notifyBadgeOff: '未開啟',
+        notifyBadgeUnconfigured: '未填密鑰',
+        notifyImmediate: '即時',
+        notifyOvSummaryUnconfigured: '長任務完成或者出事時 0 Token 推送落手機（支援 Server醬 / Bark / ntfy / 飛書 / Telegram 等）',
+        notifyOvSummaryDisabled: (ch) => `已配好 ${ch}（暫停緊）· 開返開關就可以喺任務搞掂時推送手機`,
+        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `耗時 ≥ ${minSec}s` : '每輪結束'} · Stop Hook 0 Token`,
+        btnNotifyTest: '發送測試',
+        btnNotifyConfig: '設定渠道',
+        btnNotifySave: '儲存設定',
+        notifyDirtyHint: '有未儲存嘅改動',
+        notifySavedToast: '推送設定已儲存（淨係存喺本機 notify.json）',
+        notifyNeedConfigToast: '請先揀好渠道同填好密鑰／Webhook 再開關',
+        notifyTestSending: '發送緊測試推送…',
+        notifyTestOk: (ms) => `測試推送成功 (${ms}ms)`,
+        notifyTestFail: (e) => `測試推送失敗：${e}`,
+        notifyLabels: {
+          enabled: ['開啟手機推送', '經 Antigravity Stop Hook 喺本機直接發送，0 模型 Token 消耗'],
+          channel: ['推送渠道', '揀接收通知嘅平台或者自訂 Webhook'],
+          minDuration: ['最少任務耗時', '快過呢個時間唔煩你；如果出錯會即刻通知'],
+          onlyIdle: ['淨係背景全空閒先推', '等埋所有子代理同後台任務搞掂先一次過通知'],
+          onError: ['出錯即刻通知', '任務出錯中斷時無視耗時同冷卻限制即刻推'],
+          skipCanceled: ['手動停低唔推送', '撳停止按鈕中斷對話時自動跳過'],
+          includeSummary: ['附帶 0 Token 回覆摘要', '本機讀取最後回覆頭尾濃縮成摘要，完全唔使問模型'],
+        },
+        notifyDurOpts: [
+          ['0', '唔限時長 (每輪)'],
+          ['10', '≥ 10 秒'],
+          ['15', '≥ 15 秒 (推薦)'],
+          ['30', '≥ 30 秒'],
+          ['60', '≥ 60 秒'],
+        ],
+        credLabels: {
+          sendKey: ['SendKey', 'Server醬 / Server酱³ 密鑰'],
+          apiUrl: ['自訂 URL', '可留空，自動識別 Server醬³'],
+          deviceKey: ['Device Key', 'Bark 客戶端密鑰'],
+          serverUrl: ['伺服器網址', '自建可改，預設官方地址'],
+          group: ['通知分組', '選填'],
+          sound: ['提示聲效', '選填'],
+          topic: ['Topic 主題名', '手機端訂閱嘅唯一主題'],
+          token: ['Access Token', '私有主題令牌（選填）'],
+          webhookUrl: ['Webhook URL', '群機械人或者回調地址'],
+          botToken: ['Bot Token', '喺 @BotFather 拎取'],
+          chatId: ['Chat ID', '個人 ID 或者群組 ID'],
+          apiBase: ['API 網址', '反代可改，預設官方地址'],
+          authHeader: ['Authorization', '選填請求頭，例如 Bearer xxx'],
+        },
         items: {
           language: ['介面語言', '切換全介面語言，自動保留代碼同對話原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           homeLayout: ['首頁版面', '新對話首頁樣式：用量看板 / 經典置中 / 原生', [['studio', '用量看板'], ['classic', '經典置中'], ['off', '原生首頁']]],
@@ -904,6 +1498,8 @@
       },
       en: {
         brandTitle: 'Claude Studio',
+        tabOverview: 'Overview',
+        tabSettings: 'Settings',
         loading: 'Loading...',
         checking: 'Checking',
         connected: (port, n) => `CDP :${port} · ${n} win`,
@@ -929,14 +1525,13 @@
         btnSyncCompat: 'Sync i18n List',
         btnOpenRelease: 'View Release →',
         updateAvailableTitle: (v) => `New version v${v} available`,
-        updateAvailableGit: 'Clean Git plugin folder detected. Click below to pull and hot-reload.',
-        updateAvailableManual: 'Non-Git install or local edits detected. Download the latest release package.',
         updateUpToDate: (v) => `Already up to date (v${v})`,
         updateChecking: 'Checking for updates...',
         updateRunning: 'Pulling update and refreshing windows...',
         updateDone: (v) => `Updated to v${v} and re-injected`,
         updateFail: (e) => `Update check failed: ${e}`,
         compatSynced: (p, s) => `Synced i18n compat list (${p} plugins · ${s} rules)`,
+        compatBundledFallback: (p, s) => `Cloud list not published yet; using built-in whitelist (${p} plugins · ${s} rules)`,
         compatSyncFail: (e) => `Compat sync failed: ${e}`,
         btnOpenUm: 'Usage Monitor',
         openUmNotFound: 'Usage Monitor pane not found in active window',
@@ -950,8 +1545,58 @@
         grpLayout: 'Layout Tweaks',
         grpAdvanced: 'Advanced & Extras',
         grpTelemetry: 'Usage Stats',
+        grpNotify: '🔔 Mobile Push',
         countBadge: (n) => `${n}`,
+        activeRatioBadge: (on, total) => `${on}/${total} on`,
+        statsOnBadge: 'Enabled',
         statsOffBadge: 'Off',
+        notifyTitle: '🔔 Mobile Push',
+        notifyBadgeOff: 'Off',
+        notifyBadgeUnconfigured: 'Needs Key',
+        notifyImmediate: 'Always',
+        notifyOvSummaryUnconfigured: '0-token Stop Hook alerts to your phone on completion or errors (ServerChan / Bark / ntfy / Feishu / Telegram / Webhook).',
+        notifyOvSummaryDisabled: (ch) => `${ch} configured (paused) · Toggle on to receive alerts when long turns finish.`,
+        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `≥ ${minSec}s` : 'Every turn'} · 0-Token Stop Hook`,
+        btnNotifyTest: 'Send Test',
+        btnNotifyConfig: 'Configure',
+        btnNotifySave: 'Save Push',
+        notifyDirtyHint: 'Unsaved edits',
+        notifySavedToast: 'Push settings saved cleanly to local notify.json',
+        notifyNeedConfigToast: 'Pick a push channel and enter its key/webhook first',
+        notifyTestSending: 'Sending test notification...',
+        notifyTestOk: (ms) => `Test notification sent (${ms}ms)`,
+        notifyTestFail: (e) => `Test push failed: ${e}`,
+        notifyLabels: {
+          enabled: ['Enable Mobile Push', 'Runs locally via Antigravity Stop Hook with zero model token cost'],
+          channel: ['Push Channel', 'Choose destination app, bot, or custom webhook'],
+          minDuration: ['Min Turn Duration', 'Skip quick replies below threshold; errors always notify immediately'],
+          onlyIdle: ['Notify Only When Idle', 'Wait for background tasks & subagents (fullyIdle) before notifying'],
+          onError: ['Alert Immediately on Error', 'Send urgent notification on errors regardless of duration/cooldown'],
+          skipCanceled: ['Skip Manual Cancel', 'Stay silent when you cancel a turn manually'],
+          includeSummary: ['Include 0-Token Summary', 'Extract head & tail from local transcript without calling the LLM'],
+        },
+        notifyDurOpts: [
+          ['0', 'Any duration'],
+          ['10', '≥ 10 sec'],
+          ['15', '≥ 15 sec (Recommended)'],
+          ['30', '≥ 30 sec'],
+          ['60', '≥ 60 sec'],
+        ],
+        credLabels: {
+          sendKey: ['SendKey', 'ServerChan / ServerChan³ key'],
+          apiUrl: ['Custom URL', 'Optional (auto-detected if empty)'],
+          deviceKey: ['Device Key', 'Bark device key'],
+          serverUrl: ['Server URL', 'Default official server or self-hosted'],
+          group: ['Group', 'Optional notification group'],
+          sound: ['Sound', 'Optional alert sound'],
+          topic: ['Topic', 'Subscribed topic name'],
+          token: ['Access Token', 'Optional bearer token for private topics'],
+          webhookUrl: ['Webhook URL', 'Bot or endpoint callback URL'],
+          botToken: ['Bot Token', 'Issued by @BotFather'],
+          chatId: ['Chat ID', 'User or group chat ID'],
+          apiBase: ['API Base URL', 'Custom proxy or official endpoint'],
+          authHeader: ['Authorization', 'Optional header (e.g. Bearer xxx)'],
+        },
         items: {
           language: ['Interface Language', 'Global UI localization while keeping code and chat intact', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           homeLayout: ['Home Layout', 'New-chat home style: Usage Dashboard / Classic / Native', [['studio', 'Usage Dashboard'], ['classic', 'Classic'], ['off', 'Native']]],
@@ -983,6 +1628,8 @@
       },
       ja: {
         brandTitle: 'Claude Studio',
+        tabOverview: '概要',
+        tabSettings: '設定',
         loading: '読み込み中…',
         checking: '確認中',
         connected: (port, n) => `CDP :${port} · ${n} 窓`,
@@ -1003,6 +1650,19 @@
         btnRemove: '標準 UI',
         btnReset: '初期値',
         btnRefresh: '状態更新',
+        btnCheckUpdate: '更新確認',
+        btnSelfUpdate: '今すぐ更新',
+        btnSyncCompat: '除外リスト同期',
+        btnOpenRelease: 'リリースページ →',
+        updateAvailableTitle: (v) => `新バージョン v${v} あり`,
+        updateUpToDate: (v) => `最新バージョンです (v${v})`,
+        updateChecking: '更新を確認中…',
+        updateRunning: '更新を取得して反映中…',
+        updateDone: (v) => `v${v} へ更新し再適用しました`,
+        updateFail: (e) => `更新確認失敗：${e}`,
+        compatSynced: (p, s) => `翻訳除外リスト同期完了 (${p} プラグイン · ${s} ルール)`,
+        compatBundledFallback: (p, s) => `クラウド版未公開のため内蔵リストを使用中 (${p} プラグイン · ${s} ルール)`,
+        compatSyncFail: (e) => `同期失敗：${e}`,
         btnOpenUm: '使用量監視',
         openUmNotFound: '実行中の使用量モニターが見つかりません',
         umNotInstalled: 'usage-monitor プラグイン未検出のため利用できません',
@@ -1015,8 +1675,58 @@
         grpLayout: 'レイアウト調整',
         grpAdvanced: '拡張インタラクション',
         grpTelemetry: '使用量統計',
+        grpNotify: '🔔 スマホ通知',
         countBadge: (n) => `${n} 件`,
+        activeRatioBadge: (on, total) => `${on}/${total} 有効`,
+        statsOnBadge: '有効',
         statsOffBadge: 'オフ',
+        notifyTitle: '🔔 スマホ通知',
+        notifyBadgeOff: 'オフ',
+        notifyBadgeUnconfigured: '未設定',
+        notifyImmediate: '毎回',
+        notifyOvSummaryUnconfigured: '長時間タスク完了・エラー時に Token 消費ゼロでスマホへ通知（ServerChan / Bark / ntfy / Feishu / Telegram 対応）',
+        notifyOvSummaryDisabled: (ch) => `${ch} 設定済み（停止中）· スイッチをオンにすると完了時に通知します`,
+        notifyOvSummaryActive: (ch, minSec) => `${ch} · ${minSec > 0 ? `≥ ${minSec}s` : '毎ターン'} · 0 Token Hook`,
+        btnNotifyTest: 'テスト送信',
+        btnNotifyConfig: 'チャネル設定',
+        btnNotifySave: '保存',
+        notifyDirtyHint: '未保存の変更あり',
+        notifySavedToast: '通知設定をローカル notify.json に保存しました',
+        notifyNeedConfigToast: '先に通知チャネルとキー / Webhook を設定してください',
+        notifyTestSending: 'テスト通知を送信中…',
+        notifyTestOk: (ms) => `テスト通知の送信に成功 (${ms}ms)`,
+        notifyTestFail: (e) => `テスト送信失敗：${e}`,
+        notifyLabels: {
+          enabled: ['スマホ通知を有効化', 'Stop Hook によりローカル実行するためモデル Token 消費は完全ゼロです'],
+          channel: ['通知チャネル', '通知先サービスまたはカスタム Webhook を選択'],
+          minDuration: ['最小タスク時間', 'これより短い応答はスキップ（エラー時は常に即時通知）'],
+          onlyIdle: ['全バックグラウンド完了時のみ', 'サブエージェント等がすべて終了してから通知'],
+          onError: ['エラー時は即時通知', '異常終了時は時間・クールダウン制限を無視して即時通知'],
+          skipCanceled: ['手動キャンセル時はスキップ', 'ユーザーによる停止時は通知しません'],
+          includeSummary: ['0 Token 要約を含める', 'ローカルログの冒頭・末尾から要約を生成（LLM 不使用）'],
+        },
+        notifyDurOpts: [
+          ['0', '指定なし (毎ターン)'],
+          ['10', '≥ 10 秒'],
+          ['15', '≥ 15 秒 (推奨)'],
+          ['30', '≥ 30 秒'],
+          ['60', '≥ 60 秒'],
+        ],
+        credLabels: {
+          sendKey: ['SendKey', 'ServerChan / ServerChan³ キー'],
+          apiUrl: ['カスタム URL', '任意（空欄で自動判定）'],
+          deviceKey: ['Device Key', 'Bark デバイスキー'],
+          serverUrl: ['サーバー URL', '自前サーバーも指定可能'],
+          group: ['グループ', '任意'],
+          sound: ['サウンド', '任意'],
+          topic: ['Topic 名', '購読するトピック名'],
+          token: ['Access Token', 'プライベートトピック用（任意）'],
+          webhookUrl: ['Webhook URL', 'Bot またはコールバック URL'],
+          botToken: ['Bot Token', '@BotFather で発行'],
+          chatId: ['Chat ID', 'ユーザーまたはグループ ID'],
+          apiBase: ['API ベース URL', 'プロキシ可・既定は公式'],
+          authHeader: ['Authorization', '任意ヘッダー (例: Bearer xxx)'],
+        },
         items: {
           language: ['表示言語', 'コードと本文を保護しつつ UI 全体を 5 言語化', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           homeLayout: ['ホームレイアウト', '新規チャット画面：使用量ダッシュボード / クラシック / 標準', [['studio', '使用量ボード'], ['classic', 'クラシック'], ['off', '標準']]],
@@ -1086,6 +1796,8 @@
       },
     ];
 
+    const ALL_SETTINGS_GROUP_IDS = ['basics', 'layout', 'advanced', 'telemetry', 'notify'];
+
     const apiFetch = (url, opts) => {
       if (window.sidecar && typeof window.sidecar.fetch === 'function') {
         return window.sidecar.fetch(url, opts);
@@ -1097,19 +1809,95 @@
     };
 
     const COLLAPSED_STORAGE_KEY = 'agCsStudioCollapsedGroups';
+    const COLLAPSE_V2_MIGRATION_KEY = 'agCsStudioCollapseDefaultV2';
+    const ACTIVE_TAB_STORAGE_KEY = 'agCsStudioActiveTab';
+
     let currentConfig = { language: 'zh-CN' };
     let lastStatus = null;
+    let lastUpdateCheck = null;
     let toastTimer = null;
+
+    let activeTab = loadActiveTab();
     const collapsedGroups = loadCollapsedGroups();
+
+    let notifyLoaded = false;
+    let notifyDirty = false;
+    let notifyConfig = {
+      enabled: false,
+      channel: 'serverchan',
+      minDurationSec: 15,
+      cooldownSec: 20,
+      onlyFullyIdle: true,
+      notifyOnError: true,
+      skipUserCanceled: true,
+      includeSummary: true,
+      channels: {
+        serverchan: { sendKey: '', apiUrl: '' },
+        bark: { serverUrl: 'https://api.day.app', deviceKey: '', group: 'Claude Studio', sound: '' },
+        ntfy: { serverUrl: 'https://ntfy.sh', topic: '', token: '' },
+        feishu: { webhookUrl: '' },
+        dingtalk: { webhookUrl: '' },
+        wecom: { webhookUrl: '' },
+        telegram: { botToken: '', chatId: '', apiBase: 'https://api.telegram.org' },
+        webhook: { webhookUrl: '', authHeader: '' },
+      },
+    };
+    const revealedCredFields = new Set();
+
+    function cloneObj(o) {
+      return JSON.parse(JSON.stringify(o));
+    }
+
+    function loadActiveTab() {
+      try {
+        const saved = window.localStorage?.getItem(ACTIVE_TAB_STORAGE_KEY);
+        return saved === 'settings' ? 'settings' : 'overview';
+      } catch {
+        return 'overview';
+      }
+    }
+
+    function setActiveTab(nextTab) {
+      activeTab = nextTab === 'settings' ? 'settings' : 'overview';
+      try {
+        window.localStorage?.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
+      } catch {}
+      renderTabState();
+    }
+
+    function renderTabState() {
+      const ovBtn = document.getElementById('tab-btn-overview');
+      const stBtn = document.getElementById('tab-btn-settings');
+      const ovPanel = document.getElementById('panel-overview');
+      const stPanel = document.getElementById('panel-settings');
+      const isSettings = activeTab === 'settings';
+      if (ovBtn) {
+        ovBtn.classList.toggle('is-active', !isSettings);
+        ovBtn.setAttribute('aria-selected', String(!isSettings));
+      }
+      if (stBtn) {
+        stBtn.classList.toggle('is-active', isSettings);
+        stBtn.setAttribute('aria-selected', String(isSettings));
+      }
+      if (ovPanel) ovPanel.hidden = isSettings;
+      if (stPanel) stPanel.hidden = !isSettings;
+    }
 
     function loadCollapsedGroups() {
       try {
+        const migrated = window.localStorage?.getItem(COLLAPSE_V2_MIGRATION_KEY);
+        if (!migrated) {
+          const initial = new Set(ALL_SETTINGS_GROUP_IDS);
+          window.localStorage?.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(Array.from(initial)));
+          window.localStorage?.setItem(COLLAPSE_V2_MIGRATION_KEY, '1');
+          return initial;
+        }
         const raw = window.localStorage?.getItem(COLLAPSED_STORAGE_KEY);
-        if (!raw) return new Set();
+        if (!raw) return new Set(ALL_SETTINGS_GROUP_IDS);
         const arr = JSON.parse(raw);
         return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []);
       } catch {
-        return new Set();
+        return new Set(ALL_SETTINGS_GROUP_IDS);
       }
     }
 
@@ -1126,6 +1914,23 @@
       sec.classList.toggle('is-collapsed', nextCollapsed);
       head.setAttribute('aria-expanded', String(!nextCollapsed));
       saveCollapsedGroups();
+    }
+
+    function expandGroupAndScroll(groupId, secId) {
+      collapsedGroups.delete(groupId);
+      saveCollapsedGroups();
+      const sec = document.getElementById(secId);
+      const head = sec ? sec.querySelector('.section-head') : null;
+      if (sec) sec.classList.remove('is-collapsed');
+      if (head) head.setAttribute('aria-expanded', 'true');
+      setActiveTab('settings');
+      if (sec && typeof sec.scrollIntoView === 'function') {
+        requestAnimationFrame(() => {
+          sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          const firstInput = sec.querySelector('input.notify-input');
+          if (firstInput) firstInput.focus();
+        });
+      }
     }
 
     function getT() {
@@ -1194,10 +1999,357 @@
       el.textContent = msg;
       el.classList.add('show');
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
     }
 
-    let lastUpdateCheck = null;
+    function isValidHttpUrlClient(raw) {
+      const s = String(raw || '').trim();
+      if (!s) return false;
+      try {
+        const u = new URL(s);
+        return u.protocol === 'http:' || u.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }
+
+    function isNotifyConfiguredClient(cfg) {
+      if (!cfg) return false;
+      const ch = cfg.channel;
+      const c = cfg.channels?.[ch] || {};
+      switch (ch) {
+        case 'serverchan':
+          return Boolean(String(c.sendKey || '').trim() || isValidHttpUrlClient(c.apiUrl));
+        case 'bark':
+          return Boolean(isValidHttpUrlClient(c.serverUrl) && String(c.deviceKey || '').trim());
+        case 'ntfy':
+          return Boolean(isValidHttpUrlClient(c.serverUrl) && String(c.topic || '').trim());
+        case 'feishu':
+        case 'dingtalk':
+        case 'wecom':
+        case 'webhook':
+          return Boolean(isValidHttpUrlClient(c.webhookUrl));
+        case 'telegram':
+          return Boolean(String(c.botToken || '').trim() && String(c.chatId || '').trim() && isValidHttpUrlClient(c.apiBase));
+        default:
+          return false;
+      }
+    }
+
+    function getChannelLabel(ch) {
+      const lang = currentConfig?.language || 'zh-CN';
+      const dict = NOTIFY_CHANNELS_I18N[lang] || NOTIFY_CHANNELS_I18N['zh-CN'];
+      return dict[ch] || ch;
+    }
+
+    function getNotifyBadgeInfo(cfg) {
+      const t = getT();
+      const chName = getChannelLabel(cfg.channel);
+      const useLocal = notifyLoaded || notifyDirty;
+      const configured = useLocal
+        ? isNotifyConfiguredClient(cfg)
+        : Boolean(lastStatus?.notify?.configured);
+      const enabled = useLocal
+        ? Boolean(cfg.enabled)
+        : Boolean(lastStatus?.notify?.enabled);
+      const minSec = Number(useLocal ? cfg.minDurationSec : (lastStatus?.notify?.minDurationSec ?? 15));
+
+      if (!enabled) {
+        return { text: t.notifyBadgeOff, cls: '', configured, enabled, chName, minSec };
+      }
+      if (!configured) {
+        return { text: t.notifyBadgeUnconfigured, cls: 'is-warn', configured, enabled, chName, minSec };
+      }
+      const durLabel = minSec > 0 ? `≥${minSec}s` : t.notifyImmediate;
+      return { text: `${chName} · ${durLabel}`, cls: 'is-ok', configured, enabled, chName, minSec };
+    }
+
+    function renderOverviewNotifyCard() {
+      const t = getT();
+      const cfg = notifyConfig;
+      const badgeInfo = getNotifyBadgeInfo(cfg);
+
+      const titleEl = document.getElementById('ov-notify-title');
+      if (titleEl) titleEl.textContent = t.notifyTitle;
+
+      const badgeEl = document.getElementById('ov-notify-badge');
+      if (badgeEl) {
+        badgeEl.className = `section-badge${badgeInfo.cls ? ' ' + badgeInfo.cls : ''}`;
+        badgeEl.textContent = badgeInfo.text;
+      }
+
+      const ovToggle = document.getElementById('ov-notify-toggle');
+      if (ovToggle) {
+        ovToggle.checked = badgeInfo.enabled;
+        const sw = ovToggle.closest('.switch');
+        if (sw) sw.title = t.notifyLabels?.enabled?.[0] || t.notifyTitle;
+      }
+
+      const summaryEl = document.getElementById('ov-notify-summary');
+      if (summaryEl) {
+        if (badgeInfo.enabled && badgeInfo.configured) {
+          summaryEl.textContent = t.notifyOvSummaryActive(badgeInfo.chName, badgeInfo.minSec);
+        } else if (badgeInfo.configured) {
+          summaryEl.textContent = t.notifyOvSummaryDisabled(badgeInfo.chName);
+        } else {
+          summaryEl.textContent = t.notifyOvSummaryUnconfigured;
+        }
+      }
+
+      const testLbl = document.getElementById('btn-ov-notify-test-lbl');
+      if (testLbl) testLbl.textContent = t.btnNotifyTest;
+      const testBtn = document.getElementById('btn-ov-notify-test');
+      if (testBtn) testBtn.disabled = !badgeInfo.configured;
+
+      const cfgLbl = document.getElementById('btn-ov-notify-config-lbl');
+      if (cfgLbl) cfgLbl.textContent = t.btnNotifyConfig;
+    }
+
+    function renderNotifyCreds() {
+      const t = getT();
+      const box = document.getElementById('notify-creds-box');
+      if (!box) return;
+      const ch = notifyConfig.channel || 'serverchan';
+      const schema = NOTIFY_CRED_SCHEMAS[ch] || [];
+      const chData = notifyConfig.channels?.[ch] || {};
+      box.innerHTML = '';
+
+      for (const spec of schema) {
+        const field = document.createElement('div');
+        field.className = 'notify-field';
+        const head = document.createElement('div');
+        head.className = 'notify-field-head';
+        const lbl = document.createElement('label');
+        lbl.className = 'notify-field-label';
+        const inputId = `notify-cred-${ch}-${spec.key}`;
+        lbl.setAttribute('for', inputId);
+        const [labelTxt, hintTxt] = t.credLabels?.[spec.key] || [spec.key, ''];
+        lbl.textContent = labelTxt;
+        head.appendChild(lbl);
+        if (hintTxt) {
+          const hint = document.createElement('span');
+          hint.className = 'notify-field-hint';
+          hint.textContent = hintTxt;
+          head.appendChild(hint);
+        }
+        field.appendChild(head);
+
+        const fieldKey = `${ch}.${spec.key}`;
+        const wrap = document.createElement('div');
+        wrap.className = spec.secret ? 'notify-input-wrap has-eye' : 'notify-input-wrap';
+
+        const inp = document.createElement('input');
+        inp.id = inputId;
+        inp.className = 'notify-input';
+        inp.type = spec.secret && !revealedCredFields.has(fieldKey) ? 'password' : 'text';
+        inp.autocomplete = 'off';
+        inp.spellcheck = false;
+        inp.placeholder = spec.placeholder || '';
+        inp.value = String(chData[spec.key] || '');
+        inp.addEventListener('input', () => {
+          if (!notifyConfig.channels[ch]) notifyConfig.channels[ch] = {};
+          notifyConfig.channels[ch][spec.key] = inp.value;
+          notifyDirty = true;
+          updateNotifyBadgesAndDirtyHint();
+        });
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            void persistNotifyConfig();
+          }
+        });
+        wrap.appendChild(inp);
+
+        if (spec.secret) {
+          const eye = document.createElement('button');
+          eye.type = 'button';
+          eye.className = 'notify-eye-btn';
+          eye.title = 'Show / Hide';
+          const setEyeIcon = () => {
+            const shown = revealedCredFields.has(fieldKey);
+            eye.innerHTML = shown
+              ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>'
+              : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+          };
+          setEyeIcon();
+          eye.addEventListener('click', () => {
+            if (revealedCredFields.has(fieldKey)) revealedCredFields.delete(fieldKey);
+            else revealedCredFields.add(fieldKey);
+            inp.type = revealedCredFields.has(fieldKey) ? 'text' : 'password';
+            setEyeIcon();
+          });
+          wrap.appendChild(eye);
+        }
+
+        field.appendChild(wrap);
+        box.appendChild(field);
+      }
+    }
+
+    function updateNotifyBadgesAndDirtyHint() {
+      const t = getT();
+      const badgeInfo = getNotifyBadgeInfo(notifyConfig);
+      const secBadge = document.getElementById('notify-section-badge');
+      if (secBadge) {
+        secBadge.className = `section-badge${badgeInfo.cls ? ' ' + badgeInfo.cls : ''}`;
+        secBadge.textContent = badgeInfo.text;
+      }
+      const dirtyEl = document.getElementById('notify-dirty-hint');
+      if (dirtyEl) {
+        dirtyEl.textContent = t.notifyDirtyHint;
+        dirtyEl.classList.toggle('is-visible', notifyDirty);
+      }
+      renderOverviewNotifyCard();
+    }
+
+    function renderNotifySection({ rebuildCreds = true } = {}) {
+      const t = getT();
+      const lang = currentConfig?.language || 'zh-CN';
+      const sec = document.getElementById('notify-section');
+      const head = document.getElementById('notify-section-head');
+      if (sec && head) {
+        const isCollapsed = collapsedGroups.has('notify');
+        sec.classList.toggle('is-collapsed', isCollapsed);
+        head.setAttribute('aria-expanded', String(!isCollapsed));
+      }
+
+      const titleEl = document.getElementById('notify-section-title');
+      if (titleEl) titleEl.textContent = t.grpNotify || t.notifyTitle;
+
+      const setLbl = (prefix, key) => {
+        const [n, d] = t.notifyLabels[key] || [key, ''];
+        const ne = document.getElementById(`${prefix}-name`);
+        const de = document.getElementById(`${prefix}-desc`);
+        if (ne) ne.textContent = n;
+        if (de) de.textContent = d;
+      };
+      setLbl('notify-enabled', 'enabled');
+      setLbl('notify-channel', 'channel');
+      setLbl('notify-min-dur', 'minDuration');
+      setLbl('notify-only-idle', 'onlyIdle');
+      setLbl('notify-on-error', 'onError');
+      setLbl('notify-skip-canceled', 'skipCanceled');
+      setLbl('notify-include-summary', 'includeSummary');
+
+      const enabledEl = document.getElementById('notify-enabled');
+      if (enabledEl) enabledEl.checked = Boolean(notifyConfig.enabled);
+
+      const chSel = document.getElementById('notify-channel');
+      if (chSel) {
+        const chLabels = NOTIFY_CHANNELS_I18N[lang] || NOTIFY_CHANNELS_I18N['zh-CN'];
+        chSel.innerHTML = '';
+        for (const [val, text] of Object.entries(chLabels)) {
+          const opt = document.createElement('option');
+          opt.value = val;
+          opt.textContent = text;
+          if (notifyConfig.channel === val) opt.selected = true;
+          chSel.appendChild(opt);
+        }
+      }
+
+      const durSel = document.getElementById('notify-min-duration');
+      if (durSel) {
+        durSel.innerHTML = '';
+        for (const [val, text] of t.notifyDurOpts) {
+          const opt = document.createElement('option');
+          opt.value = val;
+          opt.textContent = text;
+          if (String(notifyConfig.minDurationSec ?? 15) === val) opt.selected = true;
+          durSel.appendChild(opt);
+        }
+      }
+
+      const idleEl = document.getElementById('notify-only-idle');
+      if (idleEl) idleEl.checked = notifyConfig.onlyFullyIdle !== false;
+      const errEl = document.getElementById('notify-on-error');
+      if (errEl) errEl.checked = notifyConfig.notifyOnError !== false;
+      const cancelEl = document.getElementById('notify-skip-canceled');
+      if (cancelEl) cancelEl.checked = notifyConfig.skipUserCanceled !== false;
+      const sumEl = document.getElementById('notify-include-summary');
+      if (sumEl) sumEl.checked = notifyConfig.includeSummary !== false;
+
+      const testLbl = document.getElementById('btn-notify-test-lbl');
+      if (testLbl) testLbl.textContent = t.btnNotifyTest;
+      const saveLbl = document.getElementById('btn-notify-save-lbl');
+      if (saveLbl) saveLbl.textContent = t.btnNotifySave;
+
+      const credBox = document.getElementById('notify-creds-box');
+      const credFocused = Boolean(credBox && document.activeElement && credBox.contains(document.activeElement));
+      if (rebuildCreds && !credFocused) {
+        renderNotifyCreds();
+      }
+      updateNotifyBadgesAndDirtyHint();
+    }
+
+    async function loadNotifyConfig({ force = false } = {}) {
+      if (notifyDirty && !force) return;
+      try {
+        const res = await apiFetch('/api/notify', { method: 'GET' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.config) {
+          notifyConfig = cloneObj(data.config);
+          notifyLoaded = true;
+          notifyDirty = false;
+          renderNotifySection({ rebuildCreds: true });
+        }
+      } catch {
+        // Older sidecar process may not expose /api/notify until Antigravity reloads plugin.
+      }
+    }
+
+    async function persistNotifyConfig({ silent = false } = {}) {
+      const t = getT();
+      try {
+        const res = await apiFetch('/api/notify', {
+          method: 'POST',
+          body: JSON.stringify({ config: notifyConfig }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.ok) {
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+        if (data.config) notifyConfig = cloneObj(data.config);
+        notifyLoaded = true;
+        notifyDirty = false;
+        renderNotifySection({ rebuildCreds: true });
+        if (!silent) showToast(t.notifySavedToast);
+        return true;
+      } catch (err) {
+        showToast(t.saveErrToast(err.message));
+        return false;
+      }
+    }
+
+    async function triggerTestNotify(triggerBtn) {
+      const t = getT();
+      if (!isNotifyConfiguredClient(notifyConfig)) {
+        showToast(t.notifyNeedConfigToast);
+        expandGroupAndScroll('notify', 'notify-section');
+        return;
+      }
+      if (triggerBtn) triggerBtn.disabled = true;
+      showToast(t.notifyTestSending);
+      try {
+        const res = await apiFetch('/api/notify/test', {
+          method: 'POST',
+          body: JSON.stringify({ config: notifyConfig }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.ok) {
+          const errText = data?.error === 'not_configured' ? t.notifyNeedConfigToast : (data?.error || `HTTP ${res.status}`);
+          showToast(t.notifyTestFail(errText));
+          return;
+        }
+        showToast(t.notifyTestOk(data.latencyMs ?? 0));
+      } catch (err) {
+        showToast(t.notifyTestFail(err.message));
+      } finally {
+        if (triggerBtn) {
+          triggerBtn.disabled = triggerBtn.id === 'btn-ov-notify-test' && !isNotifyConfiguredClient(notifyConfig);
+        }
+      }
+    }
 
     function formatCompatDate(raw) {
       if (!raw) return '';
@@ -1227,7 +2379,10 @@
       }
       const verStr = `v${lastStatus?.version || '2.1.0'}`;
       const badgeEl = document.getElementById('update-section-badge');
-      if (badgeEl) badgeEl.textContent = lastUpdateCheck?.hasUpdate ? `v${lastUpdateCheck.latestVersion}` : verStr;
+      if (badgeEl) {
+        badgeEl.textContent = lastUpdateCheck?.hasUpdate ? `v${lastUpdateCheck.latestVersion}` : verStr;
+        badgeEl.classList.toggle('is-compat', Boolean(lastUpdateCheck?.hasUpdate));
+      }
 
       const compatK = document.getElementById('compat-meta-k');
       const compatV = document.getElementById('compat-meta-v');
@@ -1299,6 +2454,13 @@
       document.documentElement.lang = currentConfig?.language === 'yue' ? 'zh-HK' : (currentConfig?.language || 'zh-CN');
       const bt = document.getElementById('brand-title');
       if (bt && t.brandTitle) bt.textContent = t.brandTitle;
+
+      const tabOv = document.getElementById('tab-btn-overview');
+      if (tabOv) tabOv.textContent = t.tabOverview;
+      const tabSt = document.getElementById('tab-btn-settings');
+      if (tabSt) tabSt.textContent = t.tabSettings;
+      renderTabState();
+
       document.getElementById('btn-reinject').textContent = t.btnReinject;
       document.getElementById('btn-remove').textContent = t.btnRemove;
       document.getElementById('btn-reset').textContent = t.btnReset;
@@ -1350,6 +2512,7 @@
         document.getElementById('status-text').textContent = t.checking;
         if (metaBanner) metaBanner.style.display = 'none';
       }
+      renderOverviewNotifyCard();
       renderUpdateCard();
     }
 
@@ -1369,6 +2532,51 @@
       if (key === 'pinUsageMonitorPane' && !isUsageMonitorAvailable() && !cfg.pinUsageMonitorPane) return true;
       if (HUD_CHILD_KEYS.has(key) && !isUsageStatsOn(cfg)) return true;
       return false;
+    }
+
+    function getOptionLabel(items, key, value) {
+      const opts = items?.[key]?.[2];
+      if (!Array.isArray(opts)) return String(value || '');
+      const found = opts.find(([v]) => v === value);
+      return found ? found[1] : String(value || '');
+    }
+
+    function getGroupBadgeInfo(groupId, cfg, t, statsOn) {
+      if (groupId === 'basics') {
+        const pal = getOptionLabel(t.items, 'palette', cfg.palette || 'claude');
+        const langLbl = getOptionLabel(t.items, 'language', cfg.language || 'zh-CN');
+        return { text: `${pal} · ${langLbl}`, cls: '' };
+      }
+      if (groupId === 'layout') {
+        const flags = [
+          cfg.glassEffect !== false,
+          Boolean(cfg.sidebarRestyle),
+          Boolean(cfg.sidebarCompact),
+          Boolean(cfg.composerRestyle),
+          cfg.placeholderStyle !== 'host',
+          cfg.logoInk !== 'foreground',
+        ];
+        const on = flags.filter(Boolean).length;
+        return { text: t.activeRatioBadge(on, flags.length), cls: '' };
+      }
+      if (groupId === 'advanced') {
+        const flags = [
+          Boolean(cfg.periodicSelector),
+          cfg.orchestratorSwitch !== false,
+          cfg.effortSliderStyle === 'claude' ? Boolean(cfg.effortAccent) : true,
+          Boolean(cfg.smoothCaret),
+          cfg.mascot === 'crab',
+          Boolean(cfg.homeRipple),
+        ];
+        const on = flags.filter(Boolean).length;
+        return { text: t.activeRatioBadge(on, flags.length), cls: '' };
+      }
+      if (groupId === 'telemetry') {
+        return statsOn
+          ? { text: t.statsOnBadge, cls: 'is-compat' }
+          : { text: t.statsOffBadge, cls: '' };
+      }
+      return { text: t.countBadge(0), cls: '' };
     }
 
     function renderForm(cfg) {
@@ -1394,13 +2602,10 @@
         const headRight = document.createElement('span');
         headRight.className = 'section-head-right';
         const badge = document.createElement('span');
-        if (group.id === 'telemetry' && !statsOn) {
-          badge.className = 'section-badge';
-          badge.textContent = t.statsOffBadge;
-        } else {
-          badge.className = 'section-badge';
-          badge.textContent = t.countBadge(group.keys.length);
-        }
+        const badgeInfo = getGroupBadgeInfo(group.id, cfg, t, statsOn);
+        badge.className = `section-badge${badgeInfo.cls ? ' ' + badgeInfo.cls : ''}`;
+        badge.textContent = badgeInfo.text;
+
         const chevron = document.createElement('span');
         chevron.className = 'section-chevron';
         chevron.setAttribute('aria-hidden', 'true');
@@ -1478,6 +2683,7 @@
         sec.appendChild(body);
         container.appendChild(sec);
       }
+      renderNotifySection({ rebuildCreds: !notifyDirty });
     }
 
     async function saveOne(key, value) {
@@ -1506,6 +2712,9 @@
         currentConfig = st.config || currentConfig;
         renderStaticChrome();
         renderForm(currentConfig);
+        if (!notifyLoaded && !notifyDirty) {
+          void loadNotifyConfig();
+        }
       } catch (err) {
         const t = getT();
         document.getElementById('status-text').textContent = t.readFailed;
@@ -1635,7 +2844,11 @@
         if (!res.ok || !data?.ok) {
           throw new Error(data?.error || 'Error');
         }
-        showToast(t.compatSynced(data.pluginCount || 0, data.selectorCount || 0));
+        if (data.fallbackToBundled && typeof t.compatBundledFallback === 'function') {
+          showToast(t.compatBundledFallback(data.pluginCount || 0, data.selectorCount || 0));
+        } else {
+          showToast(t.compatSynced(data.pluginCount || 0, data.selectorCount || 0));
+        }
         await refreshStatus();
       } catch (err) {
         showToast(getT().compatSyncFail(err.message));
@@ -1644,11 +2857,77 @@
       }
     }
 
+    // Event Bindings
+    document.getElementById('tab-btn-overview').addEventListener('click', () => setActiveTab('overview'));
+    document.getElementById('tab-btn-settings').addEventListener('click', () => setActiveTab('settings'));
+
     const updateSecEl = document.getElementById('update-section');
     const updateHeadEl = document.getElementById('update-section-head');
     if (updateSecEl && updateHeadEl) {
       updateHeadEl.addEventListener('click', () => toggleGroupCollapse('updates', updateSecEl, updateHeadEl));
     }
+
+    const notifySecEl = document.getElementById('notify-section');
+    const notifyHeadEl = document.getElementById('notify-section-head');
+    if (notifySecEl && notifyHeadEl) {
+      notifyHeadEl.addEventListener('click', () => toggleGroupCollapse('notify', notifySecEl, notifyHeadEl));
+    }
+
+    document.getElementById('btn-ov-notify-config').addEventListener('click', () => {
+      expandGroupAndScroll('notify', 'notify-section');
+    });
+    document.getElementById('btn-ov-notify-test').addEventListener('click', (e) => {
+      void triggerTestNotify(e.currentTarget);
+    });
+    document.getElementById('ov-notify-toggle').addEventListener('change', (e) => {
+      const wantOn = e.currentTarget.checked;
+      if (wantOn && !isNotifyConfiguredClient(notifyConfig)) {
+        e.currentTarget.checked = false;
+        showToast(getT().notifyNeedConfigToast);
+        expandGroupAndScroll('notify', 'notify-section');
+        return;
+      }
+      notifyConfig.enabled = wantOn;
+      void persistNotifyConfig();
+    });
+
+    document.getElementById('notify-enabled').addEventListener('change', (e) => {
+      notifyConfig.enabled = e.currentTarget.checked;
+      void persistNotifyConfig();
+    });
+    document.getElementById('notify-channel').addEventListener('change', (e) => {
+      notifyConfig.channel = e.currentTarget.value;
+      notifyDirty = true;
+      renderNotifyCreds();
+      updateNotifyBadgesAndDirtyHint();
+    });
+    document.getElementById('notify-min-duration').addEventListener('change', (e) => {
+      notifyConfig.minDurationSec = Number(e.currentTarget.value);
+      void persistNotifyConfig();
+    });
+    document.getElementById('notify-only-idle').addEventListener('change', (e) => {
+      notifyConfig.onlyFullyIdle = e.currentTarget.checked;
+      void persistNotifyConfig();
+    });
+    document.getElementById('notify-on-error').addEventListener('change', (e) => {
+      notifyConfig.notifyOnError = e.currentTarget.checked;
+      void persistNotifyConfig();
+    });
+    document.getElementById('notify-skip-canceled').addEventListener('change', (e) => {
+      notifyConfig.skipUserCanceled = e.currentTarget.checked;
+      void persistNotifyConfig();
+    });
+    document.getElementById('notify-include-summary').addEventListener('change', (e) => {
+      notifyConfig.includeSummary = e.currentTarget.checked;
+      void persistNotifyConfig();
+    });
+    document.getElementById('btn-notify-save').addEventListener('click', () => {
+      void persistNotifyConfig();
+    });
+    document.getElementById('btn-notify-test').addEventListener('click', (e) => {
+      void triggerTestNotify(e.currentTarget);
+    });
+
     document.getElementById('btn-relaunch').addEventListener('click', triggerRelaunch);
     document.getElementById('btn-open-um').addEventListener('click', triggerOpenUsageMonitor);
     document.getElementById('btn-check-update').addEventListener('click', triggerCheckUpdate);
@@ -1660,7 +2939,9 @@
     document.getElementById('btn-refresh').addEventListener('click', refreshStatus);
 
     renderStaticChrome();
-    refreshStatus();
+    renderNotifySection({ rebuildCreds: true });
+    void refreshStatus();
+    void loadNotifyConfig({ force: true });
     setInterval(() => {
       if (document.visibilityState !== 'hidden') {
         void refreshStatus();

@@ -1,0 +1,11 @@
+{
+  "claude-studio-notify": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/notify-stop.mjs",
+        "timeout": 10
+      }
+    ]
+  }
+}

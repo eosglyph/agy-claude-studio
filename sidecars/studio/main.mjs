@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const cdp = require('../../cdp.js');
 const lifecycle = require('../../lifecycle.js');
+const notifyCore = require('../../notify-core.js');
 const { updateConfigSetting, injectOnce } = require('../../inject.js');
 const { removeFromAllWindows } = require('../../remove.js');
 
@@ -19,6 +20,7 @@ const HTML_PATH = join(__dirname, 'index.html');
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' };
 const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/eosglyph/agy-claude-studio/releases/latest';
 const LATEST_RELEASE_WEB_URL = 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
+const LATEST_PACKAGE_RAW_URL = 'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/package.json';
 
 function isLocalHostRequest(req) {
   if (!req?.headers) return true;
@@ -166,6 +168,7 @@ async function getStudioStatus() {
       pluginCount: compatInfo.plugins.length,
       selectorCount: compatInfo.selectors.length,
     },
+    notify: notifyCore.getNotifyStatusSummary(resolveNotifyDir()),
     update: {
       isGitRepo: existsSync(join(PLUGIN_ROOT_DIR, '.git')),
       releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -303,37 +306,105 @@ async function checkStudioUpdate({
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchFn(LATEST_RELEASE_API_URL, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': `agy-claude-studio/${currentVersion}`,
-      },
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: `HTTP ${res.status}`,
-        currentVersion,
-        ...gitState,
-        releaseUrl: LATEST_RELEASE_WEB_URL,
-      };
-    }
-    const data = await res.json();
-    const latestTag = String(data?.tag_name || '').trim();
-    const latestVersion = latestTag.replace(/^v/i, '');
+  const ua = `agy-claude-studio/${currentVersion}`;
+
+  const buildOkResult = ({ latestTag, releaseName, publishedAt, releaseUrl, source }) => {
+    const cleanTag = String(latestTag || '').trim();
+    const latestVersion = cleanTag.replace(/^v/i, '');
     const hasUpdate = Boolean(latestVersion && compareSemver(latestVersion, currentVersion) > 0);
     return {
       ok: true,
+      source,
       currentVersion,
       latestVersion: latestVersion || currentVersion,
-      latestTag: latestTag || `v${currentVersion}`,
+      latestTag: cleanTag || `v${currentVersion}`,
       hasUpdate,
-      releaseName: String(data?.name || latestTag || ''),
-      publishedAt: String(data?.published_at || ''),
-      releaseUrl: String(data?.html_url || LATEST_RELEASE_WEB_URL),
+      releaseName: String(releaseName || cleanTag || ''),
+      publishedAt: String(publishedAt || ''),
+      releaseUrl: String(releaseUrl || LATEST_RELEASE_WEB_URL),
       ...gitState,
+    };
+  };
+
+  let primaryErr = '';
+  try {
+    // 1. Primary: GitHub Releases API (rich metadata; may hit 403/429 rate limits on shared IPs)
+    try {
+      const res = await fetchFn(LATEST_RELEASE_API_URL, {
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': ua },
+        signal: controller.signal,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const latestTag = String(data?.tag_name || '').trim();
+        if (latestTag) {
+          return buildOkResult({
+            latestTag,
+            releaseName: data?.name || latestTag,
+            publishedAt: data?.published_at || '',
+            releaseUrl: data?.html_url || LATEST_RELEASE_WEB_URL,
+            source: 'github-api',
+          });
+        }
+      } else {
+        primaryErr = `HTTP ${res.status}`;
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') throw err;
+      primaryErr = err?.message || 'network error';
+    }
+
+    // 2. Fallback A: GitHub Releases web redirect (no 60/hr REST API rate limit)
+    try {
+      const webRes = await fetchFn(LATEST_RELEASE_WEB_URL, {
+        redirect: 'manual',
+        headers: { 'User-Agent': ua },
+        signal: controller.signal,
+      });
+      const loc = String(webRes?.headers?.get?.('location') || webRes?.url || '').trim();
+      const tagMatch = loc.match(/\/releases\/tag\/(v?\d+\.\d+\.\d+[^/?#]*)/i);
+      if (tagMatch) {
+        return buildOkResult({
+          latestTag: tagMatch[1],
+          releaseName: tagMatch[1],
+          publishedAt: '',
+          releaseUrl: loc.startsWith('http') ? loc : `https://github.com${loc}`,
+          source: 'release-redirect',
+        });
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') throw err;
+    }
+
+    // 3. Fallback B: Raw package.json on main (no REST API rate limit)
+    try {
+      const rawRes = await fetchFn(LATEST_PACKAGE_RAW_URL, {
+        headers: { Accept: 'application/json', 'User-Agent': ua },
+        signal: controller.signal,
+      });
+      if (rawRes.ok) {
+        const pkg = await rawRes.json();
+        const ver = String(pkg?.version || '').trim().replace(/^v/i, '');
+        if (ver) {
+          return buildOkResult({
+            latestTag: `v${ver}`,
+            releaseName: `v${ver}`,
+            publishedAt: '',
+            releaseUrl: LATEST_RELEASE_WEB_URL,
+            source: 'raw-package',
+          });
+        }
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') throw err;
+    }
+
+    return {
+      ok: false,
+      error: primaryErr || 'update check failed',
+      currentVersion,
+      ...gitState,
+      releaseUrl: LATEST_RELEASE_WEB_URL,
     };
   } catch (err) {
     return {
@@ -414,11 +485,107 @@ async function syncI18nCompatWhitelist({
       ...syncRes,
     };
   } catch (err) {
+    if (err?.status === 404) {
+      const local = cdp.readI18nCompatData(pluginDataDir);
+      return {
+        ok: true,
+        fallbackToBundled: true,
+        status: 404,
+        version: local.version,
+        updatedAt: local.updatedAt,
+        pluginCount: local.plugins.length,
+        selectorCount: local.selectors.length,
+      };
+    }
     return {
       ok: false,
       error: err?.name === 'AbortError' ? 'timeout' : err?.message || 'sync failed',
     };
   }
+}
+
+function resolveNotifyDir() {
+  return notifyCore.resolveNotifyDataDir(process.env, cdp.PLUGIN_DATA_DIR || null);
+}
+
+function getNotifyConfigApi({ dataDir = resolveNotifyDir() } = {}) {
+  const config = notifyCore.readNotifyConfig(dataDir);
+  return {
+    ok: true,
+    config,
+    configured: notifyCore.isChannelConfigured(config),
+    channels: notifyCore.CHANNEL_LIST,
+  };
+}
+
+function saveNotifyConfigApi(data, { dataDir = resolveNotifyDir() } = {}) {
+  const payload = data && typeof data === 'object' && data.config ? data.config : data;
+  const saved = notifyCore.writeNotifyConfig(dataDir, payload || {}, true);
+  return {
+    ok: true,
+    config: saved.config,
+    configured: saved.configured,
+  };
+}
+
+async function testNotifyApi(
+  data,
+  {
+    dataDir = resolveNotifyDir(),
+    fetchFn = typeof fetch === 'function' ? fetch : null,
+    language = cdp.readConfig().language,
+  } = {}
+) {
+  const baseCfg = notifyCore.readNotifyConfig(dataDir);
+  const rawCandidate =
+    data && typeof data === 'object' && data.config
+      ? data.config
+      : data && typeof data === 'object'
+      ? data
+      : null;
+  const effectiveCfg = rawCandidate
+    ? notifyCore.sanitizeNotifyConfig(rawCandidate, baseCfg)
+    : baseCfg;
+
+  if (!notifyCore.isChannelConfigured(effectiveCfg)) {
+    return {
+      ok: false,
+      channel: effectiveCfg.channel,
+      status: 0,
+      error: 'not_configured',
+      configured: false,
+    };
+  }
+
+  let title = '🔔 [Claude Studio] 测试推送通知';
+  let body =
+    '通道连接验证成功！后续当 Antigravity 完成耗时任务或执行异常时，将通过 Stop Hook 以 0 Token 自动推送到你的手机。';
+  if (language === 'en') {
+    title = '🔔 [Claude Studio] Test Push Notification';
+    body =
+      'Connection verified! Mobile notifications will trigger automatically with 0 extra tokens when tasks finish or error.';
+  } else if (language === 'ja') {
+    title = '🔔 [Claude Studio] テスト通知';
+    body =
+      'プッシュ設定のテストに成功しました。タスク完了・エラー時に Stop Hook 経由で 0 Token 通知します。';
+  } else if (language === 'zh-TW' || language === 'yue') {
+    title = '🔔 [Claude Studio] 測試推播通知';
+    body =
+      '連線驗證成功！後續當 Antigravity 完成耗時任務或執行異常時，將透過 Stop Hook 以 0 Token 自動推播至手機。';
+  }
+
+  const msg = {
+    title,
+    body,
+    level: 'info',
+    workspace: 'Claude Studio',
+    durationSec: 18,
+    terminationReason: 'NO_TOOL_CALL',
+    conversationId: 'test',
+    timestamp: new Date().toISOString(),
+  };
+
+  return notifyCore.deliverNotification(effectiveCfg, msg, { fetchFn, timeoutMs: 6000 });
 }
 
 async function resetStudioConfig() {
@@ -471,6 +638,9 @@ async function startStudioSidecar() {
   app.api('/api/check-update', guardApi(async () => checkStudioUpdate()), 'GET');
   app.api('/api/self-update', guardApi(async () => performStudioSelfUpdate()), 'POST');
   app.api('/api/sync-i18n-compat', guardApi(async () => syncI18nCompatWhitelist()), 'POST');
+  app.api('/api/notify', guardApi(async () => getNotifyConfigApi()), 'GET');
+  app.api('/api/notify', guardApi(async (data) => saveNotifyConfigApi(data)), 'POST');
+  app.api('/api/notify/test', guardApi(async (data) => testNotifyApi(data)), 'POST');
   app.api('/api/relaunch', guardApi(async () => {
     const res = await relaunchDesktopHost();
     if (!res?.ok) {
@@ -564,6 +734,10 @@ export {
   checkStudioUpdate,
   performStudioSelfUpdate,
   syncI18nCompatWhitelist,
+  resolveNotifyDir,
+  getNotifyConfigApi,
+  saveNotifyConfigApi,
+  testNotifyApi,
   getStudioStatus,
   applyConfigUpdate,
   resetStudioConfig,

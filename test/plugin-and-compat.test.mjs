@@ -504,6 +504,10 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   assert.ok(studioHtml.includes('Claude Studio'), 'Studio UI uses renamed brand title');
   assert.ok(studioHtml.includes('section-body') && studioHtml.includes('section-chevron') && studioHtml.includes('is-collapsed'), 'Studio UI provides collapsible section panels');
   assert.ok(studioHtml.includes('agCsStudioCollapsedGroups'), 'Studio UI persists collapsed group state in localStorage');
+  assert.ok(studioHtml.includes('panel-overview') && studioHtml.includes('panel-settings'), 'Studio UI splits Overview and Settings tabs');
+  assert.ok(studioHtml.includes('agCsStudioActiveTab') && studioHtml.includes('agCsStudioCollapseDefaultV2'), 'Studio UI persists active tab and defaults settings cards collapsed on v2');
+  assert.ok(studioHtml.includes('notify-section') && studioHtml.includes('overview-notify-card'), 'Studio UI includes mobile push cards on both Overview and Settings');
+  assert.ok(studioHtml.includes('/api/notify') && studioHtml.includes('/api/notify/test'), 'Studio UI wires mobile push save and test endpoints');
   assert.equal(/liangwufeng|performanceBackdrop/i.test(studioHtml), false, 'Studio UI contains no Liang Wufeng controls');
 
   const css = fs.readFileSync(path.join(ROOT_DIR, 'style.css'), 'utf8');
@@ -1328,6 +1332,56 @@ test('cdp.syncRemoteI18nCompat and Studio update helpers validate remote payload
     assert.equal(upd.latestVersion, '2.2.0');
     assert.equal(upd.isGitRepo, false);
 
+    // HTTP 403 rate-limit on api.github.com falls back to release web redirect (zero rate limit)
+    const updFallbackRedirect = await studioMod.checkStudioUpdate({
+      pluginDir: tmpDir,
+      currentVersion: '2.1.0',
+      fetchFn: async (url) => {
+        if (String(url).includes('api.github.com')) {
+          return { ok: false, status: 403 };
+        }
+        if (String(url).includes('/releases/latest')) {
+          return {
+            ok: false,
+            status: 302,
+            headers: new Map([['location', 'https://github.com/eosglyph/agy-claude-studio/releases/tag/v2.2.1']]),
+          };
+        }
+        return { ok: false, status: 500 };
+      },
+    });
+    assert.equal(updFallbackRedirect.ok, true);
+    assert.equal(updFallbackRedirect.source, 'release-redirect');
+    assert.equal(updFallbackRedirect.latestVersion, '2.2.1');
+    assert.equal(updFallbackRedirect.hasUpdate, true);
+
+    // If both API and release redirect fail, falls back to raw package.json
+    const updFallbackRaw = await studioMod.checkStudioUpdate({
+      pluginDir: tmpDir,
+      currentVersion: '2.1.0',
+      fetchFn: async (url) => {
+        if (String(url).includes('package.json')) {
+          return { ok: true, status: 200, async json() { return { version: '2.1.0' }; } };
+        }
+        return { ok: false, status: 403, headers: new Map() };
+      },
+    });
+    assert.equal(updFallbackRaw.ok, true);
+    assert.equal(updFallbackRaw.source, 'raw-package');
+    assert.equal(updFallbackRaw.latestVersion, '2.1.0');
+    assert.equal(updFallbackRaw.hasUpdate, false);
+
+    // Unreleased remote i18n-compat.json (HTTP 404) falls back cleanly to bundled whitelist
+    const compat404 = await studioMod.syncI18nCompatWhitelist({
+      pluginDataDir: tmpDir,
+      fetchFn: async () => ({ ok: false, status: 404 }),
+      reinjectFn: async () => {},
+    });
+    assert.equal(compat404.ok, true);
+    assert.equal(compat404.fallbackToBundled, true);
+    assert.equal(compat404.status, 404);
+    assert.ok(compat404.selectorCount > 0);
+
     const nonGitSelf = await studioMod.performStudioSelfUpdate({ pluginDir: tmpDir });
     assert.equal(nonGitSelf.ok, false);
     assert.equal(nonGitSelf.reason, 'not_git_repo');
@@ -1359,7 +1413,231 @@ test('cdp.syncRemoteI18nCompat and Studio update helpers validate remote payload
     assert.equal(cleanSelf.updated, true);
     assert.equal(reinjected, true);
     assert.ok(pulledCalls.includes('pull --ff-only'));
+
+    // Notify API helpers stay isolated in notify.json and deliver localized test payloads
+    const notifyDir = path.join(tmpDir, 'notify-isolation');
+    const initialNotify = studioMod.getNotifyConfigApi({ dataDir: notifyDir });
+    assert.equal(initialNotify.ok, true);
+    assert.equal(initialNotify.configured, false);
+
+    const unconfTest = await studioMod.testNotifyApi({}, { dataDir: notifyDir, fetchFn: async () => ({ ok: true }) });
+    assert.equal(unconfTest.ok, false);
+    assert.equal(unconfTest.error, 'not_configured');
+
+    const savedNotify = studioMod.saveNotifyConfigApi(
+      {
+        enabled: true,
+        channel: 'ntfy',
+        minDurationSec: 20,
+        channels: { ntfy: { topic: 'my-phone' } },
+      },
+      { dataDir: notifyDir }
+    );
+    assert.equal(savedNotify.ok, true);
+    assert.equal(savedNotify.configured, true);
+    assert.equal(fs.existsSync(path.join(notifyDir, 'notify.json')), true);
+    assert.equal(fs.existsSync(path.join(notifyDir, 'config.json')), false);
+
+    let capturedTestReq = null;
+    const okTest = await studioMod.testNotifyApi(null, {
+      dataDir: notifyDir,
+      language: 'en',
+      fetchFn: async (url, init) => {
+        capturedTestReq = { url, init };
+        return { ok: true, status: 200, async text() { return '{}'; } };
+      },
+    });
+    assert.equal(okTest.ok, true);
+    assert.equal(capturedTestReq.url, 'https://ntfy.sh/');
+    const bodyObj = JSON.parse(capturedTestReq.init.body);
+    assert.equal(bodyObj.topic, 'my-phone');
+    assert.ok(bodyObj.title.includes('Test Push Notification'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('ui-runtime persists and restores Orchestrator planner effort when Antigravity restarts with orchestratorPick.model === 0', () => {
+  const timers = new Set();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      parentNode: null,
+      children,
+      childNodes: children,
+      isConnected: true,
+      _text: opts.text || '',
+      style: { setProperty() {}, getPropertyValue() { return ''; }, removeProperty() {} },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get id() { return attrs.get('id') || ''; },
+      set id(v) { attrs.set('id', String(v)); },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return this._text || children.map((c) => c.textContent).join(''); },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      set innerHTML(v) { this._text = String(v ?? ''); children.length = 0; },
+      get childElementCount() { return children.length; },
+      get firstChild() { return children[0] || null; },
+      get lastElementChild() { return children[children.length - 1] || null; },
+      getAttribute(k) { return k === 'class' ? this.className : (attrs.has(k) ? attrs.get(k) : null); },
+      setAttribute(k, v) { if (k === 'class') this.className = v; else attrs.set(k, String(v)); },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      toggleAttribute(k, f) { if (f) attrs.set(k, ''); else attrs.delete(k); },
+      appendChild(child) {
+        if (child.parentElement) child.remove();
+        child.parentElement = this;
+        child.parentNode = this;
+        children.push(child);
+        return child;
+      },
+      insertBefore(child, ref) {
+        if (child.parentElement) child.remove();
+        child.parentElement = this;
+        child.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, child);
+        else children.push(child);
+        return child;
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+          this.parentNode = null;
+        }
+      },
+      addEventListener() {},
+      removeEventListener() {},
+      animate() { return { cancel() {} }; },
+      getBoundingClientRect() { return { left: 100, top: 600, right: 500, bottom: 660, width: 400, height: 60 }; },
+      matches(sel) { return matchesSelector(this, sel); },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches && cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (matchesSelector(c, sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const docEl = makeEl('html');
+  const head = docEl.appendChild(makeEl('head'));
+  const body = docEl.appendChild(makeEl('body', { className: 'theme-standalone' }));
+  const inputBox = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+  const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  const footer = card.appendChild(makeEl('div', { className: 'agy-composer-footer' }));
+  const modelBtn = footer.appendChild(
+    makeEl('button', {
+      attrs: { 'data-testid': 'model-selector-trigger', 'aria-label': 'Select model, current: Orchestrator (Neon)' },
+      text: 'Gemini 4 Neon Extra High',
+    })
+  );
+
+  const selectedCalls = [];
+  const neonHigh = { label: 'Gemini 4 Neon (High)', modelId: 'gemini-4-neon-high', value: 1532 };
+  const neonXHigh = { label: 'Gemini 4 Neon (XHigh)', modelId: 'gemini-4-neon-xhigh', value: 1535 };
+  const orchNeon = { label: 'Orchestrator (Neon)', modelId: 'gemini-pro-orchestrator-neon', value: 1600 };
+  const orchPick = {
+    model: 0,
+    select(v) {
+      selectedCalls.push(v);
+      this.model = v;
+    },
+  };
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      selectedModel: orchNeon,
+      setSelectedModel() {},
+      modelOptions: [neonHigh, neonXHigh, orchNeon],
+      orchestratorPlanners: [neonHigh, neonXHigh],
+      orchestratorPick: orchPick,
+      orchestratorDefaultPlanner: neonXHigh,
+    },
+    return: null,
+  };
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    readyState: 'complete',
+    visibilityState: 'visible',
+    title: 'Test - Antigravity',
+    createElement: (t) => makeEl(t),
+    getElementById: (id) => docEl.querySelector('#' + id),
+    querySelector: (s) => docEl.querySelector(s),
+    querySelectorAll: (s) => docEl.querySelectorAll(s),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+
+  const storage = {
+    'agClaudeStyle.lastOrchPlanner.v1': JSON.stringify({
+      value: 1532,
+      modelId: 'gemini-4-neon-high',
+      label: 'Gemini 4 Neon (High)',
+      effortId: 'high',
+      symbol: 'Ne',
+    }),
+  };
+  const sandbox = {
+    document: doc,
+    navigator: { language: 'zh-CN' },
+    location: { protocol: 'https:', href: 'https://127.0.0.1:1161/', pathname: '/' },
+    localStorage: {
+      getItem(k) { return Object.prototype.hasOwnProperty.call(storage, k) ? storage[k] : null; },
+      setItem(k, v) { storage[k] = String(v); },
+    },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, orchestratorSwitch: true }), sandbox);
+    assert.deepEqual(selectedCalls, [1532], 'Saved Neon High (1532) must be restored instead of falling back to default XHigh (1535)');
+    assert.equal(orchPick.model, 1532);
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  } finally {
+    for (const id of timers) clearTimeout(id);
   }
 });

@@ -107,12 +107,116 @@
   const STORAGE_FILE_CFG_KEY = 'agClaudeStyle.lastFileConfig.v1';
   const STORAGE_USAGE_CACHE_KEY = 'agClaudeStyle.trajRollup.v1';
   const STORAGE_LAST_STD_MODEL_KEY = 'agClaudeStyle.lastStdModel.v1';
+  const STORAGE_LAST_ORCH_PLANNER_KEY = 'agClaudeStyle.lastOrchPlanner.v1';
 
   let lastStandardModelMeta = null;
   try {
     const rawStd = JSON.parse(localStorage.getItem(STORAGE_LAST_STD_MODEL_KEY) || 'null');
     if (rawStd && typeof rawStd === 'object') lastStandardModelMeta = rawStd;
   } catch {}
+
+  let lastOrchPlannerMeta = null;
+  let restoredOrchPlannerOnce = false;
+  try {
+    const rawOrch = JSON.parse(localStorage.getItem(STORAGE_LAST_ORCH_PLANNER_KEY) || 'null');
+    if (rawOrch && typeof rawOrch === 'object') lastOrchPlannerMeta = rawOrch;
+  } catch {}
+
+  function rememberOrchestratorPlanner(opt) {
+    if (!opt || !periodicCore) return;
+    const label = String(opt.label || opt.modelId || '').trim();
+    if (!label && (opt.value === undefined || opt.value === null || opt.value === 0)) return;
+    const parsed = periodicCore.parseOptionEffort(label);
+    const el =
+      typeof periodicCore.matchGemini4Element === 'function'
+        ? periodicCore.matchGemini4Element(parsed.base || label)
+        : null;
+    const next = {
+      value: opt.value,
+      modelId: String(opt.modelId || ''),
+      label,
+      effortId: parsed.effortId || '',
+      symbol: el ? el.symbol : '',
+    };
+    if (
+      lastOrchPlannerMeta &&
+      lastOrchPlannerMeta.value === next.value &&
+      lastOrchPlannerMeta.modelId === next.modelId &&
+      lastOrchPlannerMeta.label === next.label
+    ) {
+      return;
+    }
+    lastOrchPlannerMeta = next;
+    try {
+      localStorage.setItem(STORAGE_LAST_ORCH_PLANNER_KEY, JSON.stringify(next));
+    } catch {}
+  }
+
+  function syncOrRestoreOrchestratorPlanner(fp, state) {
+    if (!state?.isOrchestrator || !fp || !Array.isArray(fp.orchestratorPlanners) || !fp.orchestratorPlanners.length) {
+      return;
+    }
+    const planners = fp.orchestratorPlanners.filter((p) => p && !p.disabled);
+    if (!planners.length) return;
+    const pick = fp.orchestratorPick;
+    if (!pick || typeof pick !== 'object') return;
+
+    const pickVal = pick.model;
+    if (pickVal !== undefined && pickVal !== null && pickVal !== 0) {
+      restoredOrchPlannerOnce = true;
+      const liveHit = planners.find((p) => p.value === pickVal || p.modelId === pickVal);
+      if (liveHit) rememberOrchestratorPlanner(liveHit);
+      return;
+    }
+
+    if (restoredOrchPlannerOnce || typeof pick.select !== 'function') return;
+    restoredOrchPlannerOnce = true;
+
+    const activeSym = String(state.activeSymbol || '');
+    const getPlannerSym = (p) => {
+      if (!p || typeof periodicCore?.matchGemini4Element !== 'function') return '';
+      const parsed = periodicCore.parseOptionEffort(p.label || p.modelId || '');
+      const el = periodicCore.matchGemini4Element(parsed.base || p.label || '');
+      return el ? el.symbol : '';
+    };
+
+    let target = null;
+    if (lastOrchPlannerMeta) {
+      const candidate =
+        planners.find(
+          (p) =>
+            (lastOrchPlannerMeta.value !== undefined && p.value === lastOrchPlannerMeta.value) ||
+            (lastOrchPlannerMeta.modelId && p.modelId === lastOrchPlannerMeta.modelId) ||
+            (lastOrchPlannerMeta.label && p.label === lastOrchPlannerMeta.label)
+        ) || null;
+      if (candidate && (!activeSym || !getPlannerSym(candidate) || getPlannerSym(candidate) === activeSym)) {
+        target = candidate;
+      }
+    }
+    if (!target && lastStandardModelMeta && typeof periodicCore?.findMatchingOrchestratorPlanner === 'function') {
+      const candidate = periodicCore.findMatchingOrchestratorPlanner(
+        planners,
+        lastStandardModelMeta,
+        lastStandardModelMeta.effortId
+      );
+      if (candidate && (!activeSym || !getPlannerSym(candidate) || getPlannerSym(candidate) === activeSym)) {
+        target = candidate;
+      }
+    }
+    if (!target || target.value === undefined || target.value === null) return;
+    if (fp.orchestratorDefaultPlanner && fp.orchestratorDefaultPlanner.value === target.value) {
+      return;
+    }
+    try {
+      rememberOrchestratorPlanner(target);
+      pick.select(target.value);
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => scheduleSync());
+      } else {
+        scheduleSync();
+      }
+    } catch {}
+  }
 
   function rememberStandardModel(opt) {
     if (!opt || !periodicCore) return;
@@ -3545,6 +3649,7 @@
       );
       if (hasOrchPlannerSetter) {
         try {
+          rememberOrchestratorPlanner(opt);
           fiberProps.orchestratorPick.select(opt.value);
         } catch {}
       } else if (hasRealModelSetter) {
@@ -4583,6 +4688,7 @@
           );
           if (matchingPlanner && matchingPlanner.value !== undefined) {
             try {
+              rememberOrchestratorPlanner(matchingPlanner);
               fp.orchestratorPick.select(matchingPlanner.value);
             } catch {}
           }
@@ -4603,12 +4709,7 @@
   function syncOrchestratorSwitch(card, footer, modelBtn) {
     if (!card) return;
     const existing = card.querySelector('.ag-cs-orch-switch');
-    if (
-      cfg.orchestratorSwitch === false ||
-      !modelBtn ||
-      !periodicCore ||
-      typeof periodicCore.resolveOrchestratorState !== 'function'
-    ) {
+    if (!modelBtn || !periodicCore || typeof periodicCore.resolveOrchestratorState !== 'function') {
       if (existing) existing.remove();
       return;
     }
@@ -4625,7 +4726,9 @@
       fp.selectedModel,
       lastStandardModelMeta?.effortId || ''
     );
-    if (!state.available) {
+    syncOrRestoreOrchestratorPlanner(fp, state);
+
+    if (cfg.orchestratorSwitch === false || !state.available) {
       if (existing) existing.remove();
       return;
     }
@@ -4949,6 +5052,7 @@
               );
               if (matchingPlanner && matchingPlanner.value !== undefined) {
                 try {
+                  rememberOrchestratorPlanner(matchingPlanner);
                   fiberProps.orchestratorPick.select(matchingPlanner.value);
                 } catch {}
               }

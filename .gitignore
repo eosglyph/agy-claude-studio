@@ -4,6 +4,8 @@ watch.log
 
 # Local user configuration (use config.example.json as template)
 config.json
+notify.json
+notify-state.json
 
 # Compiled Windows binaries (rebuild with `npm run build:installer`)
 installer.exe
