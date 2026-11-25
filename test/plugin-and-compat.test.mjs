@@ -504,7 +504,11 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   assert.ok(studioHtml.includes('Claude Studio'), 'Studio UI uses renamed brand title');
   assert.ok(studioHtml.includes('section-body') && studioHtml.includes('section-chevron') && studioHtml.includes('is-collapsed'), 'Studio UI provides collapsible section panels');
   assert.ok(studioHtml.includes('agCsStudioCollapsedGroups'), 'Studio UI persists collapsed group state in localStorage');
-  assert.ok(studioHtml.includes('panel-overview') && studioHtml.includes('panel-settings'), 'Studio UI splits Overview and Settings tabs');
+  assert.ok(
+    studioHtml.includes('panel-chat') && studioHtml.includes('panel-tools') && studioHtml.includes('panel-settings'),
+    'Studio UI splits Chat, Tools, and Settings tabs'
+  );
+  assert.ok(studioHtml.includes('btn-header-upgrade') && studioHtml.includes('cd-inspector'), 'Studio UI includes header upgrade pill and Claude-style chat inspector');
   assert.ok(studioHtml.includes('agCsStudioActiveTab') && studioHtml.includes('agCsStudioCollapseDefaultV2'), 'Studio UI persists active tab and defaults settings cards collapsed on v2');
   assert.ok(studioHtml.includes('notify-section') && studioHtml.includes('overview-notify-card'), 'Studio UI includes mobile push cards on both Overview and Settings');
   assert.ok(studioHtml.includes('/api/notify') && studioHtml.includes('/api/notify/test'), 'Studio UI wires mobile push save and test endpoints');

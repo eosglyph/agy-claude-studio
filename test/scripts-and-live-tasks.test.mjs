@@ -69,12 +69,23 @@ test('getLiveTasksApi queries ConversationService and tail GetCascadeTrajectoryS
         json: async () => ({
           trajectorySummaries: {
             'run-1': { stepCount: 250, status: 'CASCADE_RUN_STATUS_RUNNING' },
+            'sub-1': {
+              stepCount: 14,
+              status: 'CASCADE_RUN_STATUS_RUNNING',
+              trajectoryMetadata: { subagentSpec: { typeName: 'browser', role: 'GitHub Settings Inspector' } },
+            },
+            'sub-2': {
+              stepCount: 9,
+              status: 'CASCADE_RUN_STATUS_IDLE',
+              latestExecutorTerminationReason: 'EXECUTOR_TERMINATION_REASON_USER_CANCELED',
+              trajectoryMetadata: { subagentSpec: { typeName: 'worker', role: 'Swarm Worker (i18n-sonnet)' }, agentScript: { name: 'i18n-sonnet' } },
+            },
           },
         }),
       };
     }
     if (url.includes('GetCascadeTrajectorySteps')) {
-      assert.equal(body.stepOffset, 240);
+      assert.equal(body.stepOffset, 238);
       return {
         ok: true,
         status: 200,
@@ -83,7 +94,7 @@ test('getLiveTasksApi queries ConversationService and tail GetCascadeTrajectoryS
             {
               type: 'CORTEX_STEP_TYPE_VIEW_FILE',
               status: 'CORTEX_STEP_STATUS_RUNNING',
-              viewFile: { absolutePathUri: 'file:///d:/repo/sidecars/studio/main.mjs' },
+              viewFile: { absolutePathUri: 'file:///d:/repo/sidecars/studio/main.mjs', startLine: 9, endLine: 39 },
               metadata: { createdAt: '2026-11-25T02:00:00Z' },
             },
           ],
@@ -136,9 +147,30 @@ test('getLiveTasksApi queries ConversationService and tail GetCascadeTrajectoryS
   assert.equal(res.running[0].activeSubagentCount, 1);
   assert.equal(res.running[0].stepCount, 250);
   assert.equal(res.running[0].activity?.kind, 'reading_file');
-  assert.equal(res.running[0].activity?.detail, 'main.mjs');
+  assert.equal(res.running[0].activity?.detail, 'main.mjs:10-40');
+  assert.equal(res.running[0].subagents.length, 2);
+  assert.equal(res.running[0].subagents[0].kind, 'subagent');
+  assert.equal(res.running[0].subagents[0].title, 'GitHub Settings Inspector');
+  assert.equal(res.running[0].subagents[0].state, 'running');
+  assert.equal(res.running[0].subagents[0].stepCount, 14);
+  assert.equal(res.running[0].subagents[1].kind, 'swarm');
+  assert.equal(res.running[0].subagents[1].title, '@i18n-sonnet');
+  assert.equal(res.running[0].subagents[1].state, 'stopped');
+  assert.equal(res.running[0].subagents[1].stepCount, 9);
   assert.equal(res.recent.length, 1);
   assert.equal(calls.length, 4);
+
+  // Parallel tool batch progress ignores bookkeeping steps and reports [done/total]
+  const batchAct = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE', status: 'CORTEX_STEP_STATUS_DONE', plannerResponse: { toolCalls: [{ name: 'update_focus' }, { name: 'read_file' }, { name: 'read_file' }, { name: 'read_file' }] } },
+    { type: 'CORTEX_STEP_TYPE_GENERIC', status: 'CORTEX_STEP_STATUS_DONE', metadata: { toolCall: { name: 'update_focus' } } },
+    { type: 'CORTEX_STEP_TYPE_VIEW_FILE', status: 'CORTEX_STEP_STATUS_DONE', viewFile: { absolutePathUri: 'file:///d:/repo/a.js', startLine: 0, endLine: 49 } },
+    { type: 'CORTEX_STEP_TYPE_VIEW_FILE', status: 'CORTEX_STEP_STATUS_DONE', viewFile: { absolutePathUri: 'file:///d:/repo/b.js', startLine: 99, endLine: 199 } },
+    { type: 'CORTEX_STEP_TYPE_VIEW_FILE', status: 'CORTEX_STEP_STATUS_RUNNING', viewFile: { absolutePathUri: 'file:///d:/repo/c.js', startLine: 0, endLine: 19 } },
+  ]);
+  assert.equal(batchAct.kind, 'reading_file');
+  assert.deepEqual(batchAct.batch, { done: 2, total: 3 });
+  assert.equal(batchAct.detail, 'a.js:1-50, b.js:100-200');
 
   const thinkingAct = studioMain.classifyLiveStepActivity([
     { type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE', status: 'CORTEX_STEP_STATUS_GENERATING', plannerResponse: { thinking: 'analyzing...' } },
@@ -215,5 +247,209 @@ test('i18n-core translates split React text nodes like ["No ", "automations", " 
   } finally {
     if (prevNodeFilter === undefined) delete globalThis.NodeFilter;
     else globalThis.NodeFilter = prevNodeFilter;
+  }
+});
+
+test('getConversationInspectorApi returns real environment, context breakdown, connectors, skills/rules, and outputs, and openInspectorFileApi enforces sandbox boundaries', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-insp-'));
+  try {
+    const wsDir = path.join(tmpDir, 'my-repo');
+    fs.mkdirSync(path.join(wsDir, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(wsDir, '.git', 'HEAD'), 'ref: refs/heads/feat/v2.2\n', 'utf8');
+    fs.writeFileSync(path.join(wsDir, 'AGENTS.md'), '# Repo rules\n', 'utf8');
+
+    const appDataDir = path.join(tmpDir, 'appdata');
+    const configDir = path.join(tmpDir, 'config');
+    fs.mkdirSync(path.join(appDataDir, 'mcp', 'agent-hud'), { recursive: true });
+    fs.writeFileSync(path.join(appDataDir, 'mcp', 'agent-hud', 'get_hud.json'), '{}', 'utf8');
+    fs.writeFileSync(path.join(appDataDir, 'mcp', 'agent-hud', 'draft_hud.json'), '{}', 'utf8');
+    // Stale uninstalled host with 0 tools should be ignored
+    fs.mkdirSync(path.join(appDataDir, 'mcp', 'stale-uninstalled-host'), { recursive: true });
+
+    fs.mkdirSync(path.join(configDir, 'skills', 'demo-skill'), { recursive: true });
+    fs.writeFileSync(path.join(configDir, 'skills', 'demo-skill', 'SKILL.md'), '---\nname: demo-skill\n---\n', 'utf8');
+    fs.mkdirSync(path.join(configDir, 'rules'), { recursive: true });
+    fs.writeFileSync(path.join(configDir, 'rules', 'GEMINI.md'), '# User rule\n', 'utf8');
+
+    const convId = 'conv-inspector-test-1';
+    const brainDir = path.join(appDataDir, 'brain', convId);
+    fs.mkdirSync(path.join(brainDir, '.system_generated'), { recursive: true });
+    fs.mkdirSync(path.join(brainDir, 'scratch'), { recursive: true });
+    fs.writeFileSync(path.join(brainDir, '.hidden.md'), 'secret', 'utf8');
+    fs.writeFileSync(path.join(brainDir, 'analysis_report.md'), '# Report\n', 'utf8');
+    fs.writeFileSync(path.join(brainDir, 'danger.ps1'), 'echo bad\n', 'utf8');
+
+    const wsUri = 'file:///' + wsDir.replace(/\\/g, '/').replace(/^\/+/, '');
+    const mockFetch = async (url) => {
+      if (url.includes('GetAllCascadeTrajectories')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            trajectorySummaries: {
+              [convId]: {
+                stepCount: 42,
+                lastModifiedTime: '2026-11-25T15:00:00Z',
+                annotations: { title: 'Test Chat' },
+                workspaces: [{ workspaceFolderAbsoluteUri: wsUri, branchName: 'main' }],
+              },
+            },
+          }),
+        };
+      }
+      if (url.includes('GetCascadeTrajectoryGeneratorMetadata')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            generatorMetadata: [
+              {
+                chatModel: {
+                  modelDisplayName: 'Gemini 4 Neon (High)',
+                  usage: {
+                    inputTokens: 2000,
+                    cacheReadTokens: 132500,
+                    responseOutputTokens: 500,
+                  },
+                  chatStartMetadata: {
+                    contextWindowMetadata: {
+                      estimatedTokensUsed: 120000,
+                      maxContextTokens: 512000,
+                      tokenBreakdown: {
+                        groups: [
+                          { name: 'Chat Messages', type: 'TOKEN_TYPE_CHAT_MESSAGES', numTokens: 100000, children: [{}, {}] },
+                          { name: 'Tools', type: 'TOKEN_TYPE_TOOLS', numTokens: 12000, children: [{}] },
+                          { name: 'System Prompt', type: 'TOKEN_TYPE_SYSTEM_PROMPT', numTokens: 5000, children: [{}] },
+                          { name: 'Mcp Tools', type: 'TOKEN_TYPE_MCP_TOOLS', numTokens: 3000, children: [{}] },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }),
+        };
+      }
+      return { ok: false, status: 404 };
+    };
+
+    const res = await studioMain.getConversationInspectorApi({
+      conversationId: convId,
+      env: { ANTIGRAVITY_LS_ADDRESS: '127.0.0.1:9999', ANTIGRAVITY_CSRF_TOKEN: 'tok-test' },
+      fetchFn: mockFetch,
+      appDataDir,
+      configDir,
+    });
+
+    assert.equal(res.ok, true);
+    assert.equal(res.environment.workspaceName, 'my-repo');
+    assert.equal(res.environment.branch, 'feat/v2.2', 'must read live .git/HEAD over stale LS branchName');
+    assert.equal(res.context.available, true);
+    assert.equal(res.context.usedTokens, 135000, 'must align total with billed prompt + response tokens');
+    assert.equal(res.context.maxTokens, 512000);
+    assert.equal(res.context.freeTokens, 377000);
+    assert.equal(res.context.segments[0].tokens, 115000, 'calibration delta should be absorbed into messages so sum === usedTokens');
+    assert.deepEqual(
+      res.context.segments.map((s) => s.key),
+      ['messages', 'mcpTools', 'systemTools', 'systemPrompt']
+    );
+    assert.equal(res.connectors.length, 1);
+    assert.equal(res.connectors[0].name, 'agent-hud');
+    assert.equal(res.connectors[0].toolCount, 2);
+    assert.equal(res.mcpTools.length, 2);
+    assert.equal(res.skills.length, 1);
+    assert.equal(res.rules.length, 2);
+    assert.ok(res.outputs.some((o) => o.name === 'analysis_report.md'));
+    assert.ok(!res.outputs.some((o) => o.name.startsWith('.')));
+
+    // openInspectorFileApi security checks
+    const trav = studioMain.openInspectorFileApi(
+      { path: path.join(wsDir, 'AGENTS.md'), conversationId: convId },
+      { appDataDir, spawnFn: () => ({ unref() {} }) }
+    );
+    assert.equal(trav.ok, false);
+    assert.equal(trav.error, 'path_not_allowed');
+
+    const blocked = studioMain.openInspectorFileApi(
+      { path: path.join(brainDir, 'danger.ps1'), conversationId: convId },
+      { appDataDir, spawnFn: () => ({ unref() {} }) }
+    );
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.error, 'blocked_extension');
+
+    let openedArgs = null;
+    const allowed = studioMain.openInspectorFileApi(
+      { path: path.join(brainDir, 'analysis_report.md'), conversationId: convId },
+      {
+        appDataDir,
+        spawnFn: (cmd, args) => {
+          openedArgs = { cmd, args };
+          return { unref() {} };
+        },
+      }
+    );
+    assert.equal(allowed.ok, true);
+    assert.ok(openedArgs && openedArgs.args[0].endsWith('analysis_report.md'));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('performStudioSelfUpdate supports non-git release archive auto-upgrade while preserving PLUGIN_DATA', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-arch-'));
+  try {
+    const pluginDir = path.join(tmpDir, 'installed-plugin');
+    const pluginDataDir = path.join(tmpDir, 'plugin_data');
+    const releaseSrc = path.join(tmpDir, 'agy-claude-studio-2.2.0');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    fs.mkdirSync(pluginDataDir, { recursive: true });
+    fs.mkdirSync(releaseSrc, { recursive: true });
+
+    fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.1.0' }), 'utf8');
+    fs.writeFileSync(path.join(pluginDir, 'package.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.1.0' }), 'utf8');
+    fs.writeFileSync(path.join(pluginDir, 'marker.txt'), 'old-version', 'utf8');
+    fs.writeFileSync(path.join(pluginDataDir, 'notify.json'), JSON.stringify({ enabled: true }), 'utf8');
+
+    fs.writeFileSync(path.join(releaseSrc, 'plugin.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.2.0' }), 'utf8');
+    fs.writeFileSync(path.join(releaseSrc, 'package.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.2.0' }), 'utf8');
+    fs.writeFileSync(path.join(releaseSrc, 'marker.txt'), 'new-v2.2.0', 'utf8');
+
+    const tarFile = path.join(tmpDir, 'v2.2.0.tar.gz');
+    execFileSync('tar', ['-czf', tarFile, '-C', tmpDir, 'agy-claude-studio-2.2.0']);
+    const tarBuf = fs.readFileSync(tarFile);
+
+    let reinjected = false;
+    const updRes = await studioMain.performStudioSelfUpdate({
+      pluginDir,
+      targetTag: 'v2.2.0',
+      fetchFn: async () => ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => tarBuf.buffer.slice(tarBuf.byteOffset, tarBuf.byteOffset + tarBuf.byteLength),
+      }),
+      reinjectFn: async () => {
+        reinjected = true;
+      },
+    });
+
+    assert.equal(updRes.ok, true);
+    assert.equal(updRes.mode, 'archive');
+    assert.equal(updRes.version, '2.2.0');
+    assert.equal(reinjected, true);
+    assert.equal(fs.readFileSync(path.join(pluginDir, 'marker.txt'), 'utf8'), 'new-v2.2.0');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(pluginDataDir, 'notify.json'), 'utf8')).enabled, true);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('Studio index.html inline script parses cleanly with zero syntax errors', () => {
+  const html = fs.readFileSync(path.resolve('sidecars/studio/index.html'), 'utf8');
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  assert.ok(scripts.length >= 1, 'Expected inline script block in sidecars/studio/index.html');
+  for (const m of scripts) {
+    assert.doesNotThrow(() => new Function(m[1]));
   }
 });

@@ -128,13 +128,63 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 8px;
       margin-bottom: 10px;
+    }
+    .header-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    button.upgrade-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      width: auto;
+      min-height: 24px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      background: rgba(59, 130, 246, 0.12);
+      color: #2563eb;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: background 140ms ease, border-color 140ms ease, transform 90ms ease;
+    }
+    button.upgrade-pill:hover:not(:disabled) {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+    button.upgrade-pill[hidden] {
+      display: none !important;
+    }
+    :root[data-theme="dark"] button.upgrade-pill {
+      background: rgba(96, 165, 250, 0.16);
+      border-color: rgba(96, 165, 250, 0.34);
+      color: #7cc0ff;
+    }
+    :root[data-theme="dark"] button.upgrade-pill:hover:not(:disabled) {
+      background: rgba(96, 165, 250, 0.24);
+      border-color: rgba(96, 165, 250, 0.55);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) button.upgrade-pill {
+        background: rgba(96, 165, 250, 0.16);
+        border-color: rgba(96, 165, 250, 0.34);
+        color: #7cc0ff;
+      }
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 9px;
+      flex: 1;
       min-width: 0;
     }
     .brand-badge {
@@ -199,10 +249,10 @@
     }
     .dot.ok { background: var(--ok); }
 
-    /* Segmented 2-Tab Switcher */
+    /* Segmented 3-Tab Switcher (Chat | Tools | Settings) */
     .tab-bar {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 4px;
       padding: 3px;
       border-radius: 9px;
@@ -1185,6 +1235,624 @@
       gap: 6px;
       margin-top: 2px;
     }
+
+    /* Claude Desktop-Style Conversation Inspector (Chat Tab) */
+    .cd-inspector {
+      display: flex;
+      flex-direction: column;
+      padding: 2px 2px 4px;
+    }
+    .cd-section {
+      padding: 11px 2px;
+      border-bottom: 1px solid var(--divider-col);
+    }
+    .cd-section:first-child {
+      padding-top: 4px;
+    }
+    .cd-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .cd-heading {
+      font-size: 12px;
+      font-weight: 550;
+      color: var(--muted-fg);
+      letter-spacing: 0.01em;
+    }
+    .cd-model-pill {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 170px;
+    }
+    button.cd-icon-btn {
+      width: 22px;
+      height: 22px;
+      min-height: 22px;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-fg);
+      flex-shrink: 0;
+    }
+    button.cd-icon-btn:hover {
+      background: var(--control-hover);
+      border-color: transparent;
+      color: var(--fg);
+    }
+    .cd-env-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .cd-env-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+    .cd-env-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+    .cd-env-icon {
+      width: 15px;
+      height: 15px;
+      color: var(--muted-fg);
+      flex-shrink: 0;
+    }
+    .cd-env-text {
+      font-size: 13px;
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .cd-env-ws-name {
+      font-weight: 550;
+      color: var(--fg);
+    }
+    .cd-env-ws-path {
+      color: var(--muted-fg);
+      font-size: 12px;
+    }
+    .cd-env-branch {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--control-bg);
+      border: 1px solid var(--border-col);
+      color: var(--muted-fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10.5px;
+      white-space: nowrap;
+      max-width: 112px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+    }
+    .cd-ctx-hero {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 7px;
+      font-variant-numeric: tabular-nums;
+    }
+    .cd-ctx-pct {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+    .cd-ctx-ratio {
+      font-size: 12px;
+      color: var(--muted-fg);
+    }
+    .cd-ctx-bar {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      height: 5px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: var(--control-hover);
+      gap: 1.5px;
+      margin-bottom: 11px;
+    }
+    .cd-ctx-seg {
+      height: 100%;
+      min-width: 3px;
+      transition: width 220ms ease;
+    }
+    .cd-ctx-seg:first-child {
+      border-top-left-radius: 999px;
+      border-bottom-left-radius: 999px;
+    }
+    .cd-ctx-seg:last-child {
+      border-top-right-radius: 999px;
+      border-bottom-right-radius: 999px;
+    }
+    .cd-ctx-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .cd-ctx-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto 46px;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      line-height: 1.35;
+      font-variant-numeric: tabular-nums;
+    }
+    .cd-ctx-row.is-free {
+      margin-top: 6px;
+      padding-top: 7px;
+      border-top: 1px solid var(--divider-col);
+    }
+    .cd-ctx-label-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .cd-swatch {
+      width: 9px;
+      height: 9px;
+      border-radius: 2.5px;
+      flex-shrink: 0;
+    }
+    .cd-ctx-label {
+      color: var(--muted-fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cd-ctx-val {
+      color: var(--muted-fg);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .cd-ctx-p {
+      color: var(--fg);
+      font-weight: 500;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .cd-ctx-subrows {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: 9px;
+    }
+    button.cd-expand-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      min-height: 26px;
+      padding: 3px 4px;
+      margin: 0 -4px;
+      width: calc(100% + 8px);
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-fg);
+      font-size: 12px;
+      font-weight: 450;
+      text-align: left;
+      cursor: pointer;
+    }
+    button.cd-expand-btn:hover {
+      background: var(--control-bg);
+      border-color: transparent;
+      color: var(--fg);
+    }
+    button.cd-expand-btn:active {
+      transform: none;
+    }
+    .cd-expand-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .cd-chev {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 12px;
+      height: 12px;
+      transition: transform 150ms ease;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+    button.cd-expand-btn[aria-expanded="true"] .cd-chev {
+      transform: rotate(90deg);
+    }
+    .cd-expand-count {
+      font-size: 12px;
+      color: var(--muted-fg);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .cd-expand-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 5px 0 6px 18px;
+    }
+    .cd-expand-list[hidden] {
+      display: none !important;
+    }
+    .cd-expand-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11.5px;
+      color: var(--fg);
+      line-height: 1.35;
+    }
+    .cd-expand-item-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .cd-expand-item-sub {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    button.cd-connector-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: calc(100% + 8px);
+      margin: 0 -4px;
+      min-height: 28px;
+      padding: 3px 4px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--fg);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    button.cd-connector-btn:hover {
+      background: var(--control-bg);
+      border-color: transparent;
+    }
+    button.cd-connector-btn:active {
+      transform: none;
+    }
+    button.cd-connector-btn[aria-expanded="true"] .cd-chev {
+      transform: rotate(90deg);
+    }
+    .cd-outputs-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .cd-output-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 5px 6px;
+      margin: 0 -6px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+    .cd-output-row:hover {
+      background: var(--control-bg);
+    }
+    .cd-output-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+    .cd-output-name {
+      font-size: 12.5px;
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    button.cd-output-copy {
+      width: auto;
+      min-height: 22px;
+      padding: 0 7px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      opacity: 0;
+      flex-shrink: 0;
+      transition: opacity 120ms ease;
+    }
+    .cd-output-row:hover button.cd-output-copy,
+    button.cd-output-copy:focus-visible {
+      opacity: 1;
+    }
+    .cd-empty {
+      font-size: 12px;
+      color: var(--muted-fg);
+      padding: 2px 0;
+    }
+    /* Unified Live Activity Section (Claude Desktop style, always expanded) */
+    .cd-live-section {
+      border-bottom: none;
+      padding-bottom: 4px;
+    }
+    .cd-live-head-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .cd-live-status-text {
+      font-size: 11px;
+      color: var(--muted-fg);
+      font-variant-numeric: tabular-nums;
+    }
+    .cd-live-status-text.is-on {
+      color: var(--ok);
+      font-weight: 550;
+    }
+    .cd-live-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .cd-live-item {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .cd-live-item + .cd-live-item {
+      padding-top: 9px;
+      border-top: 1px solid var(--divider-col);
+    }
+    .cd-live-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
+    }
+    .cd-live-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      flex: 1;
+    }
+    .cd-live-title {
+      font-size: 12.5px;
+      font-weight: 550;
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .cd-live-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .cd-live-elapsed {
+      font-size: 11px;
+      color: var(--muted-fg);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    button.cd-sub-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      width: auto;
+      min-height: 20px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--border-col);
+      background: var(--control-bg);
+      color: var(--muted-fg);
+      font-size: 10.5px;
+      font-weight: 550;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    button.cd-sub-toggle:hover {
+      background: var(--control-hover);
+      border-color: var(--border-col);
+      color: var(--fg);
+    }
+    button.cd-sub-toggle[aria-expanded="true"] {
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.28);
+      color: #2563eb;
+    }
+    :root[data-theme="dark"] button.cd-sub-toggle[aria-expanded="true"] {
+      background: rgba(96, 165, 250, 0.16);
+      border-color: rgba(96, 165, 250, 0.34);
+      color: #7cc0ff;
+    }
+    button.cd-sub-toggle .cd-chev {
+      width: 10px;
+      height: 10px;
+    }
+    button.cd-sub-toggle[aria-expanded="true"] .cd-chev {
+      transform: rotate(90deg);
+    }
+    .cd-live-activity {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding-left: 14px;
+      font-size: 12px;
+      line-height: 1.4;
+      min-width: 0;
+    }
+    .cd-role-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      height: 17px;
+      border-radius: 5px;
+      font-size: 10.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cd-role-pill.is-main {
+      background: rgba(59, 130, 246, 0.13);
+      color: #2563eb;
+    }
+    :root[data-theme="dark"] .cd-role-pill.is-main {
+      background: rgba(96, 165, 250, 0.18);
+      color: #7cc0ff;
+    }
+    .cd-live-action {
+      font-weight: 550;
+      color: var(--fg);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cd-live-action.is-thinking {
+      color: #7c5dfa;
+    }
+    .cd-live-action.is-waiting {
+      color: #c7761b;
+    }
+    .cd-batch-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 5px;
+      height: 17px;
+      border-radius: 5px;
+      background: rgba(59, 130, 246, 0.11);
+      color: #2563eb;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    :root[data-theme="dark"] .cd-batch-pill {
+      background: rgba(96, 165, 250, 0.16);
+      color: #7cc0ff;
+    }
+    .cd-live-detail {
+      color: var(--muted-fg);
+      font-size: 11.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1;
+    }
+    .cd-live-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-left: 14px;
+      font-size: 11px;
+      color: var(--muted-fg);
+      font-variant-numeric: tabular-nums;
+    }
+    .cd-sub-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 3px 0 0 14px;
+      padding: 4px 0 2px 9px;
+      border-left: 1.5px solid var(--divider-col);
+      max-height: 184px;
+      overflow-y: auto;
+    }
+    .cd-sub-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      font-size: 11.5px;
+      line-height: 1.35;
+    }
+    .cd-sub-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      height: 17px;
+      border-radius: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cd-sub-badge.c0 { background: rgba(236, 72, 153, 0.13); color: #db2777; }
+    .cd-sub-badge.c1 { background: rgba(234, 88, 12, 0.13); color: #ea580c; }
+    .cd-sub-badge.c2 { background: rgba(16, 185, 129, 0.14); color: #059669; }
+    .cd-sub-badge.c3 { background: rgba(139, 92, 246, 0.14); color: #7c3aed; }
+    .cd-sub-badge.c4 { background: rgba(14, 165, 233, 0.14); color: #0284c7; }
+    :root[data-theme="dark"] .cd-sub-badge.c0 { color: #f472b6; }
+    :root[data-theme="dark"] .cd-sub-badge.c1 { color: #fb923c; }
+    :root[data-theme="dark"] .cd-sub-badge.c2 { color: #34d399; }
+    :root[data-theme="dark"] .cd-sub-badge.c3 { color: #a78bfa; }
+    :root[data-theme="dark"] .cd-sub-badge.c4 { color: #38bdf8; }
+    .cd-sub-name {
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1;
+    }
+    .cd-sub-state {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cd-sub-state.is-running {
+      color: var(--ok);
+      font-weight: 550;
+    }
+    .cd-sub-state.is-error {
+      color: #d65745;
+    }
+    .cd-sub-steps {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-width: 34px;
+      text-align: right;
+    }
   </style>
 </head>
 <body>
@@ -1197,14 +1865,18 @@
           <div class="brand-sub" id="meta-line">...</div>
         </div>
       </div>
-      <div class="status-pill" id="status-pill">
-        <span class="dot" id="status-dot"></span>
-        <span id="status-text">...</span>
+      <div class="header-right">
+        <button type="button" class="upgrade-pill" id="btn-header-upgrade" hidden>↓ 升级</button>
+        <div class="status-pill" id="status-pill">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">...</span>
+        </div>
       </div>
     </div>
 
     <div class="tab-bar" role="tablist">
-      <button type="button" class="tab-btn is-active" id="tab-btn-overview" data-tab="overview" role="tab" aria-selected="true">概览</button>
+      <button type="button" class="tab-btn is-active" id="tab-btn-chat" data-tab="chat" role="tab" aria-selected="true">对话</button>
+      <button type="button" class="tab-btn" id="tab-btn-tools" data-tab="tools" role="tab" aria-selected="false">工具</button>
       <button type="button" class="tab-btn" id="tab-btn-settings" data-tab="settings" role="tab" aria-selected="false">设置</button>
     </div>
   </div>
@@ -1218,7 +1890,105 @@
     </div>
   </div>
 
-  <div id="panel-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-overview">
+  <div id="panel-chat" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-chat">
+    <div class="cd-inspector" id="cd-inspector">
+      <div class="cd-section" id="cd-env-section">
+        <div class="cd-section-head">
+          <span class="cd-heading" id="cd-env-heading">环境</span>
+          <button type="button" class="cd-icon-btn" id="btn-inspector-refresh" title="刷新">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+          </button>
+        </div>
+        <div class="cd-env-list">
+          <div class="cd-env-row">
+            <div class="cd-env-main">
+              <svg class="cd-env-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>
+              <span class="cd-env-text" id="cd-env-host">本机</span>
+            </div>
+          </div>
+          <div class="cd-env-row" id="cd-env-ws-row" hidden>
+            <div class="cd-env-main" id="cd-env-ws-tip">
+              <svg class="cd-env-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+              <span class="cd-env-text">
+                <span class="cd-env-ws-name" id="cd-env-ws-name"></span>
+                <span class="cd-env-ws-path" id="cd-env-ws-path"></span>
+              </span>
+            </div>
+            <span class="cd-env-branch" id="cd-env-branch" hidden></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cd-section" id="cd-ctx-section">
+        <div class="cd-section-head">
+          <span class="cd-heading" id="cd-ctx-heading">上下文</span>
+          <span class="cd-model-pill" id="cd-ctx-model"></span>
+        </div>
+        <div class="cd-ctx-hero">
+          <span class="cd-ctx-pct" id="cd-ctx-pct">—</span>
+          <span class="cd-ctx-ratio" id="cd-ctx-ratio">—</span>
+        </div>
+        <div class="cd-ctx-bar" id="cd-ctx-bar"></div>
+        <div class="cd-ctx-rows" id="cd-ctx-rows"></div>
+        <div class="cd-ctx-subrows">
+          <button type="button" class="cd-expand-btn" id="cd-mcp-toggle" aria-expanded="false">
+            <span class="cd-expand-left">
+              <span class="cd-chev" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span>
+              <span id="cd-mcp-label">MCP 工具</span>
+            </span>
+            <span class="cd-expand-count" id="cd-mcp-count">0</span>
+          </button>
+          <div class="cd-expand-list" id="cd-mcp-list" hidden></div>
+
+          <button type="button" class="cd-expand-btn" id="cd-skills-toggle" aria-expanded="false">
+            <span class="cd-expand-left">
+              <span class="cd-chev" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span>
+              <span id="cd-skills-label">技能与规则</span>
+            </span>
+            <span class="cd-expand-count" id="cd-skills-count">0</span>
+          </button>
+          <div class="cd-expand-list" id="cd-skills-list" hidden></div>
+        </div>
+      </div>
+
+      <div class="cd-section" id="cd-conn-section">
+        <button type="button" class="cd-connector-btn" id="cd-conn-toggle" aria-expanded="false">
+          <span class="cd-expand-left">
+            <span id="cd-conn-label">连接器</span>
+            <span class="cd-chev" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span>
+          </span>
+          <span class="cd-expand-count" id="cd-conn-count">0</span>
+        </button>
+        <div class="cd-expand-list" id="cd-conn-list" hidden></div>
+      </div>
+
+      <div class="cd-section" id="cd-outputs-section">
+        <div class="cd-section-head">
+          <span class="cd-heading" id="cd-outputs-heading">产物文件</span>
+        </div>
+        <div class="cd-outputs-list" id="cd-outputs-list">
+          <div class="cd-empty">—</div>
+        </div>
+      </div>
+
+      <div class="cd-section cd-live-section" id="live-tasks-section">
+        <div class="cd-section-head">
+          <span class="cd-heading" id="live-tasks-title">运行状态</span>
+          <div class="cd-live-head-right">
+            <span class="cd-live-status-text" id="live-tasks-badge">空闲</span>
+            <button type="button" class="cd-icon-btn" id="btn-live-tasks-refresh" title="刷新">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="cd-live-list" id="live-tasks-list">
+          <div class="cd-empty">…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-tools" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-tools" hidden>
     <div class="overview-actions-card">
       <div class="actions">
         <button class="primary" id="btn-reinject"></button>
@@ -1226,27 +1996,6 @@
           <button id="btn-remove"></button>
           <button id="btn-open-um" disabled></button>
           <button id="btn-refresh"></button>
-        </div>
-      </div>
-    </div>
-
-    <div class="section" id="live-tasks-section" data-group-id="liveTasks">
-      <button type="button" class="section-head" id="live-tasks-head" aria-expanded="true">
-        <span class="section-title" id="live-tasks-title">📡 实时运行状态</span>
-        <span class="section-head-right">
-          <span class="section-badge" id="live-tasks-badge">空闲</span>
-          <span class="section-chevron" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-          </span>
-        </span>
-      </button>
-      <div class="live-tasks-body">
-        <div class="live-task-list" id="live-tasks-list">
-          <div class="live-task-empty">…</div>
-        </div>
-        <div class="live-tasks-foot">
-          <span id="live-tasks-updated">—</span>
-          <button type="button" class="script-mini-btn" id="btn-live-tasks-refresh">刷新</button>
         </div>
       </div>
     </div>
@@ -1334,50 +2083,6 @@
           <button type="button" class="update-pill-btn" id="btn-script-add">
             <span id="btn-script-add-lbl">+ 添加脚本</span>
           </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="section" id="update-section" data-group-id="updates">
-      <button type="button" class="section-head" id="update-section-head" aria-expanded="true">
-        <span class="section-title" id="update-section-title">⚡ 版本更新</span>
-        <span class="section-head-right">
-          <span class="section-badge" id="update-section-badge">v2.1.0</span>
-          <span class="section-chevron" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-          </span>
-        </span>
-      </button>
-      <div class="update-card-body">
-        <div class="update-item-row">
-          <div class="update-meta-block">
-            <div class="update-meta-k" id="version-meta-k">当前版本</div>
-            <div class="update-meta-v" id="version-meta-v">…</div>
-            <div class="update-meta-sub" id="version-meta-sub">…</div>
-          </div>
-          <div class="update-row-action">
-            <button type="button" class="update-pill-btn" id="btn-check-update">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-              <span id="btn-check-update-lbl"></span>
-            </button>
-            <button type="button" class="update-pill-btn primary" id="btn-self-update" style="display:none">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
-              <span id="btn-self-update-lbl"></span>
-            </button>
-          </div>
-        </div>
-        <div class="update-item-row">
-          <div class="update-meta-block">
-            <div class="update-meta-k" id="compat-meta-k">翻译保护名单</div>
-            <div class="update-meta-v" id="compat-meta-v">…</div>
-            <div class="update-meta-sub" id="compat-meta-sub">…</div>
-          </div>
-          <div class="update-row-action">
-            <button type="button" class="update-pill-btn" id="btn-sync-compat">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-              <span id="btn-sync-compat-lbl"></span>
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -1478,6 +2183,50 @@
             </button>
             <button type="button" class="update-pill-btn primary" id="btn-notify-save">
               <span id="btn-notify-save-lbl"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="update-section" data-group-id="updates">
+      <button type="button" class="section-head" id="update-section-head" aria-expanded="false">
+        <span class="section-title" id="update-section-title">⚡ 版本更新</span>
+        <span class="section-head-right">
+          <span class="section-badge" id="update-section-badge">v2.1.0</span>
+          <span class="section-chevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </span>
+      </button>
+      <div class="update-card-body">
+        <div class="update-item-row">
+          <div class="update-meta-block">
+            <div class="update-meta-k" id="version-meta-k">当前版本</div>
+            <div class="update-meta-v" id="version-meta-v">…</div>
+            <div class="update-meta-sub" id="version-meta-sub">…</div>
+          </div>
+          <div class="update-row-action">
+            <button type="button" class="update-pill-btn" id="btn-check-update">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+              <span id="btn-check-update-lbl"></span>
+            </button>
+            <button type="button" class="update-pill-btn primary" id="btn-self-update" style="display:none">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+              <span id="btn-self-update-lbl"></span>
+            </button>
+          </div>
+        </div>
+        <div class="update-item-row">
+          <div class="update-meta-block">
+            <div class="update-meta-k" id="compat-meta-k">翻译保护名单</div>
+            <div class="update-meta-v" id="compat-meta-v">…</div>
+            <div class="update-meta-sub" id="compat-meta-sub">…</div>
+          </div>
+          <div class="update-row-action">
+            <button type="button" class="update-pill-btn" id="btn-sync-compat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+              <span id="btn-sync-compat-lbl"></span>
             </button>
           </div>
         </div>
@@ -1613,8 +2362,14 @@
     const TEXTS = {
       'zh-CN': {
         brandTitle: 'Claude Studio',
-        tabOverview: '概览',
+        tabChat: '对话',
+        tabTools: '工具',
         tabSettings: '设置',
+        upgradePill: (v) => `↓ 升级 v${v}`,
+        upgradeRunning: '升级中…',
+        upgradeReloading: (v) => `已升级至 v${v}，正在重载…`,
+        upgradeDirtyGit: '检测到本地有未提交修改，已为你打开发布页手动更新',
+        upgradeManual: '当前安装目录不支持原地覆盖，已打开发布页',
         loading: '正在加载…',
         checking: '检测中',
         connected: (port, n) => `CDP :${port} · ${n} 个窗口`,
@@ -1763,8 +2518,14 @@
       },
       'zh-TW': {
         brandTitle: 'Claude Studio',
-        tabOverview: '概覽',
+        tabChat: '對話',
+        tabTools: '工具',
         tabSettings: '設定',
+        upgradePill: (v) => `↓ 升級 v${v}`,
+        upgradeRunning: '升級中…',
+        upgradeReloading: (v) => `已升級至 v${v}，正在重新載入…`,
+        upgradeDirtyGit: '偵測到本機有未提交變更，已開啟發佈頁供手動更新',
+        upgradeManual: '目前安裝目錄不支援原地覆蓋，已開啟發佈頁',
         loading: '載入中…',
         checking: '偵測中',
         connected: (port, n) => `CDP :${port} · ${n} 個視窗`,
@@ -1913,8 +2674,14 @@
       },
       yue: {
         brandTitle: 'Claude Studio',
-        tabOverview: '概覽',
+        tabChat: '對話',
+        tabTools: '工具',
         tabSettings: '設定',
+        upgradePill: (v) => `↓ 升級 v${v}`,
+        upgradeRunning: '升級緊…',
+        upgradeReloading: (v) => `已升級至 v${v}，重新載入緊…`,
+        upgradeDirtyGit: '搵到本機有未提交改動，已開返發佈頁手動更新',
+        upgradeManual: '目前安裝目錄唔支援原地覆蓋，已開啟發佈頁',
         loading: '載入緊…',
         checking: '檢查緊',
         connected: (port, n) => `CDP :${port} · ${n} 個視窗`,
@@ -2063,8 +2830,14 @@
       },
       en: {
         brandTitle: 'Claude Studio',
-        tabOverview: 'Overview',
+        tabChat: 'Chat',
+        tabTools: 'Tools',
         tabSettings: 'Settings',
+        upgradePill: (v) => `↓ v${v}`,
+        upgradeRunning: 'Updating…',
+        upgradeReloading: (v) => `Updated to v${v}, reloading…`,
+        upgradeDirtyGit: 'Local uncommitted changes detected; opened release page instead',
+        upgradeManual: 'In-place update unavailable here; opened release page',
         loading: 'Loading...',
         checking: 'Checking',
         connected: (port, n) => `CDP :${port} · ${n} win`,
@@ -2213,8 +2986,14 @@
       },
       ja: {
         brandTitle: 'Claude Studio',
-        tabOverview: '概要',
+        tabChat: '会話',
+        tabTools: 'ツール',
         tabSettings: '設定',
+        upgradePill: (v) => `↓ v${v}`,
+        upgradeRunning: '更新中…',
+        upgradeReloading: (v) => `v${v} へ更新しました。再読み込み中…`,
+        upgradeDirtyGit: '未コミットの変更があるためリリースページを開きました',
+        upgradeManual: '上書き更新できないためリリースページを開きました',
         loading: '読み込み中…',
         checking: '確認中',
         connected: (port, n) => `CDP :${port} · ${n} 窓`,
@@ -2445,7 +3224,7 @@
       },
     ];
 
-    const ALL_SETTINGS_GROUP_IDS = ['basics', 'translation', 'layout', 'advanced', 'telemetry', 'notify'];
+    const ALL_SETTINGS_GROUP_IDS = ['basics', 'translation', 'layout', 'advanced', 'telemetry', 'notify', 'updates'];
 
     const apiFetch = (url, opts) => {
       if (window.sidecar && typeof window.sidecar.fetch === 'function') {
@@ -2500,36 +3279,41 @@
     function loadActiveTab() {
       try {
         const saved = window.localStorage?.getItem(ACTIVE_TAB_STORAGE_KEY);
-        return saved === 'settings' ? 'settings' : 'overview';
+        if (saved === 'tools' || saved === 'settings' || saved === 'chat') return saved;
+        return 'chat';
       } catch {
-        return 'overview';
+        return 'chat';
       }
     }
 
     function setActiveTab(nextTab) {
-      activeTab = nextTab === 'settings' ? 'settings' : 'overview';
+      activeTab = nextTab === 'tools' || nextTab === 'settings' ? nextTab : 'chat';
       try {
         window.localStorage?.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
       } catch {}
       renderTabState();
+      if (activeTab === 'chat') {
+        void loadConversationInspector();
+        void loadLiveTasks();
+      }
     }
 
     function renderTabState() {
-      const ovBtn = document.getElementById('tab-btn-overview');
-      const stBtn = document.getElementById('tab-btn-settings');
-      const ovPanel = document.getElementById('panel-overview');
-      const stPanel = document.getElementById('panel-settings');
-      const isSettings = activeTab === 'settings';
-      if (ovBtn) {
-        ovBtn.classList.toggle('is-active', !isSettings);
-        ovBtn.setAttribute('aria-selected', String(!isSettings));
+      const tabs = [
+        ['chat', 'tab-btn-chat', 'panel-chat'],
+        ['tools', 'tab-btn-tools', 'panel-tools'],
+        ['settings', 'tab-btn-settings', 'panel-settings'],
+      ];
+      for (const [id, btnId, panelId] of tabs) {
+        const isOn = activeTab === id;
+        const btn = document.getElementById(btnId);
+        const panel = document.getElementById(panelId);
+        if (btn) {
+          btn.classList.toggle('is-active', isOn);
+          btn.setAttribute('aria-selected', String(isOn));
+        }
+        if (panel) panel.hidden = !isOn;
       }
-      if (stBtn) {
-        stBtn.classList.toggle('is-active', isSettings);
-        stBtn.setAttribute('aria-selected', String(isSettings));
-      }
-      if (ovPanel) ovPanel.hidden = isSettings;
-      if (stPanel) stPanel.hidden = !isSettings;
     }
 
     function loadCollapsedGroups() {
@@ -3103,6 +3887,28 @@
       return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
+    let isUpgradingNow = false;
+
+    function renderHeaderUpgradePill() {
+      const t = getT();
+      const pill = document.getElementById('btn-header-upgrade');
+      if (!pill) return;
+      const hasUpdate = Boolean(lastUpdateCheck?.hasUpdate && lastUpdateCheck?.latestVersion);
+      if (!hasUpdate && !isUpgradingNow) {
+        pill.hidden = true;
+        return;
+      }
+      pill.hidden = false;
+      pill.disabled = isUpgradingNow;
+      if (isUpgradingNow) {
+        pill.textContent = t.upgradeRunning;
+        pill.title = t.updateRunning;
+      } else {
+        pill.textContent = t.upgradePill(lastUpdateCheck.latestVersion);
+        pill.title = t.updateAvailableTitle(lastUpdateCheck.latestVersion);
+      }
+    }
+
     function renderUpdateCard() {
       const t = getT();
       const lang = currentConfig?.language || 'zh-CN';
@@ -3156,12 +3962,12 @@
       if (verV) verV.textContent = verStr;
 
       const isGit = Boolean(lastStatus?.update?.isGitRepo);
+      const canAuto = Boolean(lastUpdateCheck?.canAutoUpdate ?? lastStatus?.update?.canAutoUpdate);
       const gitTag = isGit ? ' (Git)' : '';
       if (verSub) {
         verSub.classList.remove('is-available');
         if (lastUpdateCheck?.hasUpdate) {
           verSub.classList.add('is-available');
-          const canGit = Boolean(lastUpdateCheck.isGitRepo && lastUpdateCheck.gitClean);
           const url = lastUpdateCheck.releaseUrl || lastStatus?.update?.releaseUrl || 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
           verSub.innerHTML = '';
           verSub.appendChild(document.createTextNode(t.updateAvailableTitle(lastUpdateCheck.latestVersion)));
@@ -3171,13 +3977,15 @@
           a.rel = 'noopener noreferrer';
           a.textContent = t.btnOpenRelease;
           verSub.appendChild(a);
-          if (selfBtn) selfBtn.style.display = canGit ? '' : 'none';
+          if (selfBtn) selfBtn.style.display = canAuto ? '' : 'none';
         } else if (lastUpdateCheck && lastUpdateCheck.hasUpdate === false) {
           verSub.textContent = isZh ? `已是最新${gitTag}` : `Up to date${gitTag}`;
           if (selfBtn) selfBtn.style.display = 'none';
         } else {
           verSub.textContent = isGit
-            ? (isZh ? 'Git 原生插件 · 支持原地更新' : 'Git plugin · In-place update ready')
+            ? (isZh ? 'Git 插件 · 支持一键升级' : 'Git plugin · 1-click update ready')
+            : canAuto
+            ? (isZh ? '原生插件 · 支持一键升级' : 'Plugin install · 1-click update ready')
             : (isZh ? '独立安装版' : 'Standalone install');
           if (selfBtn) selfBtn.style.display = 'none';
         }
@@ -3189,6 +3997,7 @@
       if (syncLbl) syncLbl.textContent = t.btnSyncCompat;
       const selfLbl = document.getElementById('btn-self-update-lbl');
       if (selfLbl) selfLbl.textContent = t.btnSelfUpdate;
+      renderHeaderUpgradePill();
     }
 
     function renderStaticChrome() {
@@ -3197,8 +4006,10 @@
       const bt = document.getElementById('brand-title');
       if (bt && t.brandTitle) bt.textContent = t.brandTitle;
 
-      const tabOv = document.getElementById('tab-btn-overview');
-      if (tabOv) tabOv.textContent = t.tabOverview;
+      const tabChat = document.getElementById('tab-btn-chat');
+      if (tabChat) tabChat.textContent = t.tabChat;
+      const tabTools = document.getElementById('tab-btn-tools');
+      if (tabTools) tabTools.textContent = t.tabTools;
       const tabSt = document.getElementById('tab-btn-settings');
       if (tabSt) tabSt.textContent = t.tabSettings;
       renderTabState();
@@ -3256,6 +4067,7 @@
       }
       renderOverviewNotifyCard();
       renderUpdateCard();
+      if (typeof renderConversationInspector === 'function') renderConversationInspector();
       if (typeof renderLiveTasksCard === 'function') renderLiveTasksCard();
       if (typeof renderScriptsCard === 'function') renderScriptsCard();
     }
@@ -3607,12 +4419,26 @@
       }
     }
 
+    async function checkUpdateSilently() {
+      try {
+        const res = await apiFetch('/api/check-update', { method: 'GET' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.ok) {
+          lastUpdateCheck = data;
+          renderUpdateCard();
+        }
+      } catch {
+        // Silent background check never disturbs the user
+      }
+    }
+
     async function triggerCheckUpdate() {
       const btn = document.getElementById('btn-check-update');
       if (btn) btn.disabled = true;
       showToast(getT().updateChecking);
       try {
-        const res = await apiFetch('/api/check-update', { method: 'GET' });
+        const res = await apiFetch('/api/check-update?force=1', { method: 'GET' });
         const data = await res.json();
         const t = getT();
         if (!res.ok || !data?.ok) {
@@ -3633,23 +4459,53 @@
     }
 
     async function triggerSelfUpdate() {
+      if (isUpgradingNow) return;
+      const t = getT();
+      const canAuto = Boolean(lastUpdateCheck?.canAutoUpdate ?? lastStatus?.update?.canAutoUpdate);
+      const releaseUrl = lastUpdateCheck?.releaseUrl || lastStatus?.update?.releaseUrl || 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
+      if (!canAuto) {
+        const mode = lastUpdateCheck?.updateMode || lastStatus?.update?.updateMode;
+        showToast(mode === 'dirty_git' ? t.upgradeDirtyGit : t.upgradeManual);
+        try {
+          window.open(releaseUrl, '_blank', 'noopener,noreferrer');
+        } catch {}
+        return;
+      }
+
+      isUpgradingNow = true;
       const btn = document.getElementById('btn-self-update');
       if (btn) btn.disabled = true;
-      showToast(getT().updateRunning);
+      renderHeaderUpgradePill();
+      showToast(t.updateRunning);
       try {
-        const res = await apiFetch('/api/self-update', { method: 'POST', body: '{}' });
+        const res = await apiFetch('/api/self-update', {
+          method: 'POST',
+          body: JSON.stringify({ targetTag: lastUpdateCheck?.latestTag || '' }),
+        });
         const data = await res.json();
-        const t = getT();
         if (!res.ok || !data?.ok) {
+          if (data?.reason === 'dirty_worktree') {
+            showToast(t.upgradeDirtyGit);
+            try { window.open(releaseUrl, '_blank', 'noopener,noreferrer'); } catch {}
+            return;
+          }
           throw new Error(data?.error || data?.reason || 'Error');
         }
-        lastUpdateCheck = { hasUpdate: false, currentVersion: data.version };
-        showToast(t.updateDone(data.version || ''));
+        const nextVer = data.version || lastUpdateCheck?.latestVersion || '';
+        lastUpdateCheck = { hasUpdate: false, currentVersion: nextVer };
+        showToast(t.upgradeReloading(nextVer));
         await refreshStatus();
+        setTimeout(() => {
+          try {
+            window.location.reload();
+          } catch {}
+        }, 900);
       } catch (err) {
         showToast(getT().updateFail(err.message));
       } finally {
+        isUpgradingNow = false;
         if (btn) btn.disabled = false;
+        renderHeaderUpgradePill();
       }
     }
 
@@ -3677,8 +4533,10 @@
     }
 
     // Event Bindings
-    document.getElementById('tab-btn-overview').addEventListener('click', () => setActiveTab('overview'));
+    document.getElementById('tab-btn-chat').addEventListener('click', () => setActiveTab('chat'));
+    document.getElementById('tab-btn-tools').addEventListener('click', () => setActiveTab('tools'));
     document.getElementById('tab-btn-settings').addEventListener('click', () => setActiveTab('settings'));
+    document.getElementById('btn-header-upgrade')?.addEventListener('click', triggerSelfUpdate);
 
     const updateSecEl = document.getElementById('update-section');
     const updateHeadEl = document.getElementById('update-section-head');
@@ -3770,8 +4628,9 @@
     document.getElementById('btn-reset').addEventListener('click', () => postAction('/api/reset', 'btnReset'));
     document.getElementById('btn-refresh').addEventListener('click', refreshStatus);
 
-    // ── Overview Extras: Live Running Tasks & Custom Scripts Runner ──
+    // ── Live Activity & Custom Scripts ──
     let liveTasksState = { available: true, running: [], recent: [], checkedAt: null, source: '' };
+    const expandedLiveSubagents = new Set();
     let customScripts = [];
     const scriptRunOutputs = new Map();
     const scriptRunningIds = new Set();
@@ -3779,13 +4638,18 @@
     function getOverviewExtrasCopy(lang) {
       if (lang === 'en') {
         return {
-          liveTitle: '📡 Live Activity',
+          liveTitle: 'Activity',
           liveIdle: 'Idle',
           liveRunningBadge: (n) => `${n} running`,
           liveRunningTag: 'Running',
           liveCancellingTag: 'Stopping',
-          liveIdleTag: 'Recent',
-          liveSubagents: (n) => `${n} subagent${n > 1 ? 's' : ''}`,
+          liveIdleTag: 'Idle',
+          liveMainRole: 'Main',
+          liveSubToggle: (n) => `Subagents (${n})`,
+          liveSubPrefix: 'Sub',
+          liveSwarmPrefix: 'Swarm',
+          liveSubState: { running: 'Running', cancelling: 'Stopping', done: 'Done', stopped: 'Stopped', error: 'Error' },
+          liveStepShort: (n) => `${n} steps`,
           liveNoRunning: 'No active agent turns right now',
           liveUnavailable: 'Live conversation API unavailable (will retry)',
           liveRefresh: 'Refresh',
@@ -3819,13 +4683,18 @@
       }
       if (lang === 'ja') {
         return {
-          liveTitle: '📡 実行中タスク',
+          liveTitle: '実行ステータス',
           liveIdle: '待機中',
           liveRunningBadge: (n) => `${n} 件実行中`,
           liveRunningTag: '実行中',
           liveCancellingTag: '停止中',
-          liveIdleTag: '最近',
-          liveSubagents: (n) => `サブエージェント ${n}`,
+          liveIdleTag: '待機中',
+          liveMainRole: '主',
+          liveSubToggle: (n) => `サブ (${n})`,
+          liveSubPrefix: '子',
+          liveSwarmPrefix: '蜂',
+          liveSubState: { running: '実行中', cancelling: '停止中', done: '完了', stopped: '終了', error: 'エラー' },
+          liveStepShort: (n) => `${n} 歩`,
           liveNoRunning: '現在実行中のタスクはありません',
           liveUnavailable: '会話ステータス API を取得できませんでした',
           liveRefresh: '更新',
@@ -3859,13 +4728,20 @@
       }
       const isTrad = lang === 'zh-TW' || lang === 'yue';
       return {
-        liveTitle: isTrad ? '📡 即時運行狀態' : '📡 实时运行状态',
+        liveTitle: isTrad ? '運行狀態' : '运行状态',
         liveIdle: isTrad ? '空閒' : '空闲',
         liveRunningBadge: (n) => (isTrad ? `${n} 個運行中` : `${n} 个运行中`),
         liveRunningTag: isTrad ? '運行中' : '运行中',
         liveCancellingTag: isTrad ? '停止中' : '停止中',
-        liveIdleTag: isTrad ? '最近' : '最近',
-        liveSubagents: (n) => (isTrad ? `+${n} 子代理` : `+${n} 子智能体`),
+        liveIdleTag: isTrad ? '空閒' : '空闲',
+        liveMainRole: '主',
+        liveSubToggle: (n) => (isTrad ? `子代理 (${n})` : `子代理 (${n})`),
+        liveSubPrefix: '子',
+        liveSwarmPrefix: '蜂',
+        liveSubState: isTrad
+          ? { running: '運行中', cancelling: '停止中', done: '已完成', stopped: '已終止', error: '出錯' }
+          : { running: '运行中', cancelling: '停止中', done: '已完成', stopped: '已终止', error: '出错' },
+        liveStepShort: (n) => (isTrad ? `${n} 步` : `${n} 步`),
         liveNoRunning: isTrad ? '目前沒有正在運行的任務' : '当前没有正在运行的任务',
         liveUnavailable: isTrad ? '暫時無法讀取會話狀態，稍後自動重試' : '暂时无法读取会话状态，稍后自动重试',
         liveRefresh: isTrad ? '重新整理' : '刷新',
@@ -3917,17 +4793,10 @@
     function renderLiveTasksCard() {
       const lang = currentConfig?.language || 'zh-CN';
       const c = getOverviewExtrasCopy(lang);
-      const sec = document.getElementById('live-tasks-section');
-      const head = document.getElementById('live-tasks-head');
-      if (sec && head) {
-        const isCollapsed = collapsedGroups.has('liveTasks');
-        sec.classList.toggle('is-collapsed', isCollapsed);
-        head.setAttribute('aria-expanded', String(!isCollapsed));
-      }
       const titleEl = document.getElementById('live-tasks-title');
       if (titleEl) titleEl.textContent = c.liveTitle;
       const refBtn = document.getElementById('btn-live-tasks-refresh');
-      if (refBtn) refBtn.textContent = c.liveRefresh;
+      if (refBtn) refBtn.title = c.liveRefresh;
 
       const running = Array.isArray(liveTasksState.running) ? liveTasksState.running : [];
       const recent = Array.isArray(liveTasksState.recent) ? liveTasksState.recent : [];
@@ -3938,175 +4807,250 @@
       }
 
       const listEl = document.getElementById('live-tasks-list');
-      if (listEl) {
-        listEl.innerHTML = '';
-        if (!liveTasksState.available) {
-          const empty = document.createElement('div');
-          empty.className = 'live-task-empty';
-          empty.textContent = c.liveUnavailable;
-          listEl.appendChild(empty);
-        } else {
-          const formatActivity = (act, runState) => {
-            if (runState === 'RUN_STATE_CANCELLING') return { tag: c.liveCancellingTag, cls: 'is-waiting' };
-            const kind = act?.kind || 'running';
-            const mapZh = {
-              thinking: ['推理思考中', 'is-thinking'],
-              responding: ['正在回复', ''],
-              reading_file: ['读取文件中', ''],
-              editing_file: ['编辑代码中', ''],
-              running_command: ['执行命令中', ''],
-              searching: ['检索代码中', ''],
-              web_search: ['联网检索中', ''],
-              subagent: ['子智能体运行', 'is-thinking'],
-              mcp_tool: ['调用工具中', ''],
-              waiting: ['等待确认', 'is-waiting'],
-              tool: ['调用工具中', ''],
-              running: [c.liveRunningTag, ''],
-            };
-            const mapEn = {
-              thinking: ['Thinking', 'is-thinking'],
-              responding: ['Responding', ''],
-              reading_file: ['Reading file', ''],
-              editing_file: ['Editing file', ''],
-              running_command: ['Running cmd', ''],
-              searching: ['Searching', ''],
-              web_search: ['Web search', ''],
-              subagent: ['Subagent', 'is-thinking'],
-              mcp_tool: ['MCP tool', ''],
-              waiting: ['Needs input', 'is-waiting'],
-              tool: ['Running tool', ''],
-              running: [c.liveRunningTag, ''],
-            };
-            const mapJa = {
-              thinking: ['推論中', 'is-thinking'],
-              responding: ['応答中', ''],
-              reading_file: ['ファイル読込', ''],
-              editing_file: ['コード編集', ''],
-              running_command: ['コマンド実行', ''],
-              searching: ['コード検索', ''],
-              web_search: ['Web 検索', ''],
-              subagent: ['サブエージェント', 'is-thinking'],
-              mcp_tool: ['MCP 実行', ''],
-              waiting: ['確認待ち', 'is-waiting'],
-              tool: ['ツール実行', ''],
-              running: [c.liveRunningTag, ''],
-            };
-            const tbl = lang === 'en' ? mapEn : lang === 'ja' ? mapJa : mapZh;
-            const pair = tbl[kind] || tbl.running;
-            return { tag: pair[0], cls: pair[1] };
-          };
+      if (!listEl) return;
+      listEl.innerHTML = '';
 
-          const formatStepElapsed = (iso) => {
-            if (!iso) return '';
-            const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-            if (!Number.isFinite(sec)) return '';
-            if (sec < 60) return `${sec}s`;
-            return `${Math.floor(sec / 60)}m ${sec % 60}s`;
-          };
-
-          const renderItem = (item, isRun) => {
-            const row = document.createElement('div');
-            row.className = `live-task-row${isRun ? ' is-running' : ''}`;
-
-            const top = document.createElement('div');
-            top.className = 'live-task-top';
-
-            const left = document.createElement('div');
-            left.className = 'live-task-left';
-            const actInfo = isRun ? formatActivity(item.activity, item.runState) : { tag: c.liveIdle, cls: '' };
-            const dot = document.createElement('span');
-            dot.className = `live-dot-pulse${
-              item.runState === 'RUN_STATE_CANCELLING'
-                ? ' is-cancelling'
-                : !isRun
-                ? ' is-idle'
-                : actInfo.cls
-                ? ' ' + actInfo.cls
-                : ''
-            }`;
-            const title = document.createElement('div');
-            title.className = 'live-task-title';
-            title.textContent = item.title || 'Conversation';
-            title.title = item.title || '';
-            left.appendChild(dot);
-            left.appendChild(title);
-
-            const tag = document.createElement('span');
-            tag.className = `live-task-tag${actInfo.cls ? ' ' + actInfo.cls : ''}`;
-            tag.textContent = actInfo.tag;
-
-            top.appendChild(left);
-            top.appendChild(tag);
-            row.appendChild(top);
-
-            const metaParts = [];
-            if (isRun) {
-              if (item.stepCount > 0) {
-                metaParts.push(lang === 'en' ? `Step ${item.stepCount}` : lang === 'ja' ? `${item.stepCount} ステップ` : `第 ${item.stepCount} 步`);
-              }
-              if (item.activity?.startedAt) {
-                const elap = formatStepElapsed(item.activity.startedAt);
-                if (elap) metaParts.push(elap);
-              }
-              if (item.activeSubagentCount > 0) {
-                metaParts.push(c.liveSubagents(item.activeSubagentCount));
-              }
-            } else {
-              const rel = formatRelTimeShort(item.updateTime, lang);
-              if (rel) metaParts.push(rel);
-            }
-
-            if (metaParts.length > 0) {
-              const meta = document.createElement('div');
-              meta.className = 'live-task-meta';
-              metaParts.forEach((part, idx) => {
-                if (idx > 0) {
-                  const sep = document.createElement('span');
-                  sep.className = 'live-task-meta-sep';
-                  sep.textContent = '·';
-                  meta.appendChild(sep);
-                }
-                const span = document.createElement('span');
-                span.className = 'live-task-meta-item';
-                span.textContent = part;
-                meta.appendChild(span);
-              });
-              row.appendChild(meta);
-            }
-
-            if (isRun && item.activity?.detail) {
-              const detail = document.createElement('div');
-              detail.className = 'live-task-detail';
-              detail.textContent = item.activity.detail;
-              detail.title = item.activity.detail;
-              row.appendChild(detail);
-            }
-
-            listEl.appendChild(row);
-          };
-
-          if (running.length > 0) {
-            for (const item of running) renderItem(item, true);
-          } else if (recent.length > 0) {
-            renderItem(recent[0], false);
-          } else {
-            const empty = document.createElement('div');
-            empty.className = 'live-task-empty';
-            empty.textContent = c.liveNoRunning;
-            listEl.appendChild(empty);
-          }
-        }
+      if (!liveTasksState.available) {
+        const empty = document.createElement('div');
+        empty.className = 'cd-empty';
+        empty.textContent = c.liveUnavailable;
+        listEl.appendChild(empty);
+        return;
       }
 
-      const updEl = document.getElementById('live-tasks-updated');
-      if (updEl) {
-        if (liveTasksState.checkedAt) {
-          const d = new Date(liveTasksState.checkedAt);
-          const pad = (n) => String(n).padStart(2, '0');
-          updEl.textContent = c.liveUpdatedAt(`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
-        } else {
-          updEl.textContent = '—';
+      const formatActivity = (act, runState) => {
+        if (runState === 'RUN_STATE_CANCELLING') return { tag: c.liveCancellingTag, cls: 'is-waiting' };
+        const kind = act?.kind || 'running';
+        const mapZh = {
+          thinking: ['推理思考', 'is-thinking'],
+          responding: ['生成回复', ''],
+          reading_file: ['读取文件', ''],
+          editing_file: ['编辑代码', ''],
+          running_command: ['执行命令', ''],
+          searching: ['检索代码', ''],
+          web_search: ['联网检索', ''],
+          subagent: ['调用子代理', 'is-thinking'],
+          mcp_tool: ['调用 MCP', ''],
+          waiting: ['等待确认', 'is-waiting'],
+          tool: ['调用工具', ''],
+          running: [c.liveRunningTag, ''],
+        };
+        const mapEn = {
+          thinking: ['Thinking', 'is-thinking'],
+          responding: ['Responding', ''],
+          reading_file: ['Reading', ''],
+          editing_file: ['Editing', ''],
+          running_command: ['Running', ''],
+          searching: ['Searching', ''],
+          web_search: ['Web search', ''],
+          subagent: ['Subagent', 'is-thinking'],
+          mcp_tool: ['MCP tool', ''],
+          waiting: ['Needs input', 'is-waiting'],
+          tool: ['Tool call', ''],
+          running: [c.liveRunningTag, ''],
+        };
+        const mapJa = {
+          thinking: ['推論中', 'is-thinking'],
+          responding: ['応答中', ''],
+          reading_file: ['読込中', ''],
+          editing_file: ['編集中', ''],
+          running_command: ['コマンド実行', ''],
+          searching: ['検索中', ''],
+          web_search: ['Web検索', ''],
+          subagent: ['サブ起動', 'is-thinking'],
+          mcp_tool: ['MCP実行', ''],
+          waiting: ['確認待ち', 'is-waiting'],
+          tool: ['ツール実行', ''],
+          running: [c.liveRunningTag, ''],
+        };
+        const tbl = lang === 'en' ? mapEn : lang === 'ja' ? mapJa : mapZh;
+        const pair = tbl[kind] || tbl.running;
+        return { tag: pair[0], cls: pair[1] };
+      };
+
+      const formatStepElapsed = (iso) => {
+        if (!iso) return '';
+        const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+        if (!Number.isFinite(sec)) return '';
+        if (sec < 60) return `${sec}s`;
+        return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+      };
+
+      const renderItem = (item, isRun) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'cd-live-item';
+
+        const top = document.createElement('div');
+        top.className = 'cd-live-top';
+
+        const left = document.createElement('div');
+        left.className = 'cd-live-left';
+        const actInfo = isRun ? formatActivity(item.activity, item.runState) : { tag: c.liveIdleTag, cls: '' };
+        const dot = document.createElement('span');
+        dot.className = `live-dot-pulse${
+          item.runState === 'RUN_STATE_CANCELLING'
+            ? ' is-cancelling'
+            : !isRun
+            ? ' is-idle'
+            : actInfo.cls
+            ? ' ' + actInfo.cls
+            : ''
+        }`;
+        const title = document.createElement('span');
+        title.className = 'cd-live-title';
+        title.textContent = item.title || 'Conversation';
+        title.title = item.title || '';
+        left.appendChild(dot);
+        left.appendChild(title);
+
+        const right = document.createElement('div');
+        right.className = 'cd-live-right';
+
+        const subList = Array.isArray(item.subagents) ? item.subagents : [];
+        const isSubsOpen = expandedLiveSubagents.has(item.id);
+        if (subList.length > 0) {
+          const subBtn = document.createElement('button');
+          subBtn.type = 'button';
+          subBtn.className = 'cd-sub-toggle';
+          subBtn.setAttribute('aria-expanded', String(isSubsOpen));
+          const lbl = document.createElement('span');
+          lbl.textContent = c.liveSubToggle(subList.length);
+          const chev = document.createElement('span');
+          chev.className = 'cd-chev';
+          chev.setAttribute('aria-hidden', 'true');
+          chev.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+          subBtn.appendChild(lbl);
+          subBtn.appendChild(chev);
+          subBtn.addEventListener('click', () => {
+            if (expandedLiveSubagents.has(item.id)) expandedLiveSubagents.delete(item.id);
+            else expandedLiveSubagents.add(item.id);
+            renderLiveTasksCard();
+          });
+          right.appendChild(subBtn);
         }
+
+        const elapText = isRun
+          ? formatStepElapsed(item.activity?.startedAt) || (item.stepCount > 0 ? c.liveStepShort(item.stepCount) : '')
+          : formatRelTimeShort(item.updateTime, lang);
+        if (elapText) {
+          const elap = document.createElement('span');
+          elap.className = 'cd-live-elapsed';
+          elap.textContent = elapText;
+          right.appendChild(elap);
+        }
+
+        top.appendChild(left);
+        top.appendChild(right);
+        wrap.appendChild(top);
+
+        if (isRun) {
+          const actRow = document.createElement('div');
+          actRow.className = 'cd-live-activity';
+
+          const rolePill = document.createElement('span');
+          rolePill.className = 'cd-role-pill is-main';
+          rolePill.textContent = c.liveMainRole;
+          actRow.appendChild(rolePill);
+
+          const actSpan = document.createElement('span');
+          actSpan.className = `cd-live-action${actInfo.cls ? ' ' + actInfo.cls : ''}`;
+          actSpan.textContent = actInfo.tag;
+          actRow.appendChild(actSpan);
+
+          if (item.activity?.batch && item.activity.batch.total >= 2) {
+            const bp = document.createElement('span');
+            bp.className = 'cd-batch-pill';
+            bp.textContent = `[${item.activity.batch.done}/${item.activity.batch.total}]`;
+            actRow.appendChild(bp);
+          }
+
+          if (item.activity?.detail) {
+            const det = document.createElement('span');
+            det.className = 'cd-live-detail';
+            det.textContent = `· ${item.activity.detail}`;
+            det.title = item.activity.detail;
+            actRow.appendChild(det);
+          }
+          wrap.appendChild(actRow);
+
+          if (item.stepCount > 0) {
+            const metaRow = document.createElement('div');
+            metaRow.className = 'cd-live-meta-row';
+            metaRow.textContent =
+              lang === 'en'
+                ? `Step ${item.stepCount}`
+                : lang === 'ja'
+                ? `${item.stepCount} ステップ`
+                : `第 ${item.stepCount} 步`;
+            wrap.appendChild(metaRow);
+          }
+        } else if (item.stepCount > 0) {
+          const metaRow = document.createElement('div');
+          metaRow.className = 'cd-live-meta-row';
+          metaRow.textContent =
+            lang === 'en'
+              ? `${c.liveIdleTag} · ${item.stepCount} steps`
+              : lang === 'ja'
+              ? `${c.liveIdleTag} · ${item.stepCount} ステップ`
+              : `${c.liveIdleTag} · 共 ${item.stepCount} 步`;
+          wrap.appendChild(metaRow);
+        }
+
+        if (subList.length > 0 && isSubsOpen) {
+          const box = document.createElement('div');
+          box.className = 'cd-sub-list';
+          let subIdx = 0;
+          let swarmIdx = 0;
+          for (const sub of subList) {
+            const sRow = document.createElement('div');
+            sRow.className = 'cd-sub-row';
+
+            const isSwarm = sub.kind === 'swarm';
+            if (isSwarm) swarmIdx += 1;
+            else subIdx += 1;
+            const num = isSwarm ? swarmIdx : subIdx;
+            const colorIdx = (isSwarm ? swarmIdx + 1 : subIdx - 1) % 5;
+
+            const badge = document.createElement('span');
+            badge.className = `cd-sub-badge c${colorIdx}`;
+            badge.textContent = `${isSwarm ? c.liveSwarmPrefix : c.liveSubPrefix}${num}`;
+
+            const name = document.createElement('span');
+            name.className = 'cd-sub-name';
+            name.textContent = sub.title || 'Subagent';
+            name.title = sub.title || '';
+
+            const st = document.createElement('span');
+            st.className = `cd-sub-state${
+              sub.state === 'running' ? ' is-running' : sub.state === 'error' ? ' is-error' : ''
+            }`;
+            st.textContent = c.liveSubState[sub.state] || c.liveSubState.done;
+
+            const steps = document.createElement('span');
+            steps.className = 'cd-sub-steps';
+            steps.textContent = sub.stepCount > 0 ? c.liveStepShort(sub.stepCount) : '—';
+
+            sRow.appendChild(badge);
+            sRow.appendChild(name);
+            sRow.appendChild(st);
+            sRow.appendChild(steps);
+            box.appendChild(sRow);
+          }
+          wrap.appendChild(box);
+        }
+
+        listEl.appendChild(wrap);
+      };
+
+      if (running.length > 0) {
+        for (const item of running) renderItem(item, true);
+      } else if (recent.length > 0) {
+        renderItem(recent[0], false);
+      } else {
+        const empty = document.createElement('div');
+        empty.className = 'cd-empty';
+        empty.textContent = c.liveNoRunning;
+        listEl.appendChild(empty);
       }
     }
 
@@ -4388,11 +5332,515 @@
       }
     }
 
-    const liveTasksSecEl = document.getElementById('live-tasks-section');
-    const liveTasksHeadEl = document.getElementById('live-tasks-head');
-    if (liveTasksSecEl && liveTasksHeadEl) {
-      liveTasksHeadEl.addEventListener('click', () => toggleGroupCollapse('liveTasks', liveTasksSecEl, liveTasksHeadEl));
+    // ── Claude Desktop-Style Conversation Inspector (Chat Tab) ──
+    const CTX_SEGMENT_COLORS = {
+      messages: '#2f7cf6',
+      mcpTools: '#e86a33',
+      systemTools: '#10a37f',
+      systemPrompt: '#e09f1f',
+      skills: '#7c8594',
+      rules: '#8b5cf6',
+      subagents: '#06b6d4',
+      plugins: '#ec4899',
+      other: '#9ca3af',
+    };
+
+    let activeConversationId = (() => {
+      try {
+        return new URLSearchParams(window.location.search).get('conversationId') || '';
+      } catch {
+        return '';
+      }
+    })();
+
+    let inspectorState = null;
+    const inspectorExpanded = { mcp: false, skills: false, connectors: false };
+
+    function getInspectorCopy(lang) {
+      if (lang === 'en') {
+        return {
+          envHeading: 'Environment',
+          hostLocal: 'This computer',
+          ctxHeading: 'Context',
+          usedPct: (p) => `${p}% used`,
+          freeSpace: 'Free space',
+          noContext: 'No context data yet',
+          mcpTools: 'MCP tools',
+          skillsRules: 'Skills & Rules',
+          connectors: 'Connectors',
+          connectedCount: (n) => `${n} connected`,
+          outputsHeading: 'Outputs',
+          outputsEmpty: 'No output files in this chat yet',
+          copyPath: 'Copy',
+          copiedPath: 'Path copied',
+          openFail: 'Could not open file',
+          toolCount: (n) => `${n} ${n === 1 ? 'tool' : 'tools'}`,
+          pluginHost: 'Plugin',
+          ruleTag: 'Rule',
+          skillTag: 'Skill',
+          noneItems: 'None',
+          refreshTip: 'Refresh',
+          seg: {
+            messages: 'Messages',
+            mcpTools: 'MCP tools',
+            systemTools: 'System tools',
+            systemPrompt: 'System prompt',
+            skills: 'Skills',
+            rules: 'Rules',
+            subagents: 'Subagents',
+            plugins: 'Plugins',
+            other: 'Other',
+          },
+        };
+      }
+      if (lang === 'ja') {
+        return {
+          envHeading: '環境',
+          hostLocal: 'このコンピューター',
+          ctxHeading: 'コンテキスト',
+          usedPct: (p) => `${p}% 使用`,
+          freeSpace: '空き容量',
+          noContext: 'コンテキストデータなし',
+          mcpTools: 'MCP ツール',
+          skillsRules: 'スキル・ルール',
+          connectors: 'コネクター',
+          connectedCount: (n) => `${n} 件接続済み`,
+          outputsHeading: '出力ファイル',
+          outputsEmpty: 'この会話の出力ファイルはまだありません',
+          copyPath: 'コピー',
+          copiedPath: 'パスをコピーしました',
+          openFail: 'ファイルを開けませんでした',
+          toolCount: (n) => `${n} ツール`,
+          pluginHost: 'プラグイン',
+          ruleTag: 'ルール',
+          skillTag: 'スキル',
+          noneItems: 'なし',
+          refreshTip: '更新',
+          seg: {
+            messages: 'メッセージ',
+            mcpTools: 'MCP ツール',
+            systemTools: 'システムツール',
+            systemPrompt: 'システムプロンプト',
+            skills: 'スキル',
+            rules: 'ルール',
+            subagents: 'サブエージェント',
+            plugins: 'プラグイン',
+            other: 'その他',
+          },
+        };
+      }
+      const isTrad = lang === 'zh-TW' || lang === 'yue';
+      return {
+        envHeading: isTrad ? '環境' : '环境',
+        hostLocal: isTrad ? '本機電腦' : '本机',
+        ctxHeading: isTrad ? '上下文' : '上下文',
+        usedPct: (p) => (isTrad ? `已用 ${p}%` : `已用 ${p}%`),
+        freeSpace: isTrad ? '剩餘空間' : '剩余空间',
+        noContext: isTrad ? '暫無上下文資料' : '暂无上下文数据',
+        mcpTools: isTrad ? 'MCP 工具' : 'MCP 工具',
+        skillsRules: isTrad ? '技能與規則' : '技能与规则',
+        connectors: isTrad ? '連接器' : '连接器',
+        connectedCount: (n) => (isTrad ? `${n} 個已連接` : `${n} 个已连接`),
+        outputsHeading: isTrad ? '產出檔案' : '产物文件',
+        outputsEmpty: isTrad ? '目前對話尚未產生檔案' : '当前对话暂无产出文件',
+        copyPath: isTrad ? '複製' : '复制',
+        copiedPath: isTrad ? '路徑已複製' : '路径已复制',
+        openFail: isTrad ? '無法開啟檔案' : '无法打开文件',
+        toolCount: (n) => (isTrad ? `${n} 個工具` : `${n} 个工具`),
+        pluginHost: isTrad ? '外掛' : '插件',
+        ruleTag: isTrad ? '規則' : '规则',
+        skillTag: isTrad ? '技能' : '技能',
+        noneItems: isTrad ? '無' : '无',
+        refreshTip: isTrad ? '重新整理' : '刷新',
+        seg: {
+          messages: isTrad ? '對話訊息' : '对话消息',
+          mcpTools: isTrad ? 'MCP 工具' : 'MCP 工具',
+          systemTools: isTrad ? '系統工具' : '系统工具',
+          systemPrompt: isTrad ? '系統提示詞' : '系统提示词',
+          skills: isTrad ? '技能' : '技能',
+          rules: isTrad ? '規則' : '规则',
+          subagents: isTrad ? '子代理' : '子智能体',
+          plugins: isTrad ? '外掛' : '插件',
+          other: isTrad ? '其他' : '其他',
+        },
+      };
     }
+
+    function formatCtxTokens(n) {
+      const v = Number(n || 0);
+      if (v >= 1000000) {
+        const m = v / 1000000;
+        return Number.isInteger(m) ? `${m}M` : `${m.toFixed(1).replace(/\.0$/, '')}M`;
+      }
+      if (v >= 1000) {
+        const k = v / 1000;
+        return k >= 100 ? `${Math.round(k)}K` : `${k.toFixed(1).replace(/\.0$/, '')}K`;
+      }
+      return String(Math.round(v));
+    }
+
+    function formatCtxPct(p) {
+      const v = Number(p || 0);
+      if (v <= 0) return '0%';
+      if (v < 0.1) return '<0.1%';
+      return `${v.toFixed(1)}%`;
+    }
+
+    function shortenParentPath(p) {
+      const s = String(p || '').trim();
+      if (!s || s.length <= 28) return s;
+      const sep = s.includes('\\') ? '\\' : '/';
+      const parts = s.split(/[\\/]/).filter(Boolean);
+      if (parts.length <= 2) return s;
+      return `${parts[0]}${sep}…${sep}${parts[parts.length - 1]}`;
+    }
+
+    function renderConversationInspector() {
+      const lang = currentConfig?.language || 'zh-CN';
+      const ic = getInspectorCopy(lang);
+      const data = inspectorState;
+
+      const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+
+      setText('cd-env-heading', ic.envHeading);
+      setText('cd-env-host', ic.hostLocal);
+      setText('cd-ctx-heading', ic.ctxHeading);
+      setText('cd-mcp-label', ic.mcpTools);
+      setText('cd-skills-label', ic.skillsRules);
+      setText('cd-conn-label', ic.connectors);
+      setText('cd-outputs-heading', ic.outputsHeading);
+      const refBtn = document.getElementById('btn-inspector-refresh');
+      if (refBtn) refBtn.title = ic.refreshTip;
+
+      // Environment workspace
+      const wsRow = document.getElementById('cd-env-ws-row');
+      const wsTip = document.getElementById('cd-env-ws-tip');
+      const wsNameEl = document.getElementById('cd-env-ws-name');
+      const wsPathEl = document.getElementById('cd-env-ws-path');
+      const branchEl = document.getElementById('cd-env-branch');
+      const env = data?.environment || {};
+      if (wsRow) {
+        if (env.workspaceName) {
+          wsRow.hidden = false;
+          if (wsNameEl) wsNameEl.textContent = env.workspaceName;
+          if (wsPathEl) wsPathEl.textContent = env.parentPath ? ` · ${shortenParentPath(env.parentPath)}` : '';
+          if (wsTip) wsTip.title = env.fullPath || env.workspaceName;
+          if (branchEl) {
+            if (env.branch) {
+              branchEl.hidden = false;
+              branchEl.textContent = env.branch;
+              branchEl.title = `Git: ${env.branch}`;
+            } else {
+              branchEl.hidden = true;
+            }
+          }
+        } else {
+          wsRow.hidden = true;
+        }
+      }
+
+      // Context breakdown
+      const ctx = data?.context || {};
+      const modelEl = document.getElementById('cd-ctx-model');
+      if (modelEl) {
+        modelEl.textContent = ctx.modelName || '';
+        modelEl.title = ctx.modelName || '';
+      }
+      const pctEl = document.getElementById('cd-ctx-pct');
+      const ratioEl = document.getElementById('cd-ctx-ratio');
+      const barEl = document.getElementById('cd-ctx-bar');
+      const rowsEl = document.getElementById('cd-ctx-rows');
+
+      if (ctx.available && ctx.maxTokens > 0) {
+        const pctNum = Number(ctx.usedPct || 0);
+        const pctStr = pctNum >= 10 ? pctNum.toFixed(1).replace(/\.0$/, '') : pctNum.toFixed(1);
+        if (pctEl) pctEl.textContent = ic.usedPct(pctStr);
+        if (ratioEl) ratioEl.textContent = `${formatCtxTokens(ctx.usedTokens)} / ${formatCtxTokens(ctx.maxTokens)}`;
+        if (barEl) {
+          barEl.innerHTML = '';
+          const segs = Array.isArray(ctx.segments) ? ctx.segments : [];
+          for (const seg of segs) {
+            if (!(seg.tokens > 0)) continue;
+            const div = document.createElement('div');
+            div.className = 'cd-ctx-seg';
+            div.style.width = `${Math.max(0.4, Math.min(100, seg.pct || 0))}%`;
+            div.style.background = CTX_SEGMENT_COLORS[seg.key] || CTX_SEGMENT_COLORS.other;
+            div.title = `${ic.seg[seg.key] || seg.key}: ${formatCtxTokens(seg.tokens)} (${formatCtxPct(seg.pct)})`;
+            barEl.appendChild(div);
+          }
+        }
+        if (rowsEl) {
+          rowsEl.innerHTML = '';
+          const segs = Array.isArray(ctx.segments) ? ctx.segments : [];
+          for (const seg of segs) {
+            if (!(seg.tokens > 0)) continue;
+            const row = document.createElement('div');
+            row.className = 'cd-ctx-row';
+            const left = document.createElement('div');
+            left.className = 'cd-ctx-label-wrap';
+            const sw = document.createElement('span');
+            sw.className = 'cd-swatch';
+            sw.style.background = CTX_SEGMENT_COLORS[seg.key] || CTX_SEGMENT_COLORS.other;
+            const lbl = document.createElement('span');
+            lbl.className = 'cd-ctx-label';
+            lbl.textContent = ic.seg[seg.key] || seg.key;
+            left.appendChild(sw);
+            left.appendChild(lbl);
+
+            const val = document.createElement('span');
+            val.className = 'cd-ctx-val';
+            val.textContent = formatCtxTokens(seg.tokens);
+
+            const p = document.createElement('span');
+            p.className = 'cd-ctx-p';
+            p.textContent = formatCtxPct(seg.pct);
+
+            row.appendChild(left);
+            row.appendChild(val);
+            row.appendChild(p);
+            rowsEl.appendChild(row);
+          }
+
+          // Free space row
+          const freeRow = document.createElement('div');
+          freeRow.className = 'cd-ctx-row is-free';
+          const fLeft = document.createElement('div');
+          fLeft.className = 'cd-ctx-label-wrap';
+          const fSw = document.createElement('span');
+          fSw.className = 'cd-swatch';
+          fSw.style.background = 'var(--control-hover)';
+          fSw.style.border = '1px solid var(--border-col)';
+          const fLbl = document.createElement('span');
+          fLbl.className = 'cd-ctx-label';
+          fLbl.textContent = ic.freeSpace;
+          fLeft.appendChild(fSw);
+          fLeft.appendChild(fLbl);
+
+          const fVal = document.createElement('span');
+          fVal.className = 'cd-ctx-val';
+          fVal.textContent = formatCtxTokens(ctx.freeTokens);
+
+          const fPct = document.createElement('span');
+          fPct.className = 'cd-ctx-p';
+          fPct.textContent = formatCtxPct(ctx.freePct);
+
+          freeRow.appendChild(fLeft);
+          freeRow.appendChild(fVal);
+          freeRow.appendChild(fPct);
+          rowsEl.appendChild(freeRow);
+        }
+      } else {
+        if (pctEl) pctEl.textContent = '—';
+        if (ratioEl) ratioEl.textContent = ic.noContext;
+        if (barEl) barEl.innerHTML = '';
+        if (rowsEl) rowsEl.innerHTML = '';
+      }
+
+      // Expandable MCP tools list
+      const mcpTools = Array.isArray(data?.mcpTools) ? data.mcpTools : [];
+      setText('cd-mcp-count', String(mcpTools.length));
+      const mcpBtn = document.getElementById('cd-mcp-toggle');
+      const mcpList = document.getElementById('cd-mcp-list');
+      if (mcpBtn && mcpList) {
+        mcpBtn.setAttribute('aria-expanded', String(inspectorExpanded.mcp));
+        mcpList.hidden = !inspectorExpanded.mcp;
+        if (inspectorExpanded.mcp) {
+          mcpList.innerHTML = '';
+          if (!mcpTools.length) {
+            const e = document.createElement('div');
+            e.className = 'cd-empty';
+            e.textContent = ic.noneItems;
+            mcpList.appendChild(e);
+          } else {
+            for (const item of mcpTools) {
+              const r = document.createElement('div');
+              r.className = 'cd-expand-item';
+              const n = document.createElement('span');
+              n.className = 'cd-expand-item-name';
+              n.textContent = item.name;
+              const s = document.createElement('span');
+              s.className = 'cd-expand-item-sub';
+              s.textContent = item.server;
+              r.appendChild(n);
+              r.appendChild(s);
+              mcpList.appendChild(r);
+            }
+          }
+        }
+      }
+
+      // Expandable Skills & Rules list
+      const skills = Array.isArray(data?.skills) ? data.skills : [];
+      const rules = Array.isArray(data?.rules) ? data.rules : [];
+      setText('cd-skills-count', String(skills.length + rules.length));
+      const skBtn = document.getElementById('cd-skills-toggle');
+      const skList = document.getElementById('cd-skills-list');
+      if (skBtn && skList) {
+        skBtn.setAttribute('aria-expanded', String(inspectorExpanded.skills));
+        skList.hidden = !inspectorExpanded.skills;
+        if (inspectorExpanded.skills) {
+          skList.innerHTML = '';
+          if (!skills.length && !rules.length) {
+            const e = document.createElement('div');
+            e.className = 'cd-empty';
+            e.textContent = ic.noneItems;
+            skList.appendChild(e);
+          } else {
+            for (const rl of rules) {
+              const r = document.createElement('div');
+              r.className = 'cd-expand-item';
+              const n = document.createElement('span');
+              n.className = 'cd-expand-item-name';
+              n.textContent = rl.name;
+              const s = document.createElement('span');
+              s.className = 'cd-expand-item-sub';
+              s.textContent = ic.ruleTag;
+              r.appendChild(n);
+              r.appendChild(s);
+              skList.appendChild(r);
+            }
+            for (const sk of skills) {
+              const r = document.createElement('div');
+              r.className = 'cd-expand-item';
+              const n = document.createElement('span');
+              n.className = 'cd-expand-item-name';
+              n.textContent = sk.name;
+              const s = document.createElement('span');
+              s.className = 'cd-expand-item-sub';
+              s.textContent = ic.skillTag;
+              r.appendChild(n);
+              r.appendChild(s);
+              skList.appendChild(r);
+            }
+          }
+        }
+      }
+
+      // Connectors
+      const connectors = Array.isArray(data?.connectors) ? data.connectors : [];
+      setText('cd-conn-count', ic.connectedCount(connectors.length));
+      const connBtn = document.getElementById('cd-conn-toggle');
+      const connList = document.getElementById('cd-conn-list');
+      if (connBtn && connList) {
+        connBtn.setAttribute('aria-expanded', String(inspectorExpanded.connectors));
+        connList.hidden = !inspectorExpanded.connectors;
+        if (inspectorExpanded.connectors) {
+          connList.innerHTML = '';
+          if (!connectors.length) {
+            const e = document.createElement('div');
+            e.className = 'cd-empty';
+            e.textContent = ic.noneItems;
+            connList.appendChild(e);
+          } else {
+            for (const cItem of connectors) {
+              const r = document.createElement('div');
+              r.className = 'cd-expand-item';
+              const n = document.createElement('span');
+              n.className = 'cd-expand-item-name';
+              n.textContent = cItem.name;
+              const s = document.createElement('span');
+              s.className = 'cd-expand-item-sub';
+              s.textContent = cItem.toolCount > 0 ? ic.toolCount(cItem.toolCount) : ic.pluginHost;
+              r.appendChild(n);
+              r.appendChild(s);
+              connList.appendChild(r);
+            }
+          }
+        }
+      }
+
+      // Outputs
+      const outputs = Array.isArray(data?.outputs) ? data.outputs : [];
+      const outEl = document.getElementById('cd-outputs-list');
+      if (outEl) {
+        outEl.innerHTML = '';
+        if (!outputs.length) {
+          const e = document.createElement('div');
+          e.className = 'cd-empty';
+          e.textContent = ic.outputsEmpty;
+          outEl.appendChild(e);
+        } else {
+          for (const f of outputs) {
+            const row = document.createElement('div');
+            row.className = 'cd-output-row';
+            row.title = f.path;
+            const main = document.createElement('div');
+            main.className = 'cd-output-main';
+            main.innerHTML = '<svg class="cd-env-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>';
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'cd-output-name';
+            nameSpan.textContent = f.name;
+            main.appendChild(nameSpan);
+
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'script-mini-btn cd-output-copy';
+            copyBtn.textContent = ic.copyPath;
+            copyBtn.addEventListener('click', async (ev) => {
+              ev.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(f.path);
+                showToast(ic.copiedPath);
+              } catch {}
+            });
+
+            row.addEventListener('click', async () => {
+              try {
+                const cid = data?.conversationId || activeConversationId;
+                const res = await apiFetch('/api/open-file', {
+                  method: 'POST',
+                  body: JSON.stringify({ path: f.path, conversationId: cid }),
+                });
+                const out = await res.json();
+                if (!res.ok || !out?.ok) showToast(ic.openFail);
+              } catch {
+                showToast(ic.openFail);
+              }
+            });
+
+            row.appendChild(main);
+            row.appendChild(copyBtn);
+            outEl.appendChild(row);
+          }
+        }
+      }
+    }
+
+    async function loadConversationInspector() {
+      try {
+        const res = await apiFetch('/api/conversation-inspector', {
+          method: 'POST',
+          body: JSON.stringify({ conversationId: activeConversationId }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.ok) {
+          inspectorState = data;
+          renderConversationInspector();
+        }
+      } catch {}
+    }
+
+    document.getElementById('btn-inspector-refresh')?.addEventListener('click', () => {
+      void loadConversationInspector();
+      void loadLiveTasks();
+    });
+    document.getElementById('cd-mcp-toggle')?.addEventListener('click', () => {
+      inspectorExpanded.mcp = !inspectorExpanded.mcp;
+      renderConversationInspector();
+    });
+    document.getElementById('cd-skills-toggle')?.addEventListener('click', () => {
+      inspectorExpanded.skills = !inspectorExpanded.skills;
+      renderConversationInspector();
+    });
+    document.getElementById('cd-conn-toggle')?.addEventListener('click', () => {
+      inspectorExpanded.connectors = !inspectorExpanded.connectors;
+      renderConversationInspector();
+    });
+
     const scriptsSecEl = document.getElementById('scripts-section');
     const scriptsHeadEl = document.getElementById('scripts-head');
     if (scriptsSecEl && scriptsHeadEl) {
@@ -4405,10 +5853,13 @@
 
     renderStaticChrome();
     renderNotifySection({ rebuildCreds: true });
+    renderConversationInspector();
     renderLiveTasksCard();
     renderScriptsCard();
     void refreshStatus();
+    void checkUpdateSilently();
     void loadNotifyConfig({ force: true });
+    void loadConversationInspector();
     void loadLiveTasks();
     void loadScripts();
     setInterval(() => {
@@ -4417,10 +5868,15 @@
       }
     }, 8000);
     setInterval(() => {
-      if (document.visibilityState !== 'hidden' && activeTab === 'overview' && !collapsedGroups.has('liveTasks')) {
+      if (document.visibilityState !== 'hidden' && activeTab === 'chat') {
         void loadLiveTasks();
       }
     }, 2500);
+    setInterval(() => {
+      if (document.visibilityState !== 'hidden' && activeTab === 'chat') {
+        void loadConversationInspector();
+      }
+    }, 5000);
   </script>
 </body>
 </html>
