@@ -107,6 +107,7 @@ const DEFAULT_CONFIG = {
   compactCustomText: '',
   periodicSelector: true,
   orchestratorSwitch: true,
+  pluginPageTranslate: true,
   i18nIgnoreSelectors: [],
   autoRelaunchWithCdp: true,
   exitOnHostClose: false,
@@ -142,6 +143,7 @@ const CONFIG_VALIDATORS = {
   compactPreset: ['empty', 'clean', 'dev', 'custom'],
   periodicSelector: 'boolean',
   orchestratorSwitch: 'boolean',
+  pluginPageTranslate: 'boolean',
   autoRelaunchWithCdp: 'boolean',
   exitOnHostClose: 'boolean',
 };

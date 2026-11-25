@@ -729,28 +729,48 @@
       padding: 2px 0 8px;
     }
     .update-card-body {
-      padding: 11px 13px 12px;
+      padding: 8px 13px 10px;
       display: flex;
       flex-direction: column;
-      gap: 11px;
+      gap: 0;
       border-top: 1px solid var(--divider-col);
     }
     .section.is-collapsed .update-card-body {
       display: none;
     }
+    .update-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 0;
+    }
+    .update-item-row + .update-item-row {
+      border-top: 1px solid var(--divider-col);
+    }
     .update-meta-block {
       display: flex;
       flex-direction: column;
       gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+    .update-row-action {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-shrink: 0;
     }
     .update-meta-k {
-      font-size: 11.5px;
+      font-size: 11px;
       color: var(--muted-fg);
       line-height: 1.3;
     }
     .update-meta-v {
-      font-size: 14.5px;
-      font-weight: 700;
+      font-size: 13.5px;
+      font-weight: 650;
       color: var(--fg);
       line-height: 1.35;
       font-variant-numeric: tabular-nums;
@@ -905,29 +925,35 @@
         </span>
       </button>
       <div class="update-card-body">
-        <div class="update-meta-block">
-          <div class="update-meta-k" id="compat-meta-k">免汉化白名单</div>
-          <div class="update-meta-v" id="compat-meta-v">…</div>
-          <div class="update-meta-sub" id="compat-meta-sub">…</div>
+        <div class="update-item-row">
+          <div class="update-meta-block">
+            <div class="update-meta-k" id="version-meta-k">当前版本</div>
+            <div class="update-meta-v" id="version-meta-v">…</div>
+            <div class="update-meta-sub" id="version-meta-sub">…</div>
+          </div>
+          <div class="update-row-action">
+            <button type="button" class="update-pill-btn" id="btn-check-update">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+              <span id="btn-check-update-lbl"></span>
+            </button>
+            <button type="button" class="update-pill-btn primary" id="btn-self-update" style="display:none">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+              <span id="btn-self-update-lbl"></span>
+            </button>
+          </div>
         </div>
-        <div class="update-meta-block">
-          <div class="update-meta-k" id="version-meta-k">当前版本</div>
-          <div class="update-meta-v" id="version-meta-v">…</div>
-          <div class="update-meta-sub" id="version-meta-sub">…</div>
-        </div>
-        <div class="update-card-actions">
-          <button type="button" class="update-pill-btn" id="btn-sync-compat">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-            <span id="btn-sync-compat-lbl"></span>
-          </button>
-          <button type="button" class="update-pill-btn" id="btn-check-update">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-            <span id="btn-check-update-lbl"></span>
-          </button>
-          <button type="button" class="update-pill-btn primary" id="btn-self-update" style="display:none">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
-            <span id="btn-self-update-lbl"></span>
-          </button>
+        <div class="update-item-row">
+          <div class="update-meta-block">
+            <div class="update-meta-k" id="compat-meta-k">翻译保护名单</div>
+            <div class="update-meta-v" id="compat-meta-v">…</div>
+            <div class="update-meta-sub" id="compat-meta-sub">…</div>
+          </div>
+          <div class="update-row-action">
+            <button type="button" class="update-pill-btn" id="btn-sync-compat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+              <span id="btn-sync-compat-lbl"></span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1187,7 +1213,7 @@
         btnRefresh: '刷新状态',
         btnCheckUpdate: '检查更新',
         btnSelfUpdate: '一键更新',
-        btnSyncCompat: '同步白名单',
+        btnSyncCompat: '同步名单',
         btnOpenRelease: '查看发布页 →',
         updateAvailableTitle: (v) => `发现新版本 v${v}`,
         updateUpToDate: (v) => `当前已是最新版本 (v${v})`,
@@ -1195,9 +1221,9 @@
         updateRunning: '正在拉取更新并刷新窗口…',
         updateDone: (v) => `已更新至 v${v} 并重新注入`,
         updateFail: (e) => `更新检查失败：${e}`,
-        compatSynced: (p, s) => `已同步防汉化白名单（${p} 个插件 · ${s} 条规则）`,
-        compatBundledFallback: (p, s) => `云端白名单尚未发布，已启用内置白名单（${p} 个插件 · ${s} 条规则）`,
-        compatSyncFail: (e) => `白名单同步失败：${e}`,
+        compatSynced: (p, s) => `已同步翻译保护名单（${p} 个插件 · ${s} 条规则）`,
+        compatBundledFallback: (p, s) => `云端保护名单尚未发布，已启用内置名单（${p} 个插件 · ${s} 条规则）`,
+        compatSyncFail: (e) => `保护名单同步失败：${e}`,
         btnOpenUm: '用量监控',
         openUmNotFound: '当前窗口未检测到正在运行的「用量监控」面板',
         umNotInstalled: '未检测到 usage-monitor 插件，安装后即可自动常驻右侧监控面板',
@@ -1207,6 +1233,8 @@
         invalidToast: (k) => `配置项 ${k} 校验未通过`,
         saveErrToast: (e) => `保存失败：${e}`,
         grpBasics: '基础设置',
+        grpTranslation: '语言与翻译',
+        pageTranslateOnShort: '市场翻译',
         grpLayout: '界面微调',
         grpAdvanced: '进阶交互',
         grpTelemetry: '用量统计',
@@ -1265,6 +1293,7 @@
         },
         items: {
           language: ['界面语言', '切换全局界面语言，自动保留代码与对话原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
+          pluginPageTranslate: ['插件市场一键翻译', '在插件市场列表与详情页顶部嵌入谷歌翻译，点击即可翻译并支持切回原文（不消耗模型额度）'],
           homeLayout: ['首页布局', '新会话首页样式：用量看板 / 经典居中 / 原生', [['studio', '用量看板'], ['classic', '经典居中'], ['off', '原生首页']]],
           palette: ['主题配色', '选择黑曜石、Claude 暖灰，或保持宿主原生配色', PALETTE_OPTS['zh-CN']],
           glassEffect: ['毛玻璃质感', '为输入框与浮层添加磨砂高光边框、看图悬浮胶囊及聚焦柔光环'],
@@ -1328,7 +1357,7 @@
         btnRefresh: '重新整理',
         btnCheckUpdate: '檢查更新',
         btnSelfUpdate: '一鍵更新',
-        btnSyncCompat: '同步白名單',
+        btnSyncCompat: '同步名單',
         btnOpenRelease: '查看發佈頁 →',
         updateAvailableTitle: (v) => `發現新版本 v${v}`,
         updateUpToDate: (v) => `目前已是最新版本 (v${v})`,
@@ -1336,9 +1365,9 @@
         updateRunning: '正在拉取更新並重新整理…',
         updateDone: (v) => `已更新至 v${v} 並重新注入`,
         updateFail: (e) => `更新檢查失敗：${e}`,
-        compatSynced: (p, s) => `已同步防漢化白名單（${p} 個外掛 · ${s} 條規則）`,
-        compatBundledFallback: (p, s) => `雲端白名單尚未發佈，已啟用內建白名單（${p} 個外掛 · ${s} 條規則）`,
-        compatSyncFail: (e) => `白名單同步失敗：${e}`,
+        compatSynced: (p, s) => `已同步翻譯保護名單（${p} 個外掛 · ${s} 條規則）`,
+        compatBundledFallback: (p, s) => `雲端保護名單尚未發佈，已啟用內建名單（${p} 個外掛 · ${s} 條規則）`,
+        compatSyncFail: (e) => `保護名單同步失敗：${e}`,
         btnOpenUm: '用量監控',
         openUmNotFound: '目前視窗未偵測到執行中的「用量監控」面板',
         umNotInstalled: '未偵測到 usage-monitor 外掛，安裝後即可自動常駐右側監控面板',
@@ -1348,6 +1377,8 @@
         invalidToast: (k) => `設定項 ${k} 驗證失敗`,
         saveErrToast: (e) => `儲存失敗：${e}`,
         grpBasics: '基礎設定',
+        grpTranslation: '語言與翻譯',
+        pageTranslateOnShort: '市場翻譯',
         grpLayout: '介面微調',
         grpAdvanced: '進階互動',
         grpTelemetry: '用量統計',
@@ -1406,6 +1437,7 @@
         },
         items: {
           language: ['介面語言', '切換全域介面語言，自動保留程式碼與對話原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
+          pluginPageTranslate: ['外掛市場一鍵翻譯', '在外掛市場列表與詳情頁頂部嵌入 Google 翻譯，點擊即可翻譯並切回原文（不消耗模型額度）'],
           homeLayout: ['首頁版面', '新對話首頁樣式：用量看板 / 經典置中 / 原生', [['studio', '用量看板'], ['classic', '經典置中'], ['off', '原生首頁']]],
           palette: ['主題配色', '選擇黑曜石、Claude 暖灰，或保持宿主原生配色', PALETTE_OPTS['zh-TW']],
           glassEffect: ['毛玻璃質感', '為輸入框與浮層加上磨砂高光邊框、看圖懸浮膠囊及聚焦柔光環'],
@@ -1469,7 +1501,7 @@
         btnRefresh: '刷新狀態',
         btnCheckUpdate: '檢查更新',
         btnSelfUpdate: '一鍵更新',
-        btnSyncCompat: '同步白名單',
+        btnSyncCompat: '同步名單',
         btnOpenRelease: '去發佈頁 →',
         updateAvailableTitle: (v) => `搵到新版本 v${v}`,
         updateUpToDate: (v) => `已經係最新版本 (v${v})`,
@@ -1477,9 +1509,9 @@
         updateRunning: '拉緊更新並刷新視窗…',
         updateDone: (v) => `已更新至 v${v} 並重新套用`,
         updateFail: (e) => `檢查更新失敗：${e}`,
-        compatSynced: (p, s) => `已同步免漢化白名單（${p} 個插件 · ${s} 條規則）`,
-        compatBundledFallback: (p, s) => `雲端白名單仲未發佈，已用返內置白名單（${p} 個插件 · ${s} 條規則）`,
-        compatSyncFail: (e) => `白名單同步失敗：${e}`,
+        compatSynced: (p, s) => `已同步翻譯保護名單（${p} 個插件 · ${s} 條規則）`,
+        compatBundledFallback: (p, s) => `雲端保護名單仲未發佈，已用返內置名單（${p} 個插件 · ${s} 條規則）`,
+        compatSyncFail: (e) => `保護名單同步失敗：${e}`,
         btnOpenUm: '用量監控',
         openUmNotFound: '目前視窗未搵到運行緊嘅「用量監控」面板',
         umNotInstalled: '未搵到 usage-monitor 插件，裝咗之後先可以自動長駐右邊監控面板',
@@ -1489,6 +1521,8 @@
         invalidToast: (k) => `設定項 ${k} 校驗失敗`,
         saveErrToast: (e) => `儲存失敗：${e}`,
         grpBasics: '基礎設定',
+        grpTranslation: '語言與翻譯',
+        pageTranslateOnShort: '市場翻譯',
         grpLayout: '介面微調',
         grpAdvanced: '進階互動',
         grpTelemetry: '用量統計',
@@ -1547,6 +1581,7 @@
         },
         items: {
           language: ['介面語言', '切換全介面語言，自動保留代碼同對話原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
+          pluginPageTranslate: ['外掛市場一鍵翻譯', '喺外掛市場列表同詳情頁頂部嵌入 Google 翻譯，撳一下就譯得仲可以切返原文（唔扣模型額度）'],
           homeLayout: ['首頁版面', '新對話首頁樣式：用量看板 / 經典置中 / 原生', [['studio', '用量看板'], ['classic', '經典置中'], ['off', '原生首頁']]],
           palette: ['主題配色', '揀黑曜石、Claude 暖灰，或者保持宿主原生配色', PALETTE_OPTS.yue],
           glassEffect: ['毛玻璃質感', '幫輸入框同浮層加磨砂高光邊框、睇圖懸浮膠囊同聚焦柔光環'],
@@ -1610,7 +1645,7 @@
         btnRefresh: 'Refresh',
         btnCheckUpdate: 'Check Updates',
         btnSelfUpdate: 'Update Now',
-        btnSyncCompat: 'Sync i18n List',
+        btnSyncCompat: 'Sync Protect List',
         btnOpenRelease: 'View Release →',
         updateAvailableTitle: (v) => `New version v${v} available`,
         updateUpToDate: (v) => `Already up to date (v${v})`,
@@ -1618,9 +1653,9 @@
         updateRunning: 'Pulling update and refreshing windows...',
         updateDone: (v) => `Updated to v${v} and re-injected`,
         updateFail: (e) => `Update check failed: ${e}`,
-        compatSynced: (p, s) => `Synced i18n compat list (${p} plugins · ${s} rules)`,
-        compatBundledFallback: (p, s) => `Cloud list not published yet; using built-in whitelist (${p} plugins · ${s} rules)`,
-        compatSyncFail: (e) => `Compat sync failed: ${e}`,
+        compatSynced: (p, s) => `Synced translation protect list (${p} plugins · ${s} rules)`,
+        compatBundledFallback: (p, s) => `Cloud list not published yet; using built-in protect list (${p} plugins · ${s} rules)`,
+        compatSyncFail: (e) => `Protect list sync failed: ${e}`,
         btnOpenUm: 'Usage Monitor',
         openUmNotFound: 'Usage Monitor pane not found in active window',
         umNotInstalled: 'usage-monitor plugin not detected; install it to auto-pin the side pane',
@@ -1630,6 +1665,8 @@
         invalidToast: (k) => `Invalid value for ${k}`,
         saveErrToast: (e) => `Save failed: ${e}`,
         grpBasics: 'Basic Settings',
+        grpTranslation: 'Language & Translation',
+        pageTranslateOnShort: 'Market Translate',
         grpLayout: 'Layout Tweaks',
         grpAdvanced: 'Advanced & Extras',
         grpTelemetry: 'Usage Stats',
@@ -1688,6 +1725,7 @@
         },
         items: {
           language: ['Interface Language', 'Global UI localization while keeping code and chat intact', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
+          pluginPageTranslate: ['Marketplace Google Translate', 'Embed an on-demand Google Translate pill on Plugin Marketplace list & detail pages (zero model tokens)'],
           homeLayout: ['Home Layout', 'New-chat home style: Usage Dashboard / Classic / Native', [['studio', 'Usage Dashboard'], ['classic', 'Classic'], ['off', 'Native']]],
           palette: ['Color Palette', 'Choose Obsidian, Claude warm paper/charcoal, or host native colors', PALETTE_OPTS.en],
           glassEffect: ['Frosted Glass Effect', 'Frosted surfaces with 1px specular borders, floating media pills & focus halos'],
@@ -1751,7 +1789,7 @@
         btnRefresh: '状態更新',
         btnCheckUpdate: '更新確認',
         btnSelfUpdate: '今すぐ更新',
-        btnSyncCompat: '除外リスト同期',
+        btnSyncCompat: '保護リスト同期',
         btnOpenRelease: 'リリースページ →',
         updateAvailableTitle: (v) => `新バージョン v${v} あり`,
         updateUpToDate: (v) => `最新バージョンです (v${v})`,
@@ -1759,8 +1797,8 @@
         updateRunning: '更新を取得して反映中…',
         updateDone: (v) => `v${v} へ更新し再適用しました`,
         updateFail: (e) => `更新確認失敗：${e}`,
-        compatSynced: (p, s) => `翻訳除外リスト同期完了 (${p} プラグイン · ${s} ルール)`,
-        compatBundledFallback: (p, s) => `クラウド版未公開のため内蔵リストを使用中 (${p} プラグイン · ${s} ルール)`,
+        compatSynced: (p, s) => `翻訳保護リスト同期完了 (${p} プラグイン · ${s} ルール)`,
+        compatBundledFallback: (p, s) => `クラウド版未公開のため内蔵保護リストを使用中 (${p} プラグイン · ${s} ルール)`,
         compatSyncFail: (e) => `同期失敗：${e}`,
         btnOpenUm: '使用量監視',
         openUmNotFound: '実行中の使用量モニターが見つかりません',
@@ -1771,6 +1809,8 @@
         invalidToast: (k) => `${k} の値が無効です`,
         saveErrToast: (e) => `保存エラー：${e}`,
         grpBasics: '基本設定',
+        grpTranslation: '言語と翻訳',
+        pageTranslateOnShort: '市場翻訳',
         grpLayout: 'レイアウト調整',
         grpAdvanced: '拡張インタラクション',
         grpTelemetry: '使用量統計',
@@ -1829,6 +1869,7 @@
         },
         items: {
           language: ['表示言語', 'コードと本文を保護しつつ UI 全体を 5 言語化', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
+          pluginPageTranslate: ['マーケットプレイス翻訳', 'プラグイン市場の一覧・詳細ページ上部に Google 翻訳ボタンを配置（クリック時のみ翻訳・トークン消費なし）'],
           homeLayout: ['ホームレイアウト', '新規チャット画面：使用量ダッシュボード / クラシック / 標準', [['studio', '使用量ボード'], ['classic', 'クラシック'], ['off', '標準']]],
           palette: ['テーマ配色', 'Obsidian・Claude またはホスト標準配色を選択します', PALETTE_OPTS.ja],
           glassEffect: ['すりガラス質感', '入力欄・浮遊パネルのすりガラス＆高光枠、画像プレビューカプセル、フォーカス光輪'],
@@ -1922,7 +1963,13 @@
         id: 'basics',
         icon: '🎨',
         titleKey: 'grpBasics',
-        keys: ['language', 'homeLayout', 'palette'],
+        keys: ['palette', 'homeLayout'],
+      },
+      {
+        id: 'translation',
+        icon: '🌐',
+        titleKey: 'grpTranslation',
+        keys: ['language', 'pluginPageTranslate'],
       },
       {
         id: 'layout',
@@ -1944,7 +1991,7 @@
       },
     ];
 
-    const ALL_SETTINGS_GROUP_IDS = ['basics', 'layout', 'advanced', 'telemetry', 'notify'];
+    const ALL_SETTINGS_GROUP_IDS = ['basics', 'translation', 'layout', 'advanced', 'telemetry', 'notify'];
 
     const apiFetch = (url, opts) => {
       if (window.sidecar && typeof window.sidecar.fetch === 'function') {
@@ -2577,7 +2624,7 @@
       const pCnt = Number(cInfo.pluginCount || 0);
       const sCnt = Number(cInfo.selectorCount || 0);
       if (compatK) {
-        compatK.textContent = lang === 'zh-CN' ? '免汉化白名单' : (lang === 'zh-TW' || lang === 'yue') ? '免漢化白名單' : lang === 'ja' ? '翻訳除外リスト' : 'i18n Opt-Out Whitelist';
+        compatK.textContent = lang === 'zh-CN' ? '翻译保护名单' : (lang === 'zh-TW' || lang === 'yue') ? '翻譯保護名單' : lang === 'ja' ? '翻訳保護リスト' : 'Translation Protect List';
       }
       if (compatV) {
         compatV.textContent = isZh ? `${sCnt} 条规则 · ${pCnt} 个插件` : `${sCnt} rules · ${pCnt} plugins`;
@@ -2730,8 +2777,14 @@
     function getGroupBadgeInfo(groupId, cfg, t, statsOn) {
       if (groupId === 'basics') {
         const pal = getOptionLabel(t.items, 'palette', cfg.palette || 'claude');
-        const langLbl = getOptionLabel(t.items, 'language', cfg.language || 'zh-CN');
-        return { text: `${pal} · ${langLbl}`, cls: '' };
+        const homeLbl = getOptionLabel(t.items, 'homeLayout', cfg.homeLayout || 'studio');
+        return { text: `${pal} · ${homeLbl}`, cls: '' };
+      }
+      if (groupId === 'translation') {
+        const langVal = cfg.language || 'zh-CN';
+        const langLbl = getOptionLabel(t.items, 'language', langVal);
+        const showPageTr = langVal !== 'en' && cfg.pluginPageTranslate !== false && t.pageTranslateOnShort;
+        return { text: showPageTr ? `${langLbl} · ${t.pageTranslateOnShort}` : langLbl, cls: '' };
       }
       if (groupId === 'layout') {
         const flags = [
@@ -2837,7 +2890,7 @@
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked =
-              key === 'glassEffect' || key === 'orchestratorSwitch'
+              key === 'glassEffect' || key === 'orchestratorSwitch' || key === 'pluginPageTranslate'
                 ? cfg[key] !== false
                 : key === 'mascot'
                 ? cfg[key] === 'crab'

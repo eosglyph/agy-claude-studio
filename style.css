@@ -4163,3 +4163,77 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="send-button"]:not(:d
   transform: translateY(-0.5px);
   box-shadow: 0 6px 16px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 44%, transparent) !important;
 }
+
+/* ── 14. Plugin Detail Page On-Demand Translate Pill ──────────────────────── */
+.ag-cs-page-translate-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 9999px;
+  border: 1px solid var(--ag-cs-pill-border, var(--border, rgba(128, 128, 128, 0.24)));
+  background: var(--ag-cs-pill-bg, var(--secondary, rgba(128, 128, 128, 0.1)));
+  color: var(--muted-foreground, currentColor);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 120ms ease;
+}
+.ag-cs-page-translate-btn.is-header {
+  height: 30px;
+  padding: 0 12px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+.ag-cs-page-translate-btn.is-header.is-in-action-group {
+  margin-left: 0;
+  margin-right: 4px;
+}
+.ag-cs-page-translate-btn:hover:not(:disabled) {
+  color: var(--foreground, currentColor);
+  background: var(--ag-cs-hover-wash, rgba(128, 128, 128, 0.14));
+  border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 42%, var(--ag-cs-pill-border, transparent));
+}
+.ag-cs-page-translate-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.ag-cs-page-translate-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 36%, transparent);
+}
+.ag-cs-page-translate-btn:disabled {
+  cursor: progress;
+  opacity: 0.78;
+}
+.ag-cs-page-translate-btn.is-translated {
+  color: var(--ag-cs-accent, var(--primary, #4d6bfe));
+  border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 42%, transparent);
+  background: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 11%, var(--ag-cs-pill-bg, transparent));
+}
+.ag-cs-page-translate-btn.is-error {
+  color: var(--ag-cs-warn-fg, var(--error, #ef8585));
+  border-color: var(--ag-cs-warn-border, rgba(239, 133, 133, 0.36));
+  background: var(--ag-cs-warn-bg, rgba(239, 133, 133, 0.08));
+}
+.ag-cs-page-translate-btn .ag-cs-pt-ico {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.ag-cs-page-translate-btn .ag-cs-pt-spin {
+  animation: ag-cs-pt-spin 0.85s linear infinite;
+}
+@keyframes ag-cs-pt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

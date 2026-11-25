@@ -27,6 +27,7 @@
   "compactCustomText": "",
   "periodicSelector": true,
   "orchestratorSwitch": true,
+  "pluginPageTranslate": true,
   "i18nIgnoreSelectors": [],
   "autoRelaunchWithCdp": true,
   "exitOnHostClose": false

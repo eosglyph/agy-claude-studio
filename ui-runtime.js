@@ -359,6 +359,7 @@
     refreshOpenContextPopover();
     refreshOpenPeriodicSelector();
     syncComposers();
+    syncPluginDetailTranslateButton();
     ensureSettingsSection();
   }
 
@@ -6658,6 +6659,609 @@
   // ── Legacy Settings Dialog Cleanup (settings now live in right Aux Pane) ──
   const SETTINGS_SEC_ID = 'ag-cs-settings-sec';
 
+  // ── Plugin Detail Page On-Demand Translation ───────────────────────────
+
+  const PAGE_TRANSLATE_BTN_CLS = 'ag-cs-page-translate-btn';
+  const PAGE_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/single';
+  const PAGE_TRANSLATE_MAX_ENCODED_LEN = 1500;
+  const PAGE_TRANSLATE_MAX_BATCH_ITEMS = 25;
+  const PAGE_TRANSLATE_TIMEOUT_MS = 12000;
+  const PAGE_TRANSLATE_CACHE_LIMIT = 2000;
+  const PAGE_TRANSLATE_SKIP_TAGS = new Set([
+    'CODE',
+    'PRE',
+    'KBD',
+    'SAMP',
+    'VAR',
+    'SVG',
+    'SCRIPT',
+    'STYLE',
+    'NOSCRIPT',
+    'TEXTAREA',
+    'INPUT',
+    'SELECT',
+    'OPTION',
+  ]);
+
+  const pageTranslateNodeMeta = new WeakMap();
+  const pageTranslateTextCache = new Map();
+  const pageTranslateActiveNodes = new Set();
+  const pageTranslateState = {
+    btn: null,
+    status: 'idle', // 'idle' | 'loading' | 'translated' | 'error'
+    pageKey: '',
+    lang: '',
+    errorMsg: '',
+    errorTimer: null,
+    abortCtrl: null,
+    reqSeq: 0,
+  };
+
+  function getPageTranslateTarget(lang) {
+    if (lang === 'zh-CN') return 'zh-CN';
+    if (lang === 'zh-TW') return 'zh-TW';
+    if (lang === 'yue') return 'zh-TW';
+    if (lang === 'ja') return 'ja';
+    return '';
+  }
+
+  function getPageTranslateStrings(lang) {
+    if (lang === 'zh-TW') {
+      return {
+        translate: '翻譯此頁',
+        showOriginal: '顯示原文',
+        loading: '翻譯中…',
+        error: '翻譯失敗，請檢查網絡',
+        empty: '暫無可翻譯英文',
+        tipTranslate: '使用 Google 翻譯此頁英文內容（不消耗模型額度）',
+        tipOriginal: '切回英文原文',
+      };
+    }
+    if (lang === 'yue') {
+      return {
+        translate: '翻譯呢頁',
+        showOriginal: '顯示原文',
+        loading: '翻譯緊…',
+        error: '翻譯失敗，請檢查網絡',
+        empty: '暫無可翻譯英文',
+        tipTranslate: '用 Google 翻譯呢頁英文內容（唔扣模型額度）',
+        tipOriginal: '切返英文原文',
+      };
+    }
+    if (lang === 'ja') {
+      return {
+        translate: 'このページを翻訳',
+        showOriginal: '原文を表示',
+        loading: '翻訳中…',
+        error: '翻訳に失敗しました',
+        empty: '翻訳対象の英語なし',
+        tipTranslate: 'Google 翻訳でこのページの英語を翻訳（トークン消費なし）',
+        tipOriginal: '英語の原文に戻す',
+      };
+    }
+    return {
+      translate: '翻译此页',
+      showOriginal: '显示原文',
+      loading: '翻译中…',
+      error: '翻译失败，请检查网络',
+      empty: '暂无可翻译英文',
+      tipTranslate: '使用谷歌翻译此页英文内容（不消耗模型额度）',
+      tipOriginal: '切回英文原文',
+    };
+  }
+
+  function normalizeTranslateSource(raw) {
+    return String(raw || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function isTranslatableEnglishText(raw) {
+    if (typeof raw !== 'string') return false;
+    const trimmed = normalizeTranslateSource(raw);
+    if (trimmed.length < 2) return false;
+    if (
+      /^(?:https?:\/\/|mailto:|\/|~\/|\.\.?\/|@[a-z0-9._-]+\/[a-z0-9._-]+|--?[a-z0-9-]+|[A-Z0-9_]{2,}|v?\d+(?:\.\d+)+)$/i.test(
+        trimmed
+      )
+    ) {
+      return false;
+    }
+    if (!/[A-Za-z]{2,}/.test(trimmed)) return false;
+    const cjkMatches = trimmed.match(/[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/g);
+    const latinMatches = trimmed.match(/[A-Za-z]/g);
+    if (cjkMatches && cjkMatches.length > 0 && (!latinMatches || latinMatches.length < cjkMatches.length * 2)) {
+      return false;
+    }
+    if (!/\s/.test(trimmed)) {
+      if (/[_./:\\@#]/.test(trimmed)) return false;
+      if (/^[a-z]+[A-Z]/.test(trimmed)) return false;
+      if (trimmed.length <= 3) return false;
+    }
+    return true;
+  }
+
+  function preserveOuterWhitespace(original, translated) {
+    const lead = original.match(/^\s*/)?.[0] || '';
+    const tail = original.match(/\s*$/)?.[0] || '';
+    return lead + String(translated || '').trim() + tail;
+  }
+
+  function resolvePluginDetailMount(detailRoot, titleEl, tablist) {
+    if (detailRoot && titleEl) {
+      let cur = titleEl.parentElement;
+      let steps = 0;
+      while (cur && cur !== detailRoot && steps < 4) {
+        const btns = Array.from(cur.querySelectorAll?.('button') || []).filter(
+          (b) =>
+            b &&
+            !b.classList?.contains(PAGE_TRANSLATE_BTN_CLS) &&
+            (!tablist || !tablist.contains(b)) &&
+            !titleEl.contains(b)
+        );
+        if (btns.length > 0) {
+          const actionBtn = btns[0];
+          let slot = actionBtn;
+          while (slot && slot.parentElement && slot.parentElement !== cur) {
+            slot = slot.parentElement;
+          }
+          if (slot === actionBtn) {
+            return { mountParent: cur, beforeNode: actionBtn, inHeader: true, inActionGroup: false };
+          }
+          if (slot && slot.parentElement === cur) {
+            return { mountParent: slot, beforeNode: slot.firstChild, inHeader: true, inActionGroup: true };
+          }
+        }
+        cur = cur.parentElement;
+        steps += 1;
+      }
+    }
+    return { mountParent: tablist, beforeNode: null, inHeader: false, inActionGroup: false };
+  }
+
+  function findPluginDetailContext() {
+    const firstTab = document.querySelector('[role="tablist"] button[id^="plugin-detail-tab-"]');
+    if (firstTab && firstTab.isConnected) {
+      const tablist = firstTab.closest?.('[role="tablist"]') || firstTab.parentElement || null;
+      if (tablist && tablist.isConnected) {
+        const bodySection = tablist.parentElement || null;
+        const detailRoot = bodySection?.parentElement || bodySection || tablist;
+        const tabpanel =
+          document.getElementById('plugin-detail-tabpanel') ||
+          detailRoot.querySelector?.('#plugin-detail-tabpanel, [role="tabpanel"]') ||
+          null;
+        const activeTabBtn = tablist.querySelector?.('[role="tab"][aria-selected="true"]') || firstTab;
+        const activeTabId = activeTabBtn?.id || '';
+        const titleEl = detailRoot.querySelector?.('h1') || null;
+        const pageKey = `${(titleEl?.textContent || '').trim()}|${activeTabId}`;
+        const mount = resolvePluginDetailMount(detailRoot, titleEl, tablist);
+        return { tablist, bodySection, detailRoot, tabpanel, activeTabId, pageKey, ...mount };
+      }
+    }
+
+    const pluginsNav = document.querySelector('nav[data-testid="plugins-tabs"]');
+    if (pluginsNav && pluginsNav.isConnected && pluginsNav.parentElement) {
+      const headerRow = pluginsNav.parentElement;
+      let detailRoot = headerRow.parentElement || headerRow;
+      let up = 0;
+      while (
+        detailRoot &&
+        detailRoot.parentElement &&
+        detailRoot.parentElement !== document.body &&
+        detailRoot.parentElement !== document.documentElement &&
+        up < 4
+      ) {
+        const len = (detailRoot.textContent || '').trim().length;
+        const hasCards = Boolean(detailRoot.querySelector?.('h2, h3, p'));
+        if (hasCards && len > 180) break;
+        detailRoot = detailRoot.parentElement;
+        up += 1;
+      }
+      const activeNavBtn =
+        pluginsNav.querySelector?.('[aria-selected="true"], [aria-current="page"], [data-state="active"]') ||
+        pluginsNav.querySelector?.('button') ||
+        null;
+      const activeTabId = (activeNavBtn?.textContent || '').trim();
+      const pageKey = `marketplace|${activeTabId}`;
+      return {
+        tablist: pluginsNav,
+        bodySection: detailRoot,
+        detailRoot,
+        tabpanel: null,
+        activeTabId,
+        pageKey,
+        mountParent: headerRow,
+        beforeNode: pluginsNav,
+        inHeader: true,
+        inActionGroup: false,
+      };
+    }
+
+    return null;
+  }
+
+  function isElementHiddenForTranslate(el) {
+    if (!el) return true;
+    if (el.hidden || el.getAttribute?.('aria-hidden') === 'true') return true;
+    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return true;
+      } catch {}
+    }
+    return false;
+  }
+
+  function collectTranslatableTextNodes(ctx) {
+    if (!ctx?.detailRoot) return [];
+    const out = [];
+    const walk = (node) => {
+      if (!node) return;
+      if (node.nodeType === 3) {
+        const meta = pageTranslateNodeMeta.get(node);
+        const orig = meta ? meta.original : node.nodeValue;
+        if (isTranslatableEnglishText(orig)) {
+          out.push(node);
+        }
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      const tag = node.tagName;
+      if (PAGE_TRANSLATE_SKIP_TAGS.has(tag)) return;
+      if (
+        node === ctx.tablist ||
+        node.classList?.contains(PAGE_TRANSLATE_BTN_CLS) ||
+        node.hasAttribute?.('data-ag-no-i18n') ||
+        node.getAttribute?.('translate') === 'no' ||
+        node.classList?.contains('notranslate') ||
+        node.getAttribute?.('role') === 'tablist' ||
+        node.getAttribute?.('role') === 'tab'
+      ) {
+        return;
+      }
+      if (isElementHiddenForTranslate(node)) return;
+      const inPanel = ctx.tabpanel ? nodeContains(ctx.tabpanel, node) : false;
+      const inBody = ctx.bodySection ? nodeContains(ctx.bodySection, node) : false;
+      // Preserve plugin proper-noun title and top header action buttons/badges.
+      if (tag === 'H1' && !inPanel) return;
+      if (tag === 'BUTTON' && !inBody) return;
+      const children = node.childNodes || node.children;
+      if (!children || !children.length) return;
+      for (let i = 0; i < children.length; i++) {
+        walk(children[i]);
+      }
+    };
+    walk(ctx.detailRoot);
+    return out;
+  }
+
+  function restorePageTranslationNodes(scopeRoot = null) {
+    for (const node of Array.from(pageTranslateActiveNodes)) {
+      if (!node || !node.isConnected) {
+        pageTranslateActiveNodes.delete(node);
+        continue;
+      }
+      if (scopeRoot && !nodeContains(scopeRoot, node)) continue;
+      const meta = pageTranslateNodeMeta.get(node);
+      if (meta && typeof meta.original === 'string') {
+        try {
+          node.nodeValue = meta.original;
+        } catch {}
+      }
+      pageTranslateActiveNodes.delete(node);
+    }
+  }
+
+  function setPageTranslateCache(cacheKey, value) {
+    if (pageTranslateTextCache.size >= PAGE_TRANSLATE_CACHE_LIMIT) {
+      const oldestKey = pageTranslateTextCache.keys().next().value;
+      if (oldestKey !== undefined) pageTranslateTextCache.delete(oldestKey);
+    }
+    pageTranslateTextCache.set(cacheKey, value);
+  }
+
+  async function fetchGoogleTranslateText(text, targetLang, signal) {
+    if (typeof fetch !== 'function') {
+      throw new Error('fetch_unavailable');
+    }
+    const url = `${PAGE_TRANSLATE_URL}?client=gtx&sl=auto&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(
+      text
+    )}`;
+    const res = await fetch(url, { method: 'GET', signal });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    if (!Array.isArray(data) || !Array.isArray(data[0])) {
+      throw new Error('invalid_translate_payload');
+    }
+    return data[0].map((seg) => (Array.isArray(seg) && typeof seg[0] === 'string' ? seg[0] : '')).join('');
+  }
+
+  async function translateTextsInBatches(uniqueTexts, targetLang, signal) {
+    const batches = [];
+    let current = [];
+    let currentEncodedLen = 0;
+    for (const text of uniqueTexts) {
+      const encLen = encodeURIComponent(text).length + 3; // + %0A
+      if (
+        current.length > 0 &&
+        (current.length >= PAGE_TRANSLATE_MAX_BATCH_ITEMS || currentEncodedLen + encLen > PAGE_TRANSLATE_MAX_ENCODED_LEN)
+      ) {
+        batches.push(current);
+        current = [];
+        currentEncodedLen = 0;
+      }
+      current.push(text);
+      currentEncodedLen += encLen;
+    }
+    if (current.length > 0) batches.push(current);
+
+    for (const batch of batches) {
+      if (signal?.aborted) throw new Error('aborted');
+      if (batch.length === 1) {
+        const translated = await fetchGoogleTranslateText(batch[0], targetLang, signal);
+        setPageTranslateCache(`${targetLang}\0${batch[0]}`, translated);
+        continue;
+      }
+      const joined = batch.join('\n');
+      const translatedBlock = await fetchGoogleTranslateText(joined, targetLang, signal);
+      const lines = translatedBlock.split('\n');
+      if (lines.length === batch.length) {
+        for (let i = 0; i < batch.length; i++) {
+          setPageTranslateCache(`${targetLang}\0${batch[i]}`, lines[i]);
+        }
+      } else {
+        for (const item of batch) {
+          if (signal?.aborted) throw new Error('aborted');
+          const single = await fetchGoogleTranslateText(item, targetLang, signal);
+          setPageTranslateCache(`${targetLang}\0${item}`, single);
+        }
+      }
+    }
+  }
+
+  function applyCachedTranslationsToNodes(nodes, targetLang) {
+    let applied = 0;
+    for (const node of nodes) {
+      if (!node || !node.isConnected) continue;
+      let meta = pageTranslateNodeMeta.get(node);
+      if (!meta) {
+        meta = { original: node.nodeValue || '', translations: new Map() };
+        pageTranslateNodeMeta.set(node, meta);
+      }
+      const norm = normalizeTranslateSource(meta.original);
+      const translated = meta.translations.get(targetLang) || pageTranslateTextCache.get(`${targetLang}\0${norm}`);
+      if (typeof translated === 'string' && translated.trim()) {
+        meta.translations.set(targetLang, translated);
+        const nextVal = preserveOuterWhitespace(meta.original, translated);
+        if (node.nodeValue !== nextVal) {
+          node.nodeValue = nextVal;
+        }
+        pageTranslateActiveNodes.add(node);
+        applied += 1;
+      }
+    }
+    return applied;
+  }
+
+  function clearPageTranslateErrorTimer() {
+    if (pageTranslateState.errorTimer) {
+      clearTimeout(pageTranslateState.errorTimer);
+      pageTranslateState.errorTimer = null;
+    }
+  }
+
+  function abortPageTranslateRequest() {
+    if (pageTranslateState.abortCtrl) {
+      try {
+        pageTranslateState.abortCtrl.abort();
+      } catch {}
+      pageTranslateState.abortCtrl = null;
+    }
+  }
+
+  function renderPageTranslateButton() {
+    const btn = pageTranslateState.btn;
+    if (!btn || !btn.isConnected) return;
+    const lang = getLang();
+    const s = getPageTranslateStrings(lang);
+    const status = pageTranslateState.status;
+    btn.classList.toggle('is-loading', status === 'loading');
+    btn.classList.toggle('is-translated', status === 'translated');
+    btn.classList.toggle('is-error', status === 'error');
+    btn.disabled = status === 'loading';
+    btn.setAttribute('aria-busy', status === 'loading' ? 'true' : 'false');
+    btn.setAttribute('aria-pressed', status === 'translated' ? 'true' : 'false');
+
+    const label =
+      status === 'loading'
+        ? s.loading
+        : status === 'translated'
+        ? s.showOriginal
+        : status === 'error'
+        ? pageTranslateState.errorMsg || s.error
+        : s.translate;
+    btn.title = status === 'translated' ? s.tipOriginal : s.tipTranslate;
+
+    const iconSvg =
+      status === 'loading'
+        ? '<svg class="ag-cs-pt-ico ag-cs-pt-spin" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.6" stroke-opacity="0.28"/><path d="M13.5 8a5.5 5.5 0 0 0-5.5-5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
+        : '<svg class="ag-cs-pt-ico" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h6.5M5.75 2.5V4m2.1 0c-.5 2.3-1.8 4.2-4.35 5.6m.95-3.4c.85 1.35 2.05 2.45 3.45 3.2M9.2 13.5l2.25-6.2h.7l2.25 6.2m-4.2-1.8h3.2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    btn.innerHTML = `${iconSvg}<span class="ag-cs-pt-label">${escapeHtml(label)}</span>`;
+  }
+
+  function showPageTranslateTransientError(msg) {
+    clearPageTranslateErrorTimer();
+    pageTranslateState.status = 'error';
+    pageTranslateState.errorMsg = msg;
+    renderPageTranslateButton();
+    pageTranslateState.errorTimer = setTimeout(() => {
+      pageTranslateState.errorTimer = null;
+      if (destroyed) return;
+      if (pageTranslateState.status === 'error') {
+        pageTranslateState.status = 'idle';
+        pageTranslateState.errorMsg = '';
+        renderPageTranslateButton();
+      }
+    }, 3000);
+  }
+
+  async function onPageTranslateButtonClick(ev) {
+    if (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    if (destroyed || pageTranslateState.status === 'loading') return;
+    const lang = getLang();
+    const targetLang = getPageTranslateTarget(lang);
+    if (!targetLang) return;
+    const ctx = findPluginDetailContext();
+    if (!ctx) return;
+    const s = getPageTranslateStrings(lang);
+
+    if (pageTranslateState.status === 'translated') {
+      restorePageTranslationNodes(ctx.detailRoot);
+      pageTranslateState.status = 'idle';
+      pageTranslateState.errorMsg = '';
+      renderPageTranslateButton();
+      return;
+    }
+
+    const nodes = collectTranslatableTextNodes(ctx);
+    if (!nodes.length) {
+      showPageTranslateTransientError(s.empty);
+      return;
+    }
+
+    const missingSet = new Set();
+    for (const node of nodes) {
+      let meta = pageTranslateNodeMeta.get(node);
+      if (!meta) {
+        meta = { original: node.nodeValue || '', translations: new Map() };
+        pageTranslateNodeMeta.set(node, meta);
+      }
+      const norm = normalizeTranslateSource(meta.original);
+      if (!norm) continue;
+      if (!meta.translations.has(targetLang) && !pageTranslateTextCache.has(`${targetLang}\0${norm}`)) {
+        missingSet.add(norm);
+      }
+    }
+
+    if (missingSet.size === 0) {
+      applyCachedTranslationsToNodes(nodes, targetLang);
+      clearPageTranslateErrorTimer();
+      pageTranslateState.status = 'translated';
+      pageTranslateState.errorMsg = '';
+      renderPageTranslateButton();
+      return;
+    }
+
+    clearPageTranslateErrorTimer();
+    abortPageTranslateRequest();
+    const seq = ++pageTranslateState.reqSeq;
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    pageTranslateState.abortCtrl = ctrl;
+    pageTranslateState.status = 'loading';
+    pageTranslateState.errorMsg = '';
+    renderPageTranslateButton();
+
+    const timeoutId = ctrl ? setTimeout(() => ctrl.abort(), PAGE_TRANSLATE_TIMEOUT_MS) : null;
+    try {
+      await translateTextsInBatches(Array.from(missingSet), targetLang, ctrl?.signal);
+      if (destroyed || seq !== pageTranslateState.reqSeq) return;
+      const liveCtx = findPluginDetailContext();
+      if (!liveCtx || liveCtx.pageKey !== ctx.pageKey) {
+        pageTranslateState.status = 'idle';
+        renderPageTranslateButton();
+        return;
+      }
+      const applied = applyCachedTranslationsToNodes(collectTranslatableTextNodes(liveCtx), targetLang);
+      pageTranslateState.status = applied > 0 ? 'translated' : 'idle';
+      renderPageTranslateButton();
+    } catch {
+      if (destroyed || seq !== pageTranslateState.reqSeq) return;
+      showPageTranslateTransientError(s.error);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (pageTranslateState.abortCtrl === ctrl) {
+        pageTranslateState.abortCtrl = null;
+      }
+    }
+  }
+
+  function teardownPageTranslate() {
+    pageTranslateState.reqSeq += 1;
+    abortPageTranslateRequest();
+    clearPageTranslateErrorTimer();
+    restorePageTranslationNodes();
+    if (pageTranslateState.btn) {
+      try {
+        pageTranslateState.btn.remove();
+      } catch {}
+      pageTranslateState.btn = null;
+    }
+    pageTranslateState.status = 'idle';
+    pageTranslateState.pageKey = '';
+    pageTranslateState.errorMsg = '';
+  }
+
+  function syncPluginDetailTranslateButton() {
+    const lang = getLang();
+    const targetLang = cfg.pluginPageTranslate === false ? '' : getPageTranslateTarget(lang);
+    const ctx = targetLang ? findPluginDetailContext() : null;
+
+    if (!targetLang || !ctx || !ctx.mountParent) {
+      if (pageTranslateState.btn || pageTranslateActiveNodes.size > 0) {
+        teardownPageTranslate();
+      }
+      return;
+    }
+
+    if (pageTranslateState.lang && pageTranslateState.lang !== lang) {
+      pageTranslateState.reqSeq += 1;
+      abortPageTranslateRequest();
+      clearPageTranslateErrorTimer();
+      restorePageTranslationNodes();
+      pageTranslateState.status = 'idle';
+      pageTranslateState.errorMsg = '';
+    }
+    pageTranslateState.lang = lang;
+
+    if (pageTranslateState.pageKey && pageTranslateState.pageKey !== ctx.pageKey) {
+      pageTranslateState.reqSeq += 1;
+      abortPageTranslateRequest();
+      clearPageTranslateErrorTimer();
+      pageTranslateState.status = 'idle';
+      pageTranslateState.errorMsg = '';
+    }
+    pageTranslateState.pageKey = ctx.pageKey;
+
+    let btn = pageTranslateState.btn;
+    const needRemount = !btn || !btn.isConnected || btn.parentElement !== ctx.mountParent;
+    if (needRemount) {
+      if (btn) {
+        try {
+          btn.remove();
+        } catch {}
+      }
+      document.querySelectorAll('.' + PAGE_TRANSLATE_BTN_CLS).forEach((el) => el.remove());
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = PAGE_TRANSLATE_BTN_CLS;
+      btn.setAttribute('data-ag-no-i18n', '1');
+      btn.addEventListener('click', onPageTranslateButtonClick);
+      if (ctx.beforeNode && ctx.beforeNode.parentElement === ctx.mountParent) {
+        ctx.mountParent.insertBefore(btn, ctx.beforeNode);
+      } else {
+        ctx.mountParent.appendChild(btn);
+      }
+      pageTranslateState.btn = btn;
+    }
+    btn.classList.toggle('is-header', Boolean(ctx.inHeader));
+    btn.classList.toggle('is-in-action-group', Boolean(ctx.inActionGroup));
+
+    renderPageTranslateButton();
+  }
+
   function ensureSettingsSection() {
     const legacy = document.getElementById(SETTINGS_SEC_ID);
     if (legacy) legacy.remove();
@@ -6686,7 +7290,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, #' +
+        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-studio-css, #ag-claude-style-css'
       )
@@ -6711,6 +7315,7 @@
     }
     syncRipple();
     syncComposers();
+    syncPluginDetailTranslateButton();
     ensureSettingsSection();
   }
 
@@ -7179,6 +7784,7 @@
         cleanupUsageMonitorFooterSplit,
         cleanupLegacyAuroraArtifacts,
         restoreGreetings,
+        teardownPageTranslate,
         () => {
           for (const unsub of Array.from(lexCompactUnsubs)) {
             try {
@@ -7209,7 +7815,7 @@
       });
       document
         .querySelectorAll(
-          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, #' +
+          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, .ag-cs-page-translate-btn, #' +
             SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());

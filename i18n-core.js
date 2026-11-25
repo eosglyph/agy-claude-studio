@@ -334,6 +334,8 @@
       }
       const names = closestSel(el, namesSel);
       if (!names) return 2;
+      // Fixed shell breadcrumb root (not a user-chosen title) must be translated.
+      if (matchesSel(names, '[data-testid="breadcrumb-segment"]') && /^\s*Customizations\s*$/.test(names.textContent || '')) return 2;
       const ctl = closestSel(el, controlsSel);
       return ctl && ctl !== names && names.contains(ctl) ? 2 : 1;
     }
