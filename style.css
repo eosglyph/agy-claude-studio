@@ -596,12 +596,21 @@ html[data-ag-cs-style][data-ag-cs-home="studio"] .agy-home [data-testid="home-gr
   transition: color 150ms ease !important;
 }
 
+html[data-ag-cs-style][data-ag-cs-logo-ink="accent"] [data-testid="app-icon-new-conversation-button"],
 html[data-ag-cs-style][data-ag-cs-home="studio"][data-ag-cs-logo-ink="accent"] .agy-home [data-testid="home-greeting"] .home-greeting-mark {
   color: var(--ag-cs-accent) !important;
 }
+html[data-ag-cs-style][data-ag-cs-logo-ink="accent"] [data-testid="app-icon-new-conversation-button"]:hover {
+  filter: brightness(1.08);
+}
 
+html[data-ag-cs-style][data-ag-cs-logo-ink="foreground"] [data-testid="app-icon-new-conversation-button"],
 html[data-ag-cs-style][data-ag-cs-home="studio"][data-ag-cs-logo-ink="foreground"] .agy-home [data-testid="home-greeting"] .home-greeting-mark {
   color: var(--foreground) !important;
+}
+html[data-ag-cs-style][data-ag-cs-logo-ink] [data-testid="app-icon-new-conversation-button"] svg path {
+  fill: currentColor !important;
+  transition: fill 150ms ease, color 150ms ease !important;
 }
 
 html[data-ag-cs-style][data-ag-cs-home="studio"] .agy-home [data-testid="home-greeting"] .home-greeting-title {

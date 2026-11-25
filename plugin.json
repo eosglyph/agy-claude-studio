@@ -8,6 +8,8 @@
   "homepage": "https://github.com/eosglyph/agy-claude-studio",
   "repository": "https://github.com/eosglyph/agy-claude-studio",
   "suggestedPrompts": [
-    "打开 Claude Studio 控制面板并查看当前主题状态"
+    "带我 30 秒完成 Claude Studio 初始偏好配置",
+    "帮我配置任务完成时的手机微信/iOS 推送提醒",
+    "帮我诊断 Claude Studio 状态或调整翻译保护名单"
   ]
 }
