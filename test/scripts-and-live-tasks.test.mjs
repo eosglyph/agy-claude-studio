@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -440,14 +441,14 @@ test('getConversationInspectorApi returns real environment, context breakdown, c
     assert.ok(!res.outputs.some((o) => o.name.startsWith('.')));
 
     // openInspectorFileApi security checks
-    const trav = studioMain.openInspectorFileApi(
+    const trav = await studioMain.openInspectorFileApi(
       { path: path.join(wsDir, 'AGENTS.md'), conversationId: convId },
       { appDataDir, spawnFn: () => ({ unref() {} }) }
     );
     assert.equal(trav.ok, false);
     assert.equal(trav.error, 'path_not_allowed');
 
-    const blocked = studioMain.openInspectorFileApi(
+    const blocked = await studioMain.openInspectorFileApi(
       { path: path.join(brainDir, 'danger.ps1'), conversationId: convId },
       { appDataDir, spawnFn: () => ({ unref() {} }) }
     );
@@ -455,13 +456,15 @@ test('getConversationInspectorApi returns real environment, context breakdown, c
     assert.equal(blocked.error, 'blocked_extension');
 
     let openedArgs = null;
-    const allowed = studioMain.openInspectorFileApi(
+    const allowed = await studioMain.openInspectorFileApi(
       { path: path.join(brainDir, 'analysis_report.md'), conversationId: convId },
       {
         appDataDir,
         spawnFn: (cmd, args) => {
           openedArgs = { cmd, args };
-          return { unref() {} };
+          const child = new EventEmitter();
+          queueMicrotask(() => child.emit('exit', 0));
+          return child;
         },
       }
     );
@@ -477,7 +480,7 @@ test('performStudioSelfUpdate supports non-git release archive auto-upgrade whil
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-arch-'));
   try {
     const pluginDir = path.join(tmpDir, 'installed-plugin');
-    const pluginDataDir = path.join(tmpDir, 'plugin_data');
+    const pluginDataDir = path.join(pluginDir, 'sidecars', 'custom-data');
     const releaseSrc = path.join(tmpDir, 'agy-claude-studio-2.2.0');
     fs.mkdirSync(pluginDir, { recursive: true });
     fs.mkdirSync(pluginDataDir, { recursive: true });
@@ -491,6 +494,11 @@ test('performStudioSelfUpdate supports non-git release archive auto-upgrade whil
     fs.writeFileSync(path.join(releaseSrc, 'plugin.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.2.0' }), 'utf8');
     fs.writeFileSync(path.join(releaseSrc, 'package.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.2.0' }), 'utf8');
     fs.writeFileSync(path.join(releaseSrc, 'marker.txt'), 'new-v2.2.0', 'utf8');
+    fs.mkdirSync(path.join(releaseSrc, 'sidecars', 'custom-data'), { recursive: true });
+    fs.writeFileSync(path.join(releaseSrc, 'sidecars', 'custom-data', 'notify.json'), JSON.stringify({ enabled: false }));
+    fs.writeFileSync(path.join(releaseSrc, 'sidecars', 'marker.txt'), 'updated sibling');
+    fs.writeFileSync(path.join(pluginDir, 'config.json'), 'local user settings');
+    fs.writeFileSync(path.join(releaseSrc, 'config.json'), 'archive default settings');
 
     const tarFile = path.join(tmpDir, 'v2.2.0.tar.gz');
     execFileSync('tar', ['-czf', tarFile, '-C', tmpDir, 'agy-claude-studio-2.2.0']);
@@ -499,6 +507,7 @@ test('performStudioSelfUpdate supports non-git release archive auto-upgrade whil
     let reinjected = false;
     const updRes = await studioMain.performStudioSelfUpdate({
       pluginDir,
+      pluginDataDir,
       targetTag: 'v2.2.0',
       fetchFn: async () => ({
         ok: true,
@@ -515,6 +524,8 @@ test('performStudioSelfUpdate supports non-git release archive auto-upgrade whil
     assert.equal(updRes.version, '2.2.0');
     assert.equal(reinjected, true);
     assert.equal(fs.readFileSync(path.join(pluginDir, 'marker.txt'), 'utf8'), 'new-v2.2.0');
+    assert.equal(fs.readFileSync(path.join(pluginDir, 'sidecars', 'marker.txt'), 'utf8'), 'updated sibling');
+    assert.equal(fs.readFileSync(path.join(pluginDir, 'config.json'), 'utf8'), 'local user settings');
     assert.equal(JSON.parse(fs.readFileSync(path.join(pluginDataDir, 'notify.json'), 'utf8')).enabled, true);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

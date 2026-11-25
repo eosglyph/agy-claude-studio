@@ -106,6 +106,7 @@ const DEFAULT_CONFIG = {
   periodicSelector: true,
   orchestratorSwitch: true,
   pluginPageTranslate: true,
+  fileLinkContextMenu: true,
   i18nIgnoreSelectors: [],
   autoRelaunchWithCdp: true,
   exitOnHostClose: false,
@@ -140,6 +141,7 @@ const CONFIG_VALIDATORS = {
   periodicSelector: 'boolean',
   orchestratorSwitch: 'boolean',
   pluginPageTranslate: 'boolean',
+  fileLinkContextMenu: 'boolean',
   autoRelaunchWithCdp: 'boolean',
   exitOnHostClose: 'boolean',
 };

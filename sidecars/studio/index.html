@@ -2437,6 +2437,8 @@
         btnNotifyConfig: '配置渠道',
         btnNotifySave: '保存设置',
         notifyDirtyHint: '有未保存的编辑',
+        notifyFieldSaved: '已保存，留空保留',
+        notifyFieldClear: '清除已保存值',
         notifySavedToast: '推送设置已保存（仅存本地 notify.json）',
         notifyNeedConfigToast: '请先选择推送渠道并填写密钥/Webhook，再开启开关',
         notifyTestSending: '正在发送测试推送…',
@@ -2490,6 +2492,7 @@
           placeholderStyle: ['输入框引导语', '选择 Claude 风格引导语或保留原生提示', [['studio', 'Claude 风格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素周期表', '在模型名旁添加四角星按钮，点击打开元素周期表选模型'],
           orchestratorSwitch: ['协作模式快捷开关', '在底栏模型名旁添加独立开关，一键在标准模型与协作模式（Orchestrator）间切换'],
+          fileLinkContextMenu: ['聊天文件右键菜单', '在对话中的本地文件链接上右键，可复制完整路径（如官方后续内置可随时关闭）'],
           compactPreset: [
             '/compact 预设文案',
             '点击 /compact 快捷按钮后自动填入的压缩要求（不会自动发送，可先改再回车）',
@@ -2599,6 +2602,8 @@
         btnNotifyConfig: '設定渠道',
         btnNotifySave: '儲存設定',
         notifyDirtyHint: '有尚未儲存的變更',
+        notifyFieldSaved: '已儲存，留空保留',
+        notifyFieldClear: '清除已儲存值',
         notifySavedToast: '推播設定已儲存（僅存本機 notify.json）',
         notifyNeedConfigToast: '請先選擇推播渠道並填寫金鑰或 Webhook，再開啟開關',
         notifyTestSending: '正在發送測試推播…',
@@ -2652,6 +2657,7 @@
           placeholderStyle: ['輸入框引導語', '選擇 Claude 風格引導語或保留原生提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '在模型名旁加入四角星按鈕，點擊開啟元素週期表選模型'],
           orchestratorSwitch: ['協作模式快捷開關', '在底列模型名旁加入獨立開關，一鍵切換標準模型與協作模式（Orchestrator）'],
+          fileLinkContextMenu: ['對話檔案右鍵選單', '在對話中的本機檔案連結按右鍵，可複製完整路徑（若官方日後內建可隨時關閉）'],
           compactPreset: [
             '/compact 預設文案',
             '點擊 /compact 快捷按鈕後自動填入的壓縮要求（不會自動送出，可先微調再按 Enter）',
@@ -2761,6 +2767,8 @@
         btnNotifyConfig: '設定渠道',
         btnNotifySave: '儲存設定',
         notifyDirtyHint: '有未儲存嘅改動',
+        notifyFieldSaved: '已儲存，留空就保留',
+        notifyFieldClear: '清除已儲存值',
         notifySavedToast: '推送設定已儲存（淨係存喺本機 notify.json）',
         notifyNeedConfigToast: '請先揀好渠道同填好密鑰／Webhook 再開關',
         notifyTestSending: '發送緊測試推送…',
@@ -2814,6 +2822,7 @@
           placeholderStyle: ['輸入框引導語', '揀 Claude 風格引導語定保留原版提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '喺模型名隔離加粒四角星，撳開元素週期表揀模型'],
           orchestratorSwitch: ['協作模式快捷開關', '喺底欄模型名隔離加粒獨立開關，一鍵切換標準模型同協作模式（Orchestrator）'],
+          fileLinkContextMenu: ['對話檔案右鍵選單', '喺對話入面嘅本機檔案連結撳右鍵，可以複製完整路徑（如果官方日後內置可以隨時熄）'],
           compactPreset: [
             '/compact 預設文案',
             '撳 /compact 快捷掣之後自動填入嘅壓縮要求（唔會自動送出，可以改完再按 Enter）',
@@ -2923,6 +2932,8 @@
         btnNotifyConfig: 'Configure',
         btnNotifySave: 'Save Push',
         notifyDirtyHint: 'Unsaved edits',
+        notifyFieldSaved: 'Saved. Leave blank to keep.',
+        notifyFieldClear: 'Clear saved value',
         notifySavedToast: 'Push settings saved cleanly to local notify.json',
         notifyNeedConfigToast: 'Pick a push channel and enter its key/webhook first',
         notifyTestSending: 'Sending test notification...',
@@ -2976,6 +2987,7 @@
           placeholderStyle: ['Input Prompt Text', 'Show Claude-style prompt copy or keep the native prompt', [['studio', 'Claude Style'], ['host', 'Native']]],
           periodicSelector: ['Gemini 4 Periodic Table', 'Add a sparkle button beside model name to pick from the Periodic Table'],
           orchestratorSwitch: ['Orchestrator Quick Switch', 'Add a compact switch beside the model selector to toggle Orchestrator mode in one click'],
+          fileLinkContextMenu: ['Chat File Link Context Menu', 'Right-click local file links in chat to copy the full path (turn off anytime if Antigravity adds this natively)'],
           compactPreset: [
             '/compact Preset Prompt',
             'Optional compaction directive pre-filled after clicking /compact (never auto-sends)',
@@ -3085,6 +3097,8 @@
         btnNotifyConfig: 'チャネル設定',
         btnNotifySave: '保存',
         notifyDirtyHint: '未保存の変更あり',
+        notifyFieldSaved: '保存済み。空欄なら保持します',
+        notifyFieldClear: '保存値をクリア',
         notifySavedToast: '通知設定をローカル notify.json に保存しました',
         notifyNeedConfigToast: '先に通知チャネルとキー / Webhook を設定してください',
         notifyTestSending: 'テスト通知を送信中…',
@@ -3138,6 +3152,7 @@
           placeholderStyle: ['入力欄ガイド文', 'Claude 風のガイド文または標準の案内文を選択', [['studio', 'Claude 風'], ['host', '標準']]],
           periodicSelector: ['Gemini 4 元素周期表', 'モデル名横に星ボタンを追加し、周期表からモデルを選択'],
           orchestratorSwitch: ['Orchestrator クイック切替', 'モデル名横にスイッチを追加し、通常モデルと Orchestrator をワンクリック切替'],
+          fileLinkContextMenu: ['チャット内ファイル右クリックメニュー', '会話内のローカルファイルリンクを右クリックしてパスをコピー（公式対応時はいつでもオフ可能）'],
           compactPreset: [
             '/compact プリセット指示',
             '/compact ボタン押下後に自動入力する圧縮指示（自動送信はせず、確認後に Enter）',
@@ -3270,7 +3285,7 @@
         id: 'advanced',
         iconKey: 'advanced',
         titleKey: 'grpAdvanced',
-        keys: ['periodicSelector', 'orchestratorSwitch', 'compactPreset', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
+        keys: ['periodicSelector', 'orchestratorSwitch', 'compactPreset', 'fileLinkContextMenu', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
       },
       {
         id: 'telemetry',
@@ -3282,13 +3297,12 @@
 
     const ALL_SETTINGS_GROUP_IDS = ['basics', 'translation', 'layout', 'advanced', 'telemetry', 'notify', 'updates'];
 
-    const apiFetch = (url, opts) => {
-      if (window.sidecar && typeof window.sidecar.fetch === 'function') {
-        return window.sidecar.fetch(url, opts);
+    const apiFetch = async (url, { body = '{}' } = {}) => {
+      if (typeof window.sidecar?.fetch !== 'function') {
+        throw new Error('Antigravity sidecar bridge is unavailable');
       }
-      return fetch(url, {
-        ...opts,
-        headers: { 'Content-Type': 'application/json', ...(opts && opts.headers) }
+      return window.sidecar.fetch(url, {
+        method: 'POST', body, headers: { 'Content-Type': 'application/json' },
       });
     };
 
@@ -3326,7 +3340,34 @@
         webhook: { webhookUrl: '', authHeader: '' },
       },
     };
+    let savedNotifyConfig = cloneObj(notifyConfig);
+    let notifySavedFields = {};
+    let notifyLoading = false;
+    let notifySaving = false;
+    let notifyWriteVersion = 0;
     const revealedCredFields = new Set();
+
+    function notifyPatch() {
+      const delta = (current, saved) => Object.fromEntries(Object.entries(current)
+        .filter(([key, value]) => value !== saved?.[key]));
+      const { channels, ...settings } = notifyConfig;
+      const patch = delta(settings, savedNotifyConfig);
+      for (const [channel, fields] of Object.entries(channels)) {
+        const edits = delta(fields, savedNotifyConfig.channels[channel]);
+        if (Object.keys(edits).length) (patch.channels ||= {})[channel] = edits;
+      }
+      return patch;
+    }
+
+    function acceptNotifyConfig(data) {
+      savedNotifyConfig = cloneObj(data.config);
+      notifyConfig = cloneObj(data.config);
+      notifySavedFields = data.savedFields || {};
+      revealedCredFields.clear();
+      notifyLoaded = true;
+      notifyDirty = false;
+      renderNotifySection({ rebuildCreds: true });
+    }
 
     function cloneObj(o) {
       return JSON.parse(JSON.stringify(o));
@@ -3506,20 +3547,27 @@
       if (!cfg) return false;
       const ch = cfg.channel;
       const c = cfg.channels?.[ch] || {};
+      const before = savedNotifyConfig.channels?.[ch] || {};
+      const hasValue = (key, isValid = (value) => Boolean(String(value || '').trim()), tiedTo) => {
+        const changedDestination = tiedTo && c[tiedTo] !== before[tiedTo];
+        if (Object.hasOwn(c, key)) return isValid(c[key]);
+        return !changedDestination && Boolean(notifySavedFields[ch]?.includes(key));
+      };
+      const hasUrl = (key) => hasValue(key, isValidHttpUrlClient);
       switch (ch) {
         case 'serverchan':
-          return Boolean(String(c.sendKey || '').trim() || isValidHttpUrlClient(c.apiUrl));
+          return hasValue('sendKey') || hasUrl('apiUrl');
         case 'bark':
-          return Boolean(isValidHttpUrlClient(c.serverUrl) && String(c.deviceKey || '').trim());
+          return hasUrl('serverUrl') && hasValue('deviceKey', undefined, 'serverUrl');
         case 'ntfy':
-          return Boolean(isValidHttpUrlClient(c.serverUrl) && String(c.topic || '').trim());
+          return hasUrl('serverUrl') && hasValue('topic');
         case 'feishu':
         case 'dingtalk':
         case 'wecom':
         case 'webhook':
-          return Boolean(isValidHttpUrlClient(c.webhookUrl));
+          return hasUrl('webhookUrl');
         case 'telegram':
-          return Boolean(String(c.botToken || '').trim() && String(c.chatId || '').trim() && isValidHttpUrlClient(c.apiBase));
+          return hasValue('botToken', undefined, 'apiBase') && hasValue('chatId') && hasUrl('apiBase');
         default:
           return false;
       }
@@ -3733,11 +3781,16 @@
         inp.type = spec.secret && !revealedCredFields.has(fieldKey) ? 'password' : 'text';
         inp.autocomplete = 'off';
         inp.spellcheck = false;
-        inp.placeholder = spec.placeholder || '';
+        const hasSavedValue = notifySavedFields[ch]?.includes(spec.key);
+        const displayPlaceholder = () => !Object.hasOwn(chData, spec.key) && hasSavedValue
+          ? t.notifyFieldSaved : (spec.placeholder || '');
+        inp.placeholder = displayPlaceholder();
         inp.value = String(chData[spec.key] || '');
         inp.addEventListener('input', () => {
           if (!notifyConfig.channels[ch]) notifyConfig.channels[ch] = {};
-          notifyConfig.channels[ch][spec.key] = inp.value;
+          if (!inp.value && hasSavedValue && chData[spec.key] !== '') delete chData[spec.key];
+          else chData[spec.key] = inp.value;
+          inp.placeholder = displayPlaceholder();
           notifyDirty = true;
           updateNotifyBadgesAndDirtyHint();
         });
@@ -3771,6 +3824,20 @@
         }
 
         field.appendChild(wrap);
+        if (hasSavedValue) {
+          const clear = document.createElement('button');
+          clear.type = 'button';
+          clear.className = 'tool-btn';
+          clear.textContent = t.notifyFieldClear;
+          clear.addEventListener('click', () => {
+            chData[spec.key] = '';
+            inp.value = '';
+            inp.placeholder = displayPlaceholder();
+            notifyDirty = true;
+            updateNotifyBadgesAndDirtyHint();
+          });
+          field.appendChild(clear);
+        }
         box.appendChild(field);
       }
     }
@@ -3863,43 +3930,46 @@
       updateNotifyBadgesAndDirtyHint();
     }
 
-    async function loadNotifyConfig({ force = false } = {}) {
-      if (notifyDirty && !force) return;
+    async function loadNotifyConfig() {
+      if (notifyDirty || notifyLoading || notifySaving) return;
+      notifyLoading = true;
+      const versionBeforeRead = notifyWriteVersion;
       try {
-        const res = await apiFetch('/api/notify', { method: 'GET' });
+        const res = await apiFetch('/api/notify/read');
         if (!res.ok) return;
         const data = await res.json();
-        if (data?.config) {
-          notifyConfig = cloneObj(data.config);
-          notifyLoaded = true;
-          notifyDirty = false;
-          renderNotifySection({ rebuildCreds: true });
+        if (data?.config && !notifyDirty && !notifySaving && versionBeforeRead === notifyWriteVersion) {
+          acceptNotifyConfig(data);
         }
       } catch {
-        // Older sidecar process may not expose /api/notify until Antigravity reloads plugin.
+        // The sidecar may be restarting.
+      } finally {
+        notifyLoading = false;
       }
     }
 
     async function persistNotifyConfig({ silent = false } = {}) {
+      if (notifySaving) return false;
       const t = getT();
+      const cardIds = ['notify-section', 'overview-notify-card'];
+      notifySaving = true;
+      notifyWriteVersion += 1;
+      for (const id of cardIds) document.getElementById(id).inert = true;
       try {
         const res = await apiFetch('/api/notify', {
-          method: 'POST',
-          body: JSON.stringify({ config: notifyConfig }),
+          body: JSON.stringify({ config: notifyPatch() }),
         });
         const data = await res.json();
-        if (!res.ok || !data?.ok) {
-          throw new Error(data?.error || `HTTP ${res.status}`);
-        }
-        if (data.config) notifyConfig = cloneObj(data.config);
-        notifyLoaded = true;
-        notifyDirty = false;
-        renderNotifySection({ rebuildCreds: true });
+        if (!res.ok || !data?.ok || !data.config) throw new Error(data?.error || `HTTP ${res.status}`);
+        acceptNotifyConfig(data);
         if (!silent) showToast(t.notifySavedToast);
         return true;
       } catch (err) {
         showToast(t.saveErrToast(err.message));
         return false;
+      } finally {
+        notifySaving = false;
+        for (const id of cardIds) document.getElementById(id).inert = false;
       }
     }
 
@@ -3914,8 +3984,7 @@
       showToast(t.notifyTestSending);
       try {
         const res = await apiFetch('/api/notify/test', {
-          method: 'POST',
-          body: JSON.stringify({ config: notifyConfig }),
+          body: JSON.stringify({ config: notifyPatch() }),
         });
         const data = await res.json();
         if (!res.ok || !data?.ok) {
@@ -4279,7 +4348,7 @@
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked =
-              key === 'glassEffect' || key === 'orchestratorSwitch' || key === 'pluginPageTranslate'
+              key === 'glassEffect' || key === 'orchestratorSwitch' || key === 'pluginPageTranslate' || key === 'fileLinkContextMenu'
                 ? cfg[key] !== false
                 : key === 'mascot'
                 ? cfg[key] === 'crab'
@@ -4380,7 +4449,6 @@
     async function saveMany(updates, toastKey) {
       try {
         const res = await apiFetch('/api/config', {
-          method: 'POST',
           body: JSON.stringify({ updates })
         });
         const data = await res.json();
@@ -4397,7 +4465,6 @@
     async function saveOne(key, value) {
       try {
         const res = await apiFetch('/api/config', {
-          method: 'POST',
           body: JSON.stringify({ key, value })
         });
         const data = await res.json();
@@ -4414,7 +4481,7 @@
     async function refreshStatus() {
       syncHostThemeAttr();
       try {
-        const res = await apiFetch('/api/status', { method: 'GET' });
+        const res = await apiFetch('/api/status');
         const st = await res.json();
         lastStatus = st;
         currentConfig = st.config || currentConfig;
@@ -4434,7 +4501,7 @@
       const btns = document.querySelectorAll('.actions button');
       btns.forEach((b) => (b.disabled = true));
       try {
-        const res = await apiFetch(path, { method: 'POST', body: '{}' });
+        const res = await apiFetch(path, {});
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error');
         const t = getT();
@@ -4454,7 +4521,7 @@
       const btn = document.getElementById('btn-relaunch');
       if (btn) btn.disabled = true;
       try {
-        const res = await apiFetch('/api/relaunch', { method: 'POST', body: '{}' });
+        const res = await apiFetch('/api/relaunch', {});
         const data = await res.json();
         if (!res.ok || !data?.ok) throw new Error(data?.error || 'Error');
         showToast(getT().relaunching);
@@ -4483,7 +4550,7 @@
       const btn = document.getElementById('btn-open-um');
       if (btn) btn.disabled = true;
       try {
-        const res = await apiFetch('/api/open-usage-monitor', { method: 'POST', body: '{}' });
+        const res = await apiFetch('/api/open-usage-monitor', {});
         const data = await res.json();
         const t = getT();
         if (!res.ok || !data?.ok) {
@@ -4498,7 +4565,7 @@
 
     async function checkUpdateSilently() {
       try {
-        const res = await apiFetch('/api/check-update', { method: 'GET' });
+        const res = await apiFetch('/api/check-update');
         if (!res.ok) return;
         const data = await res.json();
         if (data?.ok) {
@@ -4515,7 +4582,7 @@
       if (btn) btn.disabled = true;
       showToast(getT().updateChecking);
       try {
-        const res = await apiFetch('/api/check-update?force=1', { method: 'GET' });
+        const res = await apiFetch('/api/check-update', { body: JSON.stringify({ force: true }) });
         const data = await res.json();
         const t = getT();
         if (!res.ok || !data?.ok) {
@@ -4556,7 +4623,6 @@
       showToast(t.updateRunning);
       try {
         const res = await apiFetch('/api/self-update', {
-          method: 'POST',
           body: JSON.stringify({ targetTag: lastUpdateCheck?.latestTag || '' }),
         });
         const data = await res.json();
@@ -4590,7 +4656,7 @@
       const btn = document.getElementById('btn-sync-compat');
       if (btn) btn.disabled = true;
       try {
-        const res = await apiFetch('/api/sync-i18n-compat', { method: 'POST', body: '{}' });
+        const res = await apiFetch('/api/sync-i18n-compat', {});
         const data = await res.json();
         const t = getT();
         if (!res.ok || !data?.ok) {
@@ -5143,7 +5209,7 @@
 
     async function loadLiveTasks() {
       try {
-        const res = await apiFetch('/api/live-tasks', { method: 'GET' });
+        const res = await apiFetch('/api/live-tasks');
         if (!res.ok) return;
         const data = await res.json();
         if (data && data.ok) {
@@ -5324,7 +5390,7 @@
 
     async function loadScripts() {
       try {
-        const res = await apiFetch('/api/scripts', { method: 'GET' });
+        const res = await apiFetch('/api/scripts/list');
         if (!res.ok) return;
         const data = await res.json();
         if (data && data.ok && Array.isArray(data.scripts)) {
@@ -5351,7 +5417,6 @@
       }
       try {
         const res = await apiFetch('/api/scripts', {
-          method: 'POST',
           body: JSON.stringify(payload),
         });
         const data = await res.json();
@@ -5372,7 +5437,6 @@
       const c = getOverviewExtrasCopy(currentConfig?.language || 'zh-CN');
       try {
         const res = await apiFetch('/api/scripts/delete', {
-          method: 'POST',
           body: JSON.stringify({ id }),
         });
         const data = await res.json();
@@ -5391,7 +5455,6 @@
       renderScriptsCard();
       try {
         const res = await apiFetch('/api/scripts/run', {
-          method: 'POST',
           body: JSON.stringify({ id }),
         });
         const data = await res.json();
@@ -5842,7 +5905,6 @@
     async function loadConversationInspector() {
       try {
         const res = await apiFetch('/api/conversation-inspector', {
-          method: 'POST',
           body: JSON.stringify({ conversationId: activeConversationId }),
         });
         if (!res.ok) return;
@@ -5888,7 +5950,7 @@
     renderScriptsCard();
     void refreshStatus();
     void checkUpdateSilently();
-    void loadNotifyConfig({ force: true });
+    void loadNotifyConfig();
     void loadConversationInspector();
     void loadLiveTasks();
     void loadScripts();

@@ -526,8 +526,6 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   assert.match(css, /div:nth-child\(2\)\s*>\s*div\.flex[\s\S]*?bottom:\s*calc\(100%\s*\+\s*18px\)\s*!important/, 'Voice/Mic & Send cluster is pinned inside Tier-1 right edge');
 
   const studioMod = await import('../sidecars/studio/main.mjs');
-  assert.equal(studioMod.isLocalHostRequest({ headers: { host: '127.0.0.1:6155', origin: 'plugin://agy-claude-studio--studio-6155' } }), true);
-  assert.equal(studioMod.isLocalHostRequest({ headers: { host: 'evil.example.com', origin: 'https://evil.example.com' } }), false);
 
   const logoSvg = fs.readFileSync(path.join(ROOT_DIR, 'assets', 'logo.svg'), 'utf8');
   assert.ok(logoSvg.includes('ag-cs-gemini-star'), 'Plugin tab logo uses crisp Gemini sparkle star vector SVG');
@@ -1409,13 +1407,14 @@ test('cdp.syncRemoteI18nCompat and Studio update helpers validate remote payload
 
     let reinjected = false;
     const pulledCalls = [];
+    const upstream = 'a'.repeat(40);
     const cleanSelf = await studioMod.performStudioSelfUpdate({
       pluginDir: tmpDir,
       execFn: (cmd, args) => {
         pulledCalls.push(args.join(' '));
         if (args[0] === 'status') return '';
-        if (args[0] === 'rev-parse') return 'main\n';
-        if (args[0] === 'pull') return 'Updating 4c06173..abc1234\nFast-forward\n';
+        if (args[0] === 'rev-parse') return args[1] === '--verify' ? upstream : 'main\n';
+        if (args[0] === 'merge') return 'Updating 4c06173..abc1234\nFast-forward\n';
         return '';
       },
       reinjectFn: async () => {
@@ -1425,7 +1424,7 @@ test('cdp.syncRemoteI18nCompat and Studio update helpers validate remote payload
     assert.equal(cleanSelf.ok, true);
     assert.equal(cleanSelf.updated, true);
     assert.equal(reinjected, true);
-    assert.ok(pulledCalls.includes('pull --ff-only'));
+    assert.ok(pulledCalls.includes(`merge --ff-only --no-overwrite-ignore ${upstream}`));
 
     // Notify API helpers stay isolated in notify.json and deliver localized test payloads
     const notifyDir = path.join(tmpDir, 'notify-isolation');

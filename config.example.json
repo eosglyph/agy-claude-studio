@@ -26,6 +26,7 @@
   "periodicSelector": true,
   "orchestratorSwitch": true,
   "pluginPageTranslate": true,
+  "fileLinkContextMenu": true,
   "i18nIgnoreSelectors": [],
   "autoRelaunchWithCdp": true,
   "exitOnHostClose": false

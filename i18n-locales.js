@@ -356,6 +356,11 @@
     psEffortLabel: ['推理强度', '推理強度', '推理強度', 'Effort', '推論レベル'],
     psQuotaLabel: ['配额剩余', '配額剩餘', '配額剩餘', 'Quota', 'クォータ残量'],
     psNoResults: ['未找到匹配的模型', '找不到符合的模型', '搵唔到啱嘅模型', 'No matching models', '一致するモデルがありません'],
+
+    // ── Chat File Link Context Menu ──────────────────────────────────────────
+    fileMenuCopyPath: ['复制完整路径', '複製完整路徑', '複製完整路徑', 'Copy Full Path', 'フルパスをコピー'],
+    fileMenuCopyFailed: ['复制失败', '複製失敗', '複製失敗', 'Could not copy the path', 'パスをコピーできませんでした'],
+    fileMenuCopied: ['已复制完整路径', '已複製完整路徑', '已複製完整路徑', 'Full path copied', 'フルパスをコピーしました'],
   };
 
   function getUiStrings(lang) {

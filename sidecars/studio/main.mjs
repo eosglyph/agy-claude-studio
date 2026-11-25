@@ -1,10 +1,10 @@
 // Aux Pane Sidecar UI server for Claude Studio (agy-claude-studio).
 // Uses sidecar_sdk and cleans up cleanly via host /healthz watchdog when Antigravity exits.
 import { execFileSync, spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
-import { basename, dirname, extname, join, resolve } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -19,42 +19,10 @@ const { removeFromAllWindows } = require('../../remove.js');
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT_DIR = resolve(__dirname, '..', '..');
 const HTML_PATH = join(__dirname, 'index.html');
-const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' };
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Referrer-Policy': 'no-referrer' };
 const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/eosglyph/agy-claude-studio/releases/latest';
 const LATEST_RELEASE_WEB_URL = 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
 const LATEST_PACKAGE_RAW_URL = 'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/package.json';
-
-function isLocalHostRequest(req) {
-  if (!req?.headers) return true;
-  const host = String(req.headers.host || '').trim().toLowerCase();
-  const hostMatch = host.match(/^(127\.0\.0\.1|localhost|\[::1\])(?::(\d+))?$/);
-  if (host && !hostMatch) {
-    return false;
-  }
-  const origin = String(req.headers.origin || '').trim().toLowerCase();
-  if (origin && /^(?:vscode-webview|plugin):\/\/[a-z0-9._-]+$/.test(origin)) {
-    return true;
-  }
-  const secFetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
-  if (secFetchSite === 'cross-site') {
-    return false;
-  }
-  if (origin) {
-    const originMatch = origin.match(/^(https?):\/\/(127\.0\.0\.1|localhost|\[::1\])(?::(\d+))?$/);
-    if (!originMatch) {
-      return false;
-    }
-    if (hostMatch) {
-      const defaultPort = originMatch[1] === 'https' ? '443' : '80';
-      const originPort = originMatch[3] || defaultPort;
-      const hostPort = hostMatch[2] || defaultPort;
-      if (originPort !== hostPort) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
 
 const LAUNCHER_CACHE_TTL_MS = 30000;
 let launcherDiagCache = { at: 0, value: null };
@@ -494,9 +462,92 @@ function findExtractedStudioRoot(extractDir) {
 }
 
 const ARCHIVE_SKIP_TOP_NAMES = new Set(['.git', '.github', '.gitignore', 'node_modules', 'dist', 'release', 'releases']);
+const UPDATE_DATA_NAMES = new Set([
+  'plugin_data', 'config.json', 'notify.json', 'notify-state.json', 'scripts.json',
+  'periodic-override.json', 'i18n-compat-remote.json', '.watch.pid', '.watch.lock.json',
+]);
+
+function containsUpdatePath(parent, file) {
+  const rel = relative(parent, file);
+  return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`));
+}
+
+function getUpdatePathGuard(pluginDir, pluginDataDir) {
+  const installRoot = realpathSync.native(pluginDir);
+  const candidates = [pluginDataDir, cdp.STATE_DIR, cdp.CONFIG_FILE, resolveNotifyDir(), resolveScriptsDir()];
+  const protectedPaths = new Set();
+  for (const candidate of candidates.filter(Boolean)) {
+    const raw = resolve(candidate);
+    const rel = relative(resolve(pluginDir), raw);
+    if (rel && containsUpdatePath(resolve(pluginDir), raw)) protectedPaths.add(resolve(installRoot, rel));
+    try {
+      const actual = realpathSync.native(raw);
+      if (relative(installRoot, actual) && containsUpdatePath(installRoot, actual)) protectedPaths.add(actual);
+    } catch {}
+  }
+  const isProtected = (target, replacingDirectory = false) => {
+    const first = relative(installRoot, target).split(sep)[0].toLowerCase();
+    return UPDATE_DATA_NAMES.has(first) || [...protectedPaths].some((data) => (
+      containsUpdatePath(data, target) || (replacingDirectory && containsUpdatePath(target, data))
+    ));
+  };
+  return { installRoot, isProtected };
+}
+
+function getArchiveCopyPlan(sourceRoot, installRoot, isProtected) {
+  const files = [];
+  const visit = (source, destination, top = false) => {
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (top && ARCHIVE_SKIP_TOP_NAMES.has(entry.name.toLowerCase())) continue;
+      const src = join(source, entry.name);
+      const dst = join(destination, entry.name);
+      if (isProtected(dst, !entry.isDirectory())) continue;
+      if (!(entry.isFile() || entry.isDirectory())) throw new Error('Release archive contains an unsupported file type');
+      const sourceStat = lstatSync(src);
+      if (entry.isFile() && sourceStat.nlink !== 1) throw new Error('Release archive contains a hard link');
+      const targetStat = lstatSync(dst, { throwIfNoEntry: false });
+      if (targetStat && (entry.isDirectory() ? !targetStat.isDirectory() : !targetStat.isFile() || targetStat.nlink !== 1)) {
+        throw new Error(`Unsafe update destination: ${relative(installRoot, dst)}`);
+      }
+      if (entry.isDirectory()) visit(src, dst);
+      else files.push({ src, dst, exists: Boolean(targetStat) });
+    }
+  };
+  visit(sourceRoot, installRoot, true);
+  return files;
+}
+
+function applyArchiveCopyPlan(files, backupDir) {
+  mkdirSync(backupDir);
+  for (const [index, file] of files.entries()) {
+    if (file.exists) copyFileSync(file.dst, join(backupDir, String(index)));
+  }
+  let lastAttempt = -1;
+  try {
+    for (const [index, file] of files.entries()) {
+      mkdirSync(dirname(file.dst), { recursive: true });
+      lastAttempt = index;
+      copyFileSync(file.src, file.dst);
+    }
+  } catch (error) {
+    let rollbackFailed = false;
+    for (let index = lastAttempt; index >= 0; index -= 1) {
+      const file = files[index];
+      try {
+        if (file.exists) copyFileSync(join(backupDir, String(index)), file.dst);
+        else if (existsSync(file.dst)) unlinkSync(file.dst);
+      } catch {
+        rollbackFailed = true;
+      }
+    }
+    if (rollbackFailed) throw new Error('Archive update failed and could not restore every file', { cause: error });
+    throw error;
+  }
+}
 
 async function performArchiveSelfUpdate({
   pluginDir,
+  pluginDataDir,
   targetTag = '',
   fetchFn = typeof fetch === 'function' ? fetch : null,
   execFn = execFileSync,
@@ -579,13 +630,9 @@ async function performArchiveSelfUpdate({
       };
     }
 
-    const entries = readdirSync(sourceRoot, { withFileTypes: true });
-    for (const ent of entries) {
-      if (ARCHIVE_SKIP_TOP_NAMES.has(ent.name)) continue;
-      const srcPath = join(sourceRoot, ent.name);
-      const dstPath = join(pluginDir, ent.name);
-      cpSync(srcPath, dstPath, { recursive: true, force: true });
-    }
+    const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
+    const files = getArchiveCopyPlan(sourceRoot, installRoot, isProtected);
+    applyArchiveCopyPlan(files, join(tmpRoot, 'backup'));
 
     let nextVersion = normalizedTag.replace(/^v/i, '');
     try {
@@ -621,6 +668,7 @@ async function performArchiveSelfUpdate({
 
 async function performStudioSelfUpdate({
   pluginDir = PLUGIN_ROOT_DIR,
+  pluginDataDir = cdp.PLUGIN_DATA_DIR,
   execFn = execFileSync,
   fetchFn = typeof fetch === 'function' ? fetch : null,
   targetTag = '',
@@ -632,6 +680,7 @@ async function performStudioSelfUpdate({
     if (allowArchive && isValidStudioPluginDir(pluginDir)) {
       return performArchiveSelfUpdate({
         pluginDir,
+        pluginDataDir,
         targetTag,
         fetchFn,
         execFn,
@@ -653,10 +702,16 @@ async function performStudioSelfUpdate({
     };
   }
   try {
-    execFn('git', ['fetch', '--tags', 'origin'], { cwd: pluginDir, encoding: 'utf8', timeout: 25000 });
-    const pullOut = String(
-      execFn('git', ['pull', '--ff-only'], { cwd: pluginDir, encoding: 'utf8', timeout: 25000 })
-    ).trim();
+    const options = { cwd: pluginDir, encoding: 'utf8', timeout: 25000 };
+    execFn('git', ['fetch', '--tags', 'origin'], options);
+    const upstream = String(execFn('git', ['rev-parse', '--verify', '@{upstream}^{commit}'], options)).trim();
+    if (!/^[a-f0-9]{40,64}$/.test(upstream)) throw new Error('Invalid upstream commit');
+    const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
+    const changes = String(execFn('git', ['diff', '--name-only', '--no-renames', '-z', 'HEAD', upstream, '--'], options));
+    if (changes.split('\0').some((file) => file && isProtected(resolve(installRoot, file), true))) {
+      return { ok: false, reason: 'protected_data_path', releaseUrl: LATEST_RELEASE_WEB_URL };
+    }
+    const pullOut = String(execFn('git', ['merge', '--ff-only', '--no-overwrite-ignore', upstream], options)).trim();
     let nextVersion = cdp.PLUGIN_VERSION;
     try {
       const pkg = JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8'));
@@ -1852,69 +1907,128 @@ async function getConversationInspectorApi({
   };
 }
 
-const BLOCKED_OPEN_EXTS = new Set(['.exe', '.bat', '.cmd', '.com', '.ps1', '.vbs', '.js', '.mjs', '.cjs', '.sh', '.msi', '.scr', '.lnk']);
+const OPEN_DOCUMENT_EXTS = new Set(['.md', '.markdown', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.html', '.htm', '.csv', '.json']);
 
-function openInspectorFileApi(data, { appDataDir = resolveAppDataDir(), spawnFn = spawn } = {}) {
-  const filePath = String(data?.path || '').trim();
+async function openInspectorFileApi(data, { appDataDir = resolveAppDataDir(), spawnFn = spawn } = {}) {
+  const filePath = typeof data?.path === 'string' ? data.path : '';
   const conversationId = String(data?.conversationId || '').trim();
-  if (!filePath || !conversationId || !/^[a-zA-Z0-9_-]{4,128}$/.test(conversationId)) {
+  const win = process.platform === 'win32';
+  const isLocalPath = (value) => isAbsolute(value) && !/[\x00-\x1f"\x7f]/.test(value) &&
+    (!win || (/^[a-z]:[\\/]/i.test(value) && !value.slice(2).includes(':')));
+  if (!isLocalPath(filePath) || !/^[a-zA-Z0-9_-]{4,128}$/.test(conversationId)) {
     return { ok: false, error: 'invalid_request' };
   }
+  const isBelow = (dir, target) => {
+    const rel = relative(dir, target);
+    return rel && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+  };
   const brainDir = resolve(appDataDir, 'brain', conversationId);
-  const resolvedTarget = resolve(filePath);
-  const normBase = (process.platform === 'win32' ? brainDir.toLowerCase() : brainDir) + (process.platform === 'win32' ? '\\' : '/');
-  const normTarget = process.platform === 'win32' ? resolvedTarget.toLowerCase() : resolvedTarget;
-  if (!normTarget.startsWith(normBase)) {
-    return { ok: false, error: 'path_not_allowed' };
-  }
-  if (!existsSync(resolvedTarget)) {
-    return { ok: false, error: 'file_not_found' };
-  }
+  const target = resolve(filePath);
+  if (!isBelow(brainDir, target)) return { ok: false, error: 'path_not_allowed' };
+
+  let canonical;
   try {
-    if (!statSync(resolvedTarget).isFile()) return { ok: false, error: 'not_a_file' };
-  } catch {
-    return { ok: false, error: 'stat_failed' };
-  }
-  const ext = extname(resolvedTarget).toLowerCase();
-  if (BLOCKED_OPEN_EXTS.has(ext)) {
-    return { ok: false, error: 'blocked_extension' };
-  }
-  try {
-    let cmd = 'xdg-open';
-    let args = [resolvedTarget];
-    if (process.platform === 'win32') {
-      cmd = 'explorer.exe';
-      args = [resolvedTarget];
-    } else if (process.platform === 'darwin') {
-      cmd = 'open';
-      args = [resolvedTarget];
+    const root = realpathSync.native(appDataDir);
+    if (!isLocalPath(root)) return { ok: false, error: 'path_not_allowed' };
+    // Reject links before resolving through them, including Windows directory junctions.
+    let current = root;
+    for (const part of relative(appDataDir, target).split(sep)) {
+      current = join(current, part);
+      if (lstatSync(current).isSymbolicLink()) return { ok: false, error: 'path_not_allowed' };
     }
-    const child = spawnFn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true });
-    child?.unref?.();
-    return { ok: true, path: resolvedTarget };
+    const base = realpathSync.native(brainDir);
+    canonical = realpathSync.native(target);
+    if (!isLocalPath(canonical) || !isBelow(root, base) || !isBelow(base, canonical)) {
+      return { ok: false, error: 'path_not_allowed' };
+    }
+    if (!statSync(canonical).isFile()) return { ok: false, error: 'not_a_file' };
+    if (!OPEN_DOCUMENT_EXTS.has(extname(canonical).toLowerCase())) return { ok: false, error: 'blocked_extension' };
   } catch (err) {
-    return { ok: false, error: err?.message || 'open_failed' };
+    return { ok: false, error: err.code === 'ENOENT' ? 'file_not_found' : 'stat_failed' };
   }
+
+  return new Promise((done) => {
+    const launcher = win ? 'explorer.exe' : process.platform === 'darwin' ? '/usr/bin/open' : 'xdg-open';
+    let child;
+    let timer;
+    try {
+      child = spawnFn(launcher, [canonical], { detached: true, stdio: 'ignore', windowsHide: true });
+      child.once('error', () => {
+        clearTimeout(timer);
+        done({ ok: false, error: 'launcher_failed' });
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timer);
+        if (code === 0) done({ ok: true, status: 'launcher_exited' });
+        else if (win && code === 1) done({ ok: true, status: 'request_submitted' });
+        else done({ ok: false, error: 'launcher_failed' });
+      });
+      timer = setTimeout(() => {
+        child.unref();
+        done({ ok: true, status: 'request_submitted' });
+      }, 1000);
+      timer.unref();
+    } catch {
+      done({ ok: false, error: 'launcher_failed' });
+    }
+  });
+}
+
+const PRIVATE_NOTIFY_FIELDS = {
+  serverchan: ['sendKey', 'apiUrl'],
+  bark: ['deviceKey', 'serverUrl'],
+  ntfy: ['token', 'serverUrl', 'topic'],
+  feishu: ['webhookUrl'],
+  dingtalk: ['webhookUrl'],
+  wecom: ['webhookUrl'],
+  telegram: ['botToken', 'chatId', 'apiBase'],
+  webhook: ['webhookUrl', 'authHeader'],
+};
+
+function publicNotifyConfig(config) {
+  const channels = {};
+  const savedFields = {};
+  for (const [name, settings] of Object.entries(config.channels)) {
+    channels[name] = { ...settings };
+    savedFields[name] = [];
+    for (const field of PRIVATE_NOTIFY_FIELDS[name]) {
+      const defaultValue = notifyCore.DEFAULT_NOTIFY_CONFIG.channels[name][field];
+      if (settings[field] && settings[field] !== defaultValue) savedFields[name].push(field);
+      if (settings[field] !== defaultValue) delete channels[name][field];
+    }
+  }
+  return { config: { ...config, channels }, savedFields, configured: notifyCore.isChannelConfigured(config) };
+}
+
+// Changing the destination invalidates the credential associated with the old one.
+function prepareNotifyUpdate(input, base) {
+  const config = notifyCore.sanitizeNotifyConfig(input, base);
+  for (const [channel, dest, secret] of [
+    ['bark', 'serverUrl', 'deviceKey'], ['ntfy', 'serverUrl', 'token'],
+    ['telegram', 'apiBase', 'botToken'], ['webhook', 'webhookUrl', 'authHeader'],
+  ]) {
+    if (config.channels[channel][dest] !== base.channels[channel][dest] &&
+        !Object.hasOwn(input?.channels?.[channel] || {}, secret)) {
+      config.channels[channel][secret] = '';
+    }
+  }
+  return config;
 }
 
 function getNotifyConfigApi({ dataDir = resolveNotifyDir() } = {}) {
   const config = notifyCore.readNotifyConfig(dataDir);
   return {
     ok: true,
-    config,
-    configured: notifyCore.isChannelConfigured(config),
+    ...publicNotifyConfig(config),
     channels: notifyCore.CHANNEL_LIST,
   };
 }
 
 function saveNotifyConfigApi(data, { dataDir = resolveNotifyDir() } = {}) {
   const payload = data && typeof data === 'object' && data.config ? data.config : data;
-  const saved = notifyCore.writeNotifyConfig(dataDir, payload || {}, true);
-  return {
-    ok: true,
-    config: saved.config,
-    configured: saved.configured,
-  };
+  const merged = prepareNotifyUpdate(payload, notifyCore.readNotifyConfig(dataDir, { strict: true }));
+  const saved = notifyCore.writeNotifyConfig(dataDir, merged, false);
+  return { ok: true, ...publicNotifyConfig(saved.config) };
 }
 
 async function testNotifyApi(
@@ -1933,7 +2047,7 @@ async function testNotifyApi(
       ? data
       : null;
   const effectiveCfg = rawCandidate
-    ? notifyCore.sanitizeNotifyConfig(rawCandidate, baseCfg)
+    ? prepareNotifyUpdate(rawCandidate, baseCfg)
     : baseCfg;
 
   if (!notifyCore.isChannelConfigured(effectiveCfg)) {
@@ -1974,7 +2088,9 @@ async function testNotifyApi(
     timestamp: new Date().toISOString(),
   };
 
-  return notifyCore.deliverNotification(effectiveCfg, msg, { fetchFn, timeoutMs: 6000 });
+  const result = await notifyCore.deliverNotification(effectiveCfg, msg, { fetchFn, timeoutMs: 6000 });
+  if (result.ok || result.error === 'timeout' || result.error === 'network error') return result;
+  return { ...result, error: result.status >= 400 ? `HTTP ${result.status}` : 'provider_rejected' };
 }
 
 async function resetStudioConfig() {
@@ -1989,80 +2105,70 @@ async function resetStudioConfig() {
   return { ok: true, config: cdp.readConfig() };
 }
 
-async function startStudioSidecar() {
-  const { Response, SidecarApp } = await import('sidecar_sdk');
-  const app = new SidecarApp();
-
-  app.page('/', () => {
-    const html = readFileSync(HTML_PATH, 'utf8');
-    return new Response(html, {
-      status: 200,
-      contentType: 'text/html; charset=utf-8',
-      headers: NO_STORE_HEADERS,
-    });
-  });
-
-  const guardApi = (fn) => async (data, req) => {
-    if (!isLocalHostRequest(req)) {
-      return new Response(JSON.stringify({ ok: false, error: 'Forbidden host or origin' }), {
-        status: 403,
-        contentType: 'application/json',
-      });
-    }
-    return fn(data, req);
-  };
-
-  app.api('/api/status', guardApi(async () => getStudioStatus()), 'GET');
-  app.api('/api/config', guardApi(async (data) => applyConfigUpdate(data)), 'POST');
-  app.api('/api/reset', guardApi(async () => resetStudioConfig()), 'POST');
-  app.api('/api/reinject', guardApi(async () => {
+function registerStudioApis(app, ResponseClass = globalThis.Response) {
+  let updating = false;
+  // The host SDK passes only data to callbacks and skips its UI-token check on GET.
+  const api = (route, handler) => app.api(route, handler, 'POST');
+  api('/api/status', async () => getStudioStatus());
+  api('/api/config', async (data) => applyConfigUpdate(data));
+  api('/api/reset', async () => resetStudioConfig());
+  api('/api/reinject', async () => {
     const res = await injectOnce({ log: () => {} });
     return { ok: true, ...res };
-  }), 'POST');
-  app.api('/api/remove', guardApi(async () => {
+  });
+  api('/api/remove', async () => {
     const removed = await removeFromAllWindows({ log: () => {}, warn: () => {} });
     return { ok: true, removed };
-  }), 'POST');
-  app.api('/api/open-usage-monitor', guardApi(async () => openUsageMonitorPaneInHost()), 'POST');
-  app.api('/api/check-update', guardApi(async (data, req) => {
-    const force = Boolean(data?.force || /[?&]force=1(?:&|$)/.test(String(req?.url || '')));
-    return checkStudioUpdate({ forceRefresh: force });
-  }), 'GET');
-  app.api('/api/self-update', guardApi(async (data) => performStudioSelfUpdate({ targetTag: data?.targetTag || '' })), 'POST');
-  app.api('/api/sync-i18n-compat', guardApi(async () => syncI18nCompatWhitelist()), 'POST');
-  app.api('/api/periodic-sync', guardApi(async () => syncPeriodicElementsApi()), 'POST');
-  app.api('/api/notify', guardApi(async () => getNotifyConfigApi()), 'GET');
-  app.api('/api/notify', guardApi(async (data) => saveNotifyConfigApi(data)), 'POST');
-  app.api('/api/notify/test', guardApi(async (data) => testNotifyApi(data)), 'POST');
-  app.api('/api/live-tasks', guardApi(async () => getLiveTasksApi()), 'GET');
-  app.api('/api/conversation-inspector', guardApi(async (data, req) => {
-    let cid = String(data?.conversationId || '').trim();
-    if (!cid && req?.url) {
-      try {
-        const u = new URL(req.url, 'http://127.0.0.1');
-        cid = String(u.searchParams.get('conversationId') || '').trim();
-      } catch {}
+  });
+  api('/api/open-usage-monitor', async () => openUsageMonitorPaneInHost());
+  api('/api/check-update', (data) => checkStudioUpdate({ forceRefresh: data?.force === true }));
+  api('/api/self-update', async (data) => {
+    if (updating) return { ok: false, reason: 'update_in_progress' };
+    updating = true;
+    try {
+      return await performStudioSelfUpdate({ targetTag: data?.targetTag || '' });
+    } finally {
+      updating = false;
     }
-    return getConversationInspectorApi({ conversationId: cid });
-  }), 'GET');
-  app.api('/api/conversation-inspector', guardApi(async (data) => {
+  });
+  api('/api/sync-i18n-compat', async () => syncI18nCompatWhitelist());
+  api('/api/periodic-sync', async () => syncPeriodicElementsApi());
+  api('/api/notify/read', () => getNotifyConfigApi());
+  api('/api/notify', async (data) => saveNotifyConfigApi(data));
+  api('/api/notify/test', async (data) => testNotifyApi(data));
+  api('/api/live-tasks', async () => getLiveTasksApi());
+  api('/api/conversation-inspector', async (data) => {
     return getConversationInspectorApi({ conversationId: String(data?.conversationId || '').trim() });
-  }), 'POST');
-  app.api('/api/open-file', guardApi(async (data) => openInspectorFileApi(data)), 'POST');
-  app.api('/api/scripts', guardApi(async () => getScriptsApi()), 'GET');
-  app.api('/api/scripts', guardApi(async (data) => upsertScriptApi(data)), 'POST');
-  app.api('/api/scripts/delete', guardApi(async (data) => deleteScriptApi(data)), 'POST');
-  app.api('/api/scripts/run', guardApi(async (data) => runScriptApi(data)), 'POST');
-  app.api('/api/relaunch', guardApi(async () => {
+  });
+  api('/api/open-file', async (data) => openInspectorFileApi(data));
+  api('/api/scripts/list', () => getScriptsApi());
+  api('/api/scripts', async (data) => upsertScriptApi(data));
+  api('/api/scripts/delete', async (data) => deleteScriptApi(data));
+  api('/api/scripts/run', async (data) => runScriptApi(data));
+  api('/api/relaunch', async () => {
     const res = await relaunchDesktopHost();
     if (!res?.ok) {
-      return new Response(JSON.stringify(res), {
+      return new ResponseClass(JSON.stringify(res), {
         status: res?.status || 500,
         contentType: 'application/json',
       });
     }
     return res;
-  }), 'POST');
+  });
+}
+
+async function startStudioSidecar() {
+  if (!process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN?.trim()) {
+    throw new Error('Missing Antigravity sidecar UI token');
+  }
+  const { Response, SidecarApp } = await import('sidecar_sdk');
+  const app = new SidecarApp();
+  app.page('/', () => new Response(readFileSync(HTML_PATH, 'utf8'), {
+    status: 200,
+    contentType: 'text/html; charset=utf-8',
+    headers: NO_STORE_HEADERS,
+  }));
+  registerStudioApis(app, Response);
 
   let shuttingDown = false;
   let watchdog = null;
@@ -2140,7 +2246,7 @@ if (isSameEntryPath(invokedPath, currentPath)) {
 }
 
 export {
-  isLocalHostRequest,
+  registerStudioApis,
   detectUsageMonitorInstalled,
   compareSemver,
   checkStudioUpdate,

@@ -1,5 +1,6 @@
 // Zero-dependency mobile push notification core for Claude Studio (agy-claude-studio).
 // Node-only (Stop hook + local studio sidecar). Never bundled or injected into renderer pages.
+const { randomUUID } = require('node:crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -214,27 +215,47 @@ function isChannelConfigured(cfg) {
   }
 }
 
-function readNotifyConfig(dataDir) {
+function privateNotifyDir(filePath) {
+  const dir = path.dirname(filePath);
+  if (!fs.lstatSync(dir).isDirectory()) throw new Error('Invalid notification data directory');
+  if (process.platform !== 'win32' && (fs.statSync(dir).mode & 0o777) !== 0o700) fs.chmodSync(dir, 0o700);
+}
+
+function readNotifyConfig(dataDir, { strict = false } = {}) {
   const filePath = getNotifyConfigPath(dataDir);
+  let fd;
   try {
-    if (!fs.existsSync(filePath)) return cloneDefaultConfig();
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (!fs.lstatSync(filePath).isFile()) throw new Error('Invalid notification settings file');
+    privateNotifyDir(filePath);
+    fd = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.nlink !== 1) throw new Error('Invalid notification settings file');
+    if (process.platform !== 'win32' && (stat.mode & 0o777) !== 0o600) fs.fchmodSync(fd, 0o600);
+    const raw = JSON.parse(fs.readFileSync(fd, 'utf8'));
     return sanitizeNotifyConfig(raw, DEFAULT_NOTIFY_CONFIG);
-  } catch {
+  } catch (error) {
+    // An absent file is normal. Fail closed on an unreadable existing file when merging a write.
+    if (strict && (error.code !== 'ENOENT' || fd !== undefined)) throw new Error('Could not read notification settings');
     return cloneDefaultConfig();
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
 }
 
 function writeNotifyConfig(dataDir, raw, mergeExisting = true) {
   const filePath = getNotifyConfigPath(dataDir);
-  const base = mergeExisting ? readNotifyConfig(dataDir) : DEFAULT_NOTIFY_CONFIG;
+  const base = mergeExisting ? readNotifyConfig(dataDir, { strict: true }) : DEFAULT_NOTIFY_CONFIG;
   const sanitized = sanitizeNotifyConfig(raw, base);
-  cdp.atomicWriteFileSync(filePath, JSON.stringify(sanitized, null, 2) + '\n');
-  return {
-    config: sanitized,
-    configured: isChannelConfigured(sanitized),
-    path: filePath,
-  };
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  privateNotifyDir(filePath);
+  const tempPath = `${filePath}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify(sanitized, null, 2) + '\n', { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    fs.renameSync(tempPath, filePath);
+  } finally {
+    try { fs.unlinkSync(tempPath); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+  }
+  return { config: sanitized, configured: isChannelConfigured(sanitized), path: filePath };
 }
 
 function getNotifyStatusSummary(dataDir) {
@@ -821,13 +842,12 @@ async function deliverNotification(
       method: reqSpec.method,
       headers: reqSpec.headers,
       body: reqSpec.body,
+      redirect: 'error',
       signal: controller.signal,
     });
 
-    let rawText = '';
-    try {
-      rawText = await res.text();
-    } catch {}
+    const rawText = await res.text();
+    if (controller.signal.aborted) throw controller.signal.reason;
 
     let parsedJson = null;
     if (rawText && (rawText.trim().startsWith('{') || rawText.trim().startsWith('['))) {
@@ -837,12 +857,11 @@ async function deliverNotification(
     }
 
     if (!res.ok) {
-      const apiErr = parsedJson?.error || parsedJson?.errmsg || parsedJson?.message || parsedJson?.description;
       return {
         ok: false,
         channel,
         status: res.status,
-        error: apiErr ? String(apiErr) : `HTTP ${res.status}`,
+        error: `HTTP ${res.status}`,
         latencyMs: Date.now() - startedAt,
       };
     }
@@ -853,7 +872,7 @@ async function deliverNotification(
         ok: false,
         channel,
         status: res.status,
-        error: interpreted.error,
+        error: 'provider rejected notification',
         latencyMs: Date.now() - startedAt,
       };
     }
@@ -870,7 +889,7 @@ async function deliverNotification(
       ok: false,
       channel,
       status: 0,
-      error: err?.name === 'AbortError' ? 'timeout' : err?.message || 'network error',
+      error: controller.signal.aborted || err?.name === 'AbortError' ? 'timeout' : 'network error',
       latencyMs: Date.now() - startedAt,
     };
   } finally {

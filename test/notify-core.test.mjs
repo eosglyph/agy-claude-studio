@@ -329,7 +329,7 @@ test('notifyCore builds and delivers all 8 channels cleanly including UTF-8 ntfy
     fetchFn: async () => ({ ok: true, status: 200, async text() { return JSON.stringify({ errno: 40001, errmsg: 'bad sendkey' }); } }),
   });
   assert.equal(errRes.ok, false);
-  assert.equal(errRes.error, 'bad sendkey');
+  assert.equal(errRes.error, 'provider rejected notification');
 });
 
 test('notify.json isolates secrets from config.json & renderer injection, and Stop hook runs non-blockingly', async () => {

@@ -7416,12 +7416,282 @@
     syncQueued = false;
   }
 
+  // ── Chat File Link Right-Click Context Menu ────────────────────────────
+  const FILE_MENU_CLS = 'ag-cs-file-menu';
+  const FILE_TOAST_CLS = 'ag-cs-file-toast';
+  let openFileMenu = null;
+  let fileToastEl = null;
+  let fileToastTimer = null;
+
+  function clearFileLinkToast() {
+    if (fileToastTimer) {
+      clearTimeout(fileToastTimer);
+      fileToastTimer = null;
+    }
+    if (fileToastEl) {
+      try {
+        fileToastEl.remove();
+      } catch {}
+      fileToastEl = null;
+    }
+  }
+
+  function showFileLinkToast(message, isError = false) {
+    clearFileLinkToast();
+    if (!message || !document.body) return;
+    const el = document.createElement('div');
+    el.className = FILE_TOAST_CLS + (isError ? ' is-error' : '');
+    el.setAttribute('data-ag-no-i18n', '1');
+    el.setAttribute('role', 'status');
+    el.textContent = String(message);
+    document.body.appendChild(el);
+    fileToastEl = el;
+    fileToastTimer = setTimeout(() => {
+      clearFileLinkToast();
+    }, 2000);
+  }
+
+  function closeFileLinkMenu() {
+    if (openFileMenu) {
+      try {
+        openFileMenu.remove();
+      } catch {}
+      openFileMenu = null;
+    }
+  }
+
+  function decodeLocalFileUriForDisplay(rawUri) {
+    if (typeof rawUri !== 'string') return null;
+    const trimmed = rawUri.trim();
+    if (!/^file:\/\//i.test(trimmed)) return null;
+    const noFrag = trimmed.split('#')[0].split('?')[0];
+    let parsed;
+    try {
+      parsed = new URL(noFrag);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'file:') return null;
+    const host = String(parsed.hostname || '').toLowerCase();
+    if (host && host !== 'localhost') return null;
+    let decoded = '';
+    try {
+      decoded = decodeURIComponent(parsed.pathname || '');
+    } catch {
+      return null;
+    }
+    if (!decoded || /[\x00-\x1f\x7f]/.test(decoded) || /^[\\/]{2}/.test(decoded)) return null;
+    const isWinPath = /^\/[A-Za-z]:(?:\/|$)/.test(decoded);
+    const fullPath = isWinPath ? decoded.slice(1).replace(/\//g, '\\') : decoded;
+    const sep = isWinPath ? '\\' : '/';
+    const cleanNoTrail = fullPath.length > 3 ? fullPath.replace(/[\\/]+$/, '') : fullPath;
+    const idx = cleanNoTrail.lastIndexOf(sep);
+    const baseName = idx >= 0 ? cleanNoTrail.slice(idx + 1) : cleanNoTrail;
+    const dirName = idx >= 0 ? cleanNoTrail.slice(0, idx) : '';
+    return { fullPath, baseName: baseName || fullPath, dirName };
+  }
+
+  function extractHrefFromFiberNode(el) {
+    if (!el || typeof el !== 'object') return '';
+    let fiberKey = '';
+    try {
+      const keys = Object.keys(el);
+      for (let i = 0; i < keys.length; i += 1) {
+        if (keys[i].startsWith('__reactFiber')) {
+          fiberKey = keys[i];
+          break;
+        }
+      }
+    } catch {
+      return '';
+    }
+    if (!fiberKey) return '';
+    let f = el[fiberKey];
+    for (let depth = 0; depth < 8 && f; depth += 1, f = f.return) {
+      const mp = f.memoizedProps;
+      if (!mp || typeof mp !== 'object') continue;
+      if (typeof mp.href === 'string' && /^file:\/\//i.test(mp.href.trim())) {
+        return mp.href.trim();
+      }
+      const nodeHref = mp.node?.properties?.href;
+      if (typeof nodeHref === 'string' && /^file:\/\//i.test(nodeHref.trim())) {
+        return nodeHref.trim();
+      }
+    }
+    return '';
+  }
+
+  function extractLocalFileLinkFromTarget(target) {
+    const el = target && target.nodeType === 1 ? target : target?.parentElement;
+    if (!el || typeof el.closest !== 'function') return null;
+    if (isOwnPluginNode(el) || !el.closest('[data-testid="conversation-view"]')) return null;
+
+    // 1. Direct <a href="file://...">
+    const anchor = el.closest('a[href]');
+    if (anchor) {
+      const href = String(anchor.getAttribute('href') || '').trim();
+      if (/^file:\/\//i.test(href)) {
+        return decodeLocalFileUriForDisplay(href);
+      }
+    }
+
+    // 2. Antigravity file mention pill (<bdi class="context-scope-mention"> or inline quotable wrapper)
+    const mention = el.closest('bdi.context-scope-mention, [data-quotable-inline="true"], .context-scope-mention');
+    if (mention) {
+      const fiberHref = extractHrefFromFiberNode(mention) || extractHrefFromFiberNode(mention.parentElement);
+      if (fiberHref) {
+        return decodeLocalFileUriForDisplay(fiberHref);
+      }
+    }
+
+    // 3. Fallback: clickable inline file pill inside conversation view whose React fiber carries a file:// href
+    const conv = el.closest('[data-testid="conversation-view"]');
+    if (conv) {
+      let cur = el;
+      for (let depth = 0; depth < 3 && cur && cur !== conv; depth += 1, cur = cur.parentElement) {
+        const directHref = String(cur.getAttribute?.('data-href') || cur.getAttribute?.('href') || '').trim();
+        if (/^file:\/\//i.test(directHref)) {
+          return decodeLocalFileUriForDisplay(directHref);
+        }
+        const fHref = extractHrefFromFiberNode(cur);
+        if (fHref) {
+          return decodeLocalFileUriForDisplay(fHref);
+        }
+      }
+    }
+    return null;
+  }
+
+  async function copyPathToClipboard(text) {
+    const ui = uiText(getLang());
+    let copied = false;
+    try {
+      if (typeof navigator.clipboard?.writeText === 'function') {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      }
+    } catch {}
+    if (destroyed || cfg.fileLinkContextMenu === false) return;
+    if (!copied && document.body) {
+      const ta = document.createElement('textarea');
+      const focused = document.activeElement;
+      const selection = document.getSelection?.();
+      const ranges = Array.from({ length: selection?.rangeCount || 0 }, (_, i) => selection.getRangeAt(i).cloneRange());
+      try {
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand('copy');
+      } catch {} finally {
+        ta.remove();
+        focused?.focus?.({ preventScroll: true });
+        if (selection && ranges.length) {
+          selection.removeAllRanges();
+          for (const range of ranges) selection.addRange(range);
+        }
+      }
+    }
+    showFileLinkToast(copied ? ui.fileMenuCopied : ui.fileMenuCopyFailed, !copied);
+  }
+
+  function openFileLinkContextMenu(info, clientX, clientY) {
+    closeFileLinkMenu();
+    if (!info || !document.body) return;
+    const lang = getLang();
+    const ui = uiText(lang);
+    const copyLabel = ui.fileMenuCopyPath || 'Copy Full Path';
+
+    const menu = document.createElement('div');
+    menu.className = FILE_MENU_CLS;
+    menu.setAttribute('data-ag-no-i18n', '1');
+    menu.setAttribute('role', 'menu');
+
+    const head = document.createElement('div');
+    head.className = 'ag-cs-file-menu-head';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'ag-cs-file-menu-name';
+    nameEl.textContent = info.baseName;
+    nameEl.title = info.fullPath;
+    head.appendChild(nameEl);
+    if (info.dirName) {
+      const dirEl = document.createElement('div');
+      dirEl.className = 'ag-cs-file-menu-dir';
+      dirEl.textContent = info.dirName;
+      dirEl.title = info.dirName;
+      head.appendChild(dirEl);
+    }
+    menu.appendChild(head);
+
+    const makeItem = (label, svgPath, onClick) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ag-cs-file-menu-item';
+      btn.setAttribute('role', 'menuitem');
+      btn.innerHTML =
+        '<svg class="ag-cs-file-menu-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        svgPath +
+        '</svg>' +
+        '<span></span>';
+      btn.querySelector('span').textContent = label;
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        closeFileLinkMenu();
+        onClick();
+      });
+      return btn;
+    };
+
+    menu.appendChild(
+      makeItem(
+        copyLabel,
+        '<rect x="5.25" y="5.25" width="8" height="8" rx="1.25"/><path d="M3.25 10.75A1.25 1.25 0 0 1 2 9.5v-6A1.25 1.25 0 0 1 3.25 2.25h6A1.25 1.25 0 0 1 10.5 3.5"/>',
+        () => copyPathToClipboard(info.fullPath)
+      )
+    );
+
+    menu.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+    });
+
+    document.body.appendChild(menu);
+    openFileMenu = menu;
+
+    const vw = window.innerWidth || 1024;
+    const vh = window.innerHeight || 768;
+    const rect = menu.getBoundingClientRect();
+    const x = Math.max(8, Math.min(vw - rect.width - 8, clientX));
+    const y = Math.max(8, Math.min(vh - rect.height - 8, clientY));
+    menu.style.left = Math.round(x) + 'px';
+    menu.style.top = Math.round(y) + 'px';
+  }
+
+  function onDocContextMenu(ev) {
+    if (destroyed || cfg.fileLinkContextMenu === false) {
+      if (openFileMenu) closeFileLinkMenu();
+      return;
+    }
+    if (openFileMenu && nodeContains(openFileMenu, ev.target)) return;
+    const info = extractLocalFileLinkFromTarget(ev.target);
+    if (!info) {
+      if (openFileMenu) closeFileLinkMenu();
+      return;
+    }
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+    openFileLinkContextMenu(info, ev.clientX, ev.clientY);
+  }
+
   function isOwnPluginNode(target) {
     const el = target && target.closest ? target : target?.parentElement;
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, #' +
+        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-studio-css, #ag-claude-style-css'
       )
@@ -7502,6 +7772,9 @@
     if (openEffortPop && !nodeContains(openEffortPop, ev.target) && (!openEffortAnchor || !nodeContains(openEffortAnchor, ev.target))) {
       closeEffortPopover();
     }
+    if (openFileMenu && !nodeContains(openFileMenu, ev.target)) {
+      closeFileLinkMenu();
+    }
     if (crabState.root) {
       crabState.stage.quietSince = Date.now();
       if (crabState.stage.asleep) {
@@ -7566,6 +7839,7 @@
       if (openPsDrawer) closePeriodicSelector();
       if (openPopover) closeContextPopover();
       if (openEffortPop) closeEffortPopover();
+      if (openFileMenu) closeFileLinkMenu();
       return;
     }
     if (
@@ -7680,6 +7954,7 @@
 
   function onWindowResize() {
     if (destroyed) return;
+    if (openFileMenu) closeFileLinkMenu();
     if (openPopover && openPopover.isConnected && openPopoverAnchor && openPopoverAnchor.isConnected) {
       positionPopoverAboveAnchor(openPopover, openPopoverAnchor);
     }
@@ -7733,6 +8008,7 @@
     ['pointerdown', onDocPointerDown],
     ['mousedown', onDocMouseDown],
     ['click', onDocClick],
+    ['contextmenu', onDocContextMenu],
     ['keydown', onDocKeyDown],
     ['keyup', onDocCaretEvent],
     ['mouseup', onDocCaretEvent],
@@ -7859,6 +8135,7 @@
         } catch {}
       }
       applyRootAttrs();
+      if (cfg.fileLinkContextMenu === false && openFileMenu) closeFileLinkMenu();
       refreshOpenEffortPopover();
       refreshOpenPeriodicSelector();
       runSync();
@@ -7917,6 +8194,8 @@
         closePeriodicSelector,
         closeContextPopover,
         closeEffortPopover,
+        closeFileLinkMenu,
+        clearFileLinkToast,
         teardownSmoothCarets,
         clearTurnBadges,
         unmountRipple,
@@ -7964,7 +8243,7 @@
       document.getElementById(PERIODIC_DYNAMIC_STYLE_ID)?.remove();
       document
         .querySelectorAll(
-          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, .ag-cs-page-translate-btn, #' +
+          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, #' +
             SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());

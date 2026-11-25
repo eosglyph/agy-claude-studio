@@ -8,7 +8,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 
 const MAX_SCRIPTS = 32;
 const MAX_OUTPUT_BYTES = 16 * 1024;
@@ -213,6 +213,18 @@ function resolveInvocation(entry) {
   const extraArgs = Array.isArray(entry.args) ? entry.args.slice() : [];
   const ext = scriptPath ? path.extname(scriptPath).toLowerCase() : '';
 
+  const commandName = path.win32.basename(explicitCmd).toLowerCase().replace(/[ .]+$/, '');
+  const commandExt = path.win32.extname(commandName);
+  if (['.bat', '.cmd'].includes(ext) || ['.bat', '.cmd'].includes(commandExt) || /^(?:cmd|cmd\.exe)$/.test(commandName)) {
+    return {
+      cmd: '',
+      argv: [],
+      blockedReason: 'unsupported_batch_script',
+      blockedMessage:
+        'Batch (.bat/.cmd) scripts are disabled because cmd.exe parses shell metacharacters; use .ps1, .mjs/.js, .py, or .sh instead.',
+    };
+  }
+
   if (explicitCmd) {
     const cmd = explicitCmd === 'node' ? process.execPath : explicitCmd;
     const argv = scriptPath ? [scriptPath, ...extraArgs] : extraArgs;
@@ -232,10 +244,56 @@ function resolveInvocation(entry) {
   if (ext === '.sh') {
     return { cmd: 'bash', argv: [scriptPath, ...extraArgs] };
   }
-  if (ext === '.bat' || ext === '.cmd') {
-    return { cmd: process.env.ComSpec || 'cmd.exe', argv: ['/d', '/c', scriptPath, ...extraArgs] };
-  }
   return { cmd: scriptPath, argv: extraArgs };
+}
+
+function isRunning(child) {
+  return Boolean(child.pid) && child.exitCode === null && child.signalCode === null;
+}
+
+function signalProcessGroup(child, signal) {
+  if (!child.pid) return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    if (isRunning(child)) {
+      try { child.kill(signal); } catch {}
+    }
+  }
+}
+
+async function stopTimedOutScript(child) {
+  if (!child.pid) return;
+  if (process.platform === 'win32') {
+    if (!isRunning(child)) return;
+    const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+    const taskkill = path.join(systemRoot, 'System32', 'taskkill.exe');
+    const killed = await new Promise((done) => {
+      execFile(taskkill, ['/T', '/F', '/PID', String(child.pid)], {
+        timeout: 3000,
+        windowsHide: true,
+      }, (error) => done(!error));
+    });
+    if (!killed && isRunning(child)) child.kill('SIGKILL');
+    return;
+  }
+  signalProcessGroup(child, 'SIGTERM');
+  await new Promise((done) => setTimeout(done, 1200));
+  signalProcessGroup(child, 'SIGKILL');
+}
+
+function isLocalScriptPath(value) {
+  return !/[\x00-\x1f\x7f]/.test(value) && (process.platform !== 'win32' || (
+    !/^[\\/]{2}/.test(value) && !value.replace(/^[A-Za-z]:[\\/]/, '').includes(':')
+  ));
+}
+
+function scriptChildEnv(dataDir) {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase().startsWith('ANTIGRAVITY_SIDECAR_')) delete env[key];
+  }
+  return { ...env, PLUGIN_DATA: dataDir, AGY_CLAUDE_STUDIO_DATA_DIR: dataDir };
 }
 
 function clipTail(bufs, maxBytes = MAX_OUTPUT_BYTES) {
@@ -265,21 +323,32 @@ function runCustomScript(dataDir, id, options = {}) {
     return Promise.resolve({ ok: false, error: 'not_found' });
   }
   const entry = list[idx];
-  if (entry.scriptPath && !fs.existsSync(entry.scriptPath)) {
+  if (![entry.cwd, entry.scriptPath, entry.command].every(isLocalScriptPath)) {
+    return Promise.resolve({ ok: false, error: 'invalid_script_path' });
+  }
+  const scriptPath = entry.scriptPath ? path.resolve(entry.cwd || process.cwd(), entry.scriptPath) : '';
+  const invocation = resolveInvocation({ ...entry, scriptPath });
+  if (invocation.blockedReason) {
     return Promise.resolve({
       ok: false,
-      error: 'script_not_found',
-      message: `Script path not found: ${entry.scriptPath}`,
+      error: invocation.blockedReason,
+      message: invocation.blockedMessage || 'Script type is not allowed',
     });
   }
-
-  const { cmd, argv } = resolveInvocation(entry);
-  let cwd = entry.cwd && fs.existsSync(entry.cwd) ? entry.cwd : '';
-  if (!cwd && entry.scriptPath) {
-    const parent = path.dirname(entry.scriptPath);
-    if (fs.existsSync(parent)) cwd = parent;
+  const { cmd, argv } = invocation;
+  const cwd = entry.cwd ? path.resolve(entry.cwd) : scriptPath ? path.dirname(scriptPath) : process.cwd();
+  try {
+    if (!fs.statSync(cwd).isDirectory()) throw new Error('Working directory is not a directory');
+  } catch {
+    return Promise.resolve({ ok: false, error: 'invalid_cwd', message: `Invalid working directory: ${cwd}` });
   }
-  if (!cwd) cwd = process.cwd();
+  if (scriptPath) {
+    try {
+      if (!fs.statSync(scriptPath).isFile()) throw new Error('Not a regular file');
+    } catch {
+      return Promise.resolve({ ok: false, error: 'script_not_found', message: `Script not found: ${scriptPath}` });
+    }
+  }
 
   const timeoutMs = clampTimeoutSec(options.timeoutSec ?? entry.timeoutSec) * 1000;
   const startedAt = Date.now();
@@ -297,12 +366,9 @@ function runCustomScript(dataDir, id, options = {}) {
       child = spawn(cmd, argv, {
         cwd,
         shell: false,
+        detached: process.platform !== 'win32',
         windowsHide: true,
-        env: {
-          ...process.env,
-          PLUGIN_DATA: dataDir,
-          AGY_CLAUDE_STUDIO_DATA_DIR: dataDir,
-        },
+        env: scriptChildEnv(dataDir),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
@@ -314,16 +380,18 @@ function runCustomScript(dataDir, id, options = {}) {
       return;
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       timedOut = true;
       try {
-        child.kill('SIGTERM');
-      } catch {}
-      setTimeout(() => {
-        try {
-          child.kill('SIGKILL');
-        } catch {}
-      }, 1200).unref?.();
+        await stopTimedOutScript(child);
+      } catch {
+        // Preserve the timeout result even if the operating system rejects cleanup.
+      } finally {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        child.unref();
+        finish(child.exitCode);
+      }
     }, timeoutMs);
     timer.unref?.();
 
@@ -384,8 +452,8 @@ function runCustomScript(dataDir, id, options = {}) {
       });
     };
 
-    child.on('error', (err) => finish(-1, err));
-    child.on('close', (code) => finish(code, null));
+    child.on('error', (err) => { if (!timedOut) finish(-1, err); });
+    child.on('close', (code) => { if (!timedOut) finish(code); });
   });
 }
 
