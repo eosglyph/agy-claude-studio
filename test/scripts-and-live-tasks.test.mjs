@@ -57,11 +57,39 @@ test('scripts-core parses args, CRUDs entries in scripts.json, and executes scri
   }
 });
 
-test('getLiveTasksApi queries ConversationService for running tasks, subagents, and recent idle items', async () => {
+test('getLiveTasksApi queries ConversationService and tail GetCascadeTrajectorySteps for step activity details', async () => {
   const calls = [];
   const mockFetch = async (url, opts) => {
     const body = JSON.parse(opts.body);
     calls.push({ url, body });
+    if (url.includes('GetAllCascadeTrajectories')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          trajectorySummaries: {
+            'run-1': { stepCount: 250, status: 'CASCADE_RUN_STATUS_RUNNING' },
+          },
+        }),
+      };
+    }
+    if (url.includes('GetCascadeTrajectorySteps')) {
+      assert.equal(body.stepOffset, 240);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          steps: [
+            {
+              type: 'CORTEX_STEP_TYPE_VIEW_FILE',
+              status: 'CORTEX_STEP_STATUS_RUNNING',
+              viewFile: { absolutePathUri: 'file:///d:/repo/sidecars/studio/main.mjs' },
+              metadata: { createdAt: '2026-11-25T02:00:00Z' },
+            },
+          ],
+        }),
+      };
+    }
     if (body.parentConversationId === 'run-1') {
       return {
         ok: true,
@@ -106,8 +134,22 @@ test('getLiveTasksApi queries ConversationService for running tasks, subagents, 
   assert.equal(res.running[0].title, 'Refactor Studio Sidecar');
   assert.equal(res.running[0].subagentCount, 2);
   assert.equal(res.running[0].activeSubagentCount, 1);
+  assert.equal(res.running[0].stepCount, 250);
+  assert.equal(res.running[0].activity?.kind, 'reading_file');
+  assert.equal(res.running[0].activity?.detail, 'main.mjs');
   assert.equal(res.recent.length, 1);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 4);
+
+  const thinkingAct = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE', status: 'CORTEX_STEP_STATUS_GENERATING', plannerResponse: { thinking: 'analyzing...' } },
+  ]);
+  assert.equal(thinkingAct.kind, 'thinking');
+
+  const cmdAct = studioMain.classifyLiveStepActivity([
+    { type: 'CORTEX_STEP_TYPE_GENERIC', status: 'CORTEX_STEP_STATUS_RUNNING', metadata: { toolCall: { name: 'run_command', argumentsJson: JSON.stringify({ toolSummary: 'Run unit tests' }) } } },
+  ]);
+  assert.equal(cmdAct.kind, 'running_command');
+  assert.equal(cmdAct.detail, 'Run unit tests');
 
   const unavailable = await studioMain.getLiveTasksApi({
     env: {},

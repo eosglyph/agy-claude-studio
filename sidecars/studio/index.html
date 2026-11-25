@@ -863,10 +863,9 @@
     }
     .live-task-row {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 7px 9px;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 10px;
       border-radius: 9px;
       border: 1px solid var(--border-col);
       background: var(--control-bg);
@@ -874,6 +873,13 @@
     .live-task-row.is-running {
       border-color: color-mix(in srgb, #2e9e66 42%, var(--border-col));
       background: color-mix(in srgb, #2e9e66 7%, var(--control-bg));
+    }
+    .live-task-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
     }
     .live-task-left {
       display: flex;
@@ -895,6 +901,24 @@
       background: #d9822b;
       box-shadow: 0 0 0 0 rgba(217, 130, 43, 0.55);
     }
+    .live-dot-pulse.is-thinking {
+      background: #7c5dfa;
+      box-shadow: 0 0 0 0 rgba(124, 93, 250, 0.55);
+    }
+    .live-dot-pulse.is-waiting {
+      background: #d9822b;
+      box-shadow: 0 0 0 0 rgba(217, 130, 43, 0.55);
+    }
+    .live-task-row.is-running .live-task-tag.is-thinking {
+      color: #7c5dfa;
+      border-color: rgba(124, 93, 250, 0.35);
+      background: rgba(124, 93, 250, 0.1);
+    }
+    .live-task-row.is-running .live-task-tag.is-waiting {
+      color: #c7761b;
+      border-color: rgba(217, 130, 43, 0.4);
+      background: rgba(217, 130, 43, 0.11);
+    }
     .live-dot-pulse.is-idle {
       background: var(--muted-fg);
       opacity: 0.45;
@@ -906,10 +930,6 @@
       70% { box-shadow: 0 0 0 6px rgba(46, 158, 102, 0); }
       100% { box-shadow: 0 0 0 0 rgba(46, 158, 102, 0); }
     }
-    .live-task-info {
-      min-width: 0;
-      flex: 1;
-    }
     .live-task-title {
       font-size: 12px;
       font-weight: 600;
@@ -917,11 +937,36 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1;
     }
-    .live-task-sub {
+    .live-task-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px 6px;
+      padding-left: 14px;
       font-size: 10.5px;
+      line-height: 1.35;
       color: var(--muted-fg);
-      margin-top: 1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .live-task-meta-item {
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .live-task-meta-sep {
+      opacity: 0.5;
+      user-select: none;
+    }
+    .live-task-detail {
+      padding-left: 14px;
+      font-size: 11px;
+      line-height: 1.38;
+      color: var(--muted-fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .live-task-tag {
       font-size: 10.5px;
@@ -3758,46 +3803,155 @@
           empty.textContent = c.liveUnavailable;
           listEl.appendChild(empty);
         } else {
-          if (running.length === 0) {
+          const formatActivity = (act, runState) => {
+            if (runState === 'RUN_STATE_CANCELLING') return { tag: c.liveCancellingTag, cls: 'is-waiting' };
+            const kind = act?.kind || 'running';
+            const mapZh = {
+              thinking: ['推理思考中', 'is-thinking'],
+              responding: ['正在回复', ''],
+              reading_file: ['读取文件中', ''],
+              editing_file: ['编辑代码中', ''],
+              running_command: ['执行命令中', ''],
+              searching: ['检索代码中', ''],
+              web_search: ['联网检索中', ''],
+              subagent: ['子智能体运行', 'is-thinking'],
+              mcp_tool: ['调用工具中', ''],
+              waiting: ['等待确认', 'is-waiting'],
+              tool: ['调用工具中', ''],
+              running: [c.liveRunningTag, ''],
+            };
+            const mapEn = {
+              thinking: ['Thinking', 'is-thinking'],
+              responding: ['Responding', ''],
+              reading_file: ['Reading file', ''],
+              editing_file: ['Editing file', ''],
+              running_command: ['Running cmd', ''],
+              searching: ['Searching', ''],
+              web_search: ['Web search', ''],
+              subagent: ['Subagent', 'is-thinking'],
+              mcp_tool: ['MCP tool', ''],
+              waiting: ['Needs input', 'is-waiting'],
+              tool: ['Running tool', ''],
+              running: [c.liveRunningTag, ''],
+            };
+            const mapJa = {
+              thinking: ['推論中', 'is-thinking'],
+              responding: ['応答中', ''],
+              reading_file: ['ファイル読込', ''],
+              editing_file: ['コード編集', ''],
+              running_command: ['コマンド実行', ''],
+              searching: ['コード検索', ''],
+              web_search: ['Web 検索', ''],
+              subagent: ['サブエージェント', 'is-thinking'],
+              mcp_tool: ['MCP 実行', ''],
+              waiting: ['確認待ち', 'is-waiting'],
+              tool: ['ツール実行', ''],
+              running: [c.liveRunningTag, ''],
+            };
+            const tbl = lang === 'en' ? mapEn : lang === 'ja' ? mapJa : mapZh;
+            const pair = tbl[kind] || tbl.running;
+            return { tag: pair[0], cls: pair[1] };
+          };
+
+          const formatStepElapsed = (iso) => {
+            if (!iso) return '';
+            const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+            if (!Number.isFinite(sec)) return '';
+            if (sec < 60) return `${sec}s`;
+            return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+          };
+
+          const renderItem = (item, isRun) => {
+            const row = document.createElement('div');
+            row.className = `live-task-row${isRun ? ' is-running' : ''}`;
+
+            const top = document.createElement('div');
+            top.className = 'live-task-top';
+
+            const left = document.createElement('div');
+            left.className = 'live-task-left';
+            const actInfo = isRun ? formatActivity(item.activity, item.runState) : { tag: c.liveIdle, cls: '' };
+            const dot = document.createElement('span');
+            dot.className = `live-dot-pulse${
+              item.runState === 'RUN_STATE_CANCELLING'
+                ? ' is-cancelling'
+                : !isRun
+                ? ' is-idle'
+                : actInfo.cls
+                ? ' ' + actInfo.cls
+                : ''
+            }`;
+            const title = document.createElement('div');
+            title.className = 'live-task-title';
+            title.textContent = item.title || 'Conversation';
+            title.title = item.title || '';
+            left.appendChild(dot);
+            left.appendChild(title);
+
+            const tag = document.createElement('span');
+            tag.className = `live-task-tag${actInfo.cls ? ' ' + actInfo.cls : ''}`;
+            tag.textContent = actInfo.tag;
+
+            top.appendChild(left);
+            top.appendChild(tag);
+            row.appendChild(top);
+
+            const metaParts = [];
+            if (isRun) {
+              if (item.stepCount > 0) {
+                metaParts.push(lang === 'en' ? `Step ${item.stepCount}` : lang === 'ja' ? `${item.stepCount} ステップ` : `第 ${item.stepCount} 步`);
+              }
+              if (item.activity?.startedAt) {
+                const elap = formatStepElapsed(item.activity.startedAt);
+                if (elap) metaParts.push(elap);
+              }
+              if (item.activeSubagentCount > 0) {
+                metaParts.push(c.liveSubagents(item.activeSubagentCount));
+              }
+            } else {
+              const rel = formatRelTimeShort(item.updateTime, lang);
+              if (rel) metaParts.push(rel);
+            }
+
+            if (metaParts.length > 0) {
+              const meta = document.createElement('div');
+              meta.className = 'live-task-meta';
+              metaParts.forEach((part, idx) => {
+                if (idx > 0) {
+                  const sep = document.createElement('span');
+                  sep.className = 'live-task-meta-sep';
+                  sep.textContent = '·';
+                  meta.appendChild(sep);
+                }
+                const span = document.createElement('span');
+                span.className = 'live-task-meta-item';
+                span.textContent = part;
+                meta.appendChild(span);
+              });
+              row.appendChild(meta);
+            }
+
+            if (isRun && item.activity?.detail) {
+              const detail = document.createElement('div');
+              detail.className = 'live-task-detail';
+              detail.textContent = item.activity.detail;
+              detail.title = item.activity.detail;
+              row.appendChild(detail);
+            }
+
+            listEl.appendChild(row);
+          };
+
+          if (running.length > 0) {
+            for (const item of running) renderItem(item, true);
+          } else if (recent.length > 0) {
+            renderItem(recent[0], false);
+          } else {
             const empty = document.createElement('div');
             empty.className = 'live-task-empty';
             empty.textContent = c.liveNoRunning;
             listEl.appendChild(empty);
           }
-          const renderItem = (item, isRun) => {
-            const row = document.createElement('div');
-            row.className = `live-task-row${isRun ? ' is-running' : ''}`;
-            const left = document.createElement('div');
-            left.className = 'live-task-left';
-            const dot = document.createElement('span');
-            dot.className = `live-dot-pulse${item.runState === 'RUN_STATE_CANCELLING' ? ' is-cancelling' : isRun ? '' : ' is-idle'}`;
-            const info = document.createElement('div');
-            info.className = 'live-task-info';
-            const title = document.createElement('div');
-            title.className = 'live-task-title';
-            title.textContent = item.title || 'Conversation';
-            title.title = item.title || '';
-            const sub = document.createElement('div');
-            sub.className = 'live-task-sub';
-            const subParts = [];
-            if (item.activeSubagentCount > 0) subParts.push(c.liveSubagents(item.activeSubagentCount));
-            else if (item.subagentCount > 0) subParts.push(c.liveSubagents(item.subagentCount));
-            const rel = formatRelTimeShort(item.updateTime, lang);
-            if (rel) subParts.push(rel);
-            sub.textContent = subParts.join(' · ') || (isRun ? c.liveRunningTag : '');
-            info.appendChild(title);
-            if (sub.textContent) info.appendChild(sub);
-            left.appendChild(dot);
-            left.appendChild(info);
-            const tag = document.createElement('span');
-            tag.className = 'live-task-tag';
-            tag.textContent = item.runState === 'RUN_STATE_CANCELLING' ? c.liveCancellingTag : isRun ? c.liveRunningTag : c.liveIdleTag;
-            row.appendChild(left);
-            row.appendChild(tag);
-            listEl.appendChild(row);
-          };
-          for (const item of running) renderItem(item, true);
-          for (const item of recent.slice(0, running.length > 0 ? 1 : 2)) renderItem(item, false);
         }
       }
 
@@ -4123,7 +4277,7 @@
       if (document.visibilityState !== 'hidden' && activeTab === 'overview' && !collapsedGroups.has('liveTasks')) {
         void loadLiveTasks();
       }
-    }, 4000);
+    }, 2500);
   </script>
 </body>
 </html>

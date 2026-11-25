@@ -612,6 +612,178 @@ async function getLiveTasksCdpFallback() {
   return { ok: true, available: false, source: 'none', running: [], recent: [], checkedAt: new Date().toISOString() };
 }
 
+async function callLanguageServer(method, body, { env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null, timeoutMs = 4000 } = {}) {
+  const addr = String(env?.ANTIGRAVITY_LS_ADDRESS || '').trim();
+  const csrf = String(env?.ANTIGRAVITY_CSRF_TOKEN || '').trim();
+  if (!addr || !csrf || typeof fetchFn !== 'function') {
+    return { ok: false, reason: 'no_ls_env' };
+  }
+  const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const res = await fetchFn(`http://${addr}/exa.language_server_pb.LanguageServerService/${method}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Connect-Protocol-Version': '1',
+        'x-antigravity-csrf-token': csrf,
+      },
+      body: JSON.stringify(body || {}),
+      signal: ctrl?.signal,
+    });
+    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    const json = await res.json();
+    return { ok: true, data: json };
+  } catch (err) {
+    return { ok: false, reason: err?.name === 'AbortError' ? 'timeout' : err?.message || 'fetch_failed' };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function extractShortBaseName(rawUri) {
+  if (!rawUri || typeof rawUri !== 'string') return '';
+  let clean = rawUri.trim();
+  try {
+    clean = decodeURIComponent(clean);
+  } catch {}
+  clean = clean.replace(/^file:\/+/i, '').replace(/[\\/]+$/, '');
+  const parts = clean.split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
+}
+
+function parseJsonSafe(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function classifyLiveStepActivity(steps) {
+  if (!Array.isArray(steps) || steps.length === 0) return null;
+  const ACTIVE_STATUSES = new Set([
+    'CORTEX_STEP_STATUS_RUNNING',
+    'CORTEX_STEP_STATUS_GENERATING',
+    'CORTEX_STEP_STATUS_WAITING',
+    'CORTEX_STEP_STATUS_PENDING',
+  ]);
+
+  let target = null;
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    const s = steps[i];
+    if (s && ACTIVE_STATUSES.has(String(s.status || ''))) {
+      target = s;
+      break;
+    }
+  }
+  if (!target) {
+    for (let i = steps.length - 1; i >= 0; i -= 1) {
+      if (steps[i]) {
+        target = steps[i];
+        break;
+      }
+    }
+  }
+  if (!target) return null;
+
+  const type = String(target.type || '').toUpperCase();
+  const status = String(target.status || '').toUpperCase();
+  const waiting = status === 'CORTEX_STEP_STATUS_WAITING';
+  const toolCall = target.metadata?.toolCall || target.generic?.toolCall || null;
+  const toolName = String(toolCall?.name || '').trim().toLowerCase();
+  const toolArgs = parseJsonSafe(toolCall?.argumentsJson) || {};
+  const toolSummary = String(target.metadata?.toolSummary || toolArgs.toolSummary || '').trim();
+  const startedAt = target.metadata?.createdAt || null;
+
+  let kind = 'running';
+  let detail = toolSummary;
+
+  if (waiting) {
+    kind = 'waiting';
+  } else if (type === 'CORTEX_STEP_TYPE_PLANNER_RESPONSE') {
+    const pr = target.plannerResponse || {};
+    const hasResp = Boolean(pr.modifiedResponse || pr.response);
+    const hasThink = Boolean(pr.thinking);
+    kind = hasResp && !hasThink ? 'responding' : hasResp && status === 'CORTEX_STEP_STATUS_DONE' ? 'responding' : 'thinking';
+    if (hasResp && hasThink && status === 'CORTEX_STEP_STATUS_GENERATING') {
+      kind = 'responding';
+    }
+  } else if (type === 'CORTEX_STEP_TYPE_VIEW_FILE' || toolName === 'read_file' || toolName === 'view_file') {
+    kind = 'reading_file';
+    const file = extractShortBaseName(
+      target.viewFile?.absolutePathUri || toolArgs.Path || toolArgs.AbsolutePath || ''
+    );
+    if (file) detail = file;
+  } else if (
+    type === 'CORTEX_STEP_TYPE_CODE_ACTION' ||
+    toolName === 'edit_file' ||
+    toolName === 'write_file' ||
+    toolName === 'write_to_file' ||
+    toolName === 'replace_file_content' ||
+    toolName === 'multi_replace_file_content'
+  ) {
+    kind = 'editing_file';
+    const file = extractShortBaseName(
+      target.codeAction?.actionSpec?.editFile?.path?.absoluteUri ||
+        target.codeAction?.actionSpec?.createFile?.path?.absoluteUri ||
+        toolArgs.Path ||
+        toolArgs.TargetFile ||
+        ''
+    );
+    if (file) detail = file;
+  } else if (type === 'CORTEX_STEP_TYPE_RUN_COMMAND' || toolName === 'run_command' || toolName === 'command_status') {
+    kind = 'running_command';
+    if (!detail) {
+      const cmdLine = String(target.runCommand?.commandLine || toolArgs.CommandLine || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (cmdLine) detail = cmdLine.slice(0, 44);
+    }
+  } else if (
+    type === 'CORTEX_STEP_TYPE_GREP_SEARCH' ||
+    type === 'CORTEX_STEP_TYPE_FIND' ||
+    type === 'CORTEX_STEP_TYPE_LIST_DIRECTORY' ||
+    toolName === 'grep_search' ||
+    toolName === 'find_by_name' ||
+    toolName === 'list_dir'
+  ) {
+    kind = 'searching';
+    if (!detail) {
+      detail = String(toolArgs.Query || toolArgs.Pattern || extractShortBaseName(toolArgs.SearchPath || toolArgs.DirectoryPath || '') || '').slice(0, 40);
+    }
+  } else if (type === 'CORTEX_STEP_TYPE_SEARCH_WEB' || toolName === 'search_web' || toolName === 'read_url_content') {
+    kind = 'web_search';
+    if (!detail) detail = String(toolArgs.query || toolArgs.Url || '').slice(0, 40);
+  } else if (
+    type === 'CORTEX_STEP_TYPE_BROWSER_SUBAGENT' ||
+    toolName === 'invoke_subagent' ||
+    toolName === 'swarm' ||
+    toolName === 'browser_subagent'
+  ) {
+    kind = 'subagent';
+    if (!detail) detail = String(toolArgs.Role || toolArgs.name || toolArgs.TaskName || '').slice(0, 40);
+  } else if (type === 'CORTEX_STEP_TYPE_MCP_TOOL' || toolName === 'call_mcp_tool') {
+    kind = 'mcp_tool';
+    if (!detail) detail = String(toolArgs.ToolName || toolArgs.ServerName || '').slice(0, 40);
+  } else if (toolName === 'ask_question') {
+    kind = 'waiting';
+  } else if (toolName) {
+    kind = 'tool';
+    if (!detail) detail = toolName;
+  }
+
+  return {
+    kind,
+    detail: String(detail || '').slice(0, 60),
+    toolName,
+    status,
+    waiting,
+    startedAt,
+  };
+}
+
 async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null, allowCdpFallback = true } = {}) {
   const listRes = await callConversationService(
     'ListConversations',
@@ -643,6 +815,8 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
     pinned: Boolean(c?.annotations?.pinned),
     subagentCount: 0,
     activeSubagentCount: 0,
+    stepCount: 0,
+    activity: null,
   });
 
   const normalized = convos.map(normalizeConvo);
@@ -653,23 +827,46 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
     .filter((c) => c.runState !== 'RUN_STATE_RUNNING' && c.runState !== 'RUN_STATE_CANCELLING')
     .slice(0, 3);
 
-  // Best-effort child subagent counts for up to 5 running conversations
-  await Promise.all(
-    running.slice(0, 5).map(async (item) => {
-      const subRes = await callConversationService(
-        'ListConversations',
-        { pageSize: 20, parentConversationId: item.id, includeArchived: false },
-        { env, fetchFn, timeoutMs: 2500 }
-      );
-      if (subRes.ok && Array.isArray(subRes.data?.conversations)) {
-        const subs = subRes.data.conversations;
-        item.subagentCount = subs.length;
-        item.activeSubagentCount = subs.filter(
-          (s) => s?.state?.runState === 'RUN_STATE_RUNNING' || s?.state?.runState === 'RUN_STATE_CANCELLING'
-        ).length;
-      }
-    })
-  );
+  // Enrich up to 5 running conversations with live step activity (via lightweight tail stepOffset) & subagents
+  if (running.length > 0) {
+    let summaries = {};
+    const sumRes = await callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 2500 });
+    if (sumRes.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object') {
+      summaries = sumRes.data.trajectorySummaries;
+    }
+
+    await Promise.all(
+      running.slice(0, 5).map(async (item) => {
+        const subPromise = callConversationService(
+          'ListConversations',
+          { pageSize: 20, parentConversationId: item.id, includeArchived: false },
+          { env, fetchFn, timeoutMs: 2500 }
+        );
+        const stepCount = Number(summaries?.[item.id]?.stepCount || 0);
+        item.stepCount = stepCount;
+        const stepPromise =
+          stepCount > 0
+            ? callLanguageServer(
+                'GetCascadeTrajectorySteps',
+                { cascadeId: item.id, stepOffset: Math.max(0, stepCount - 10) },
+                { env, fetchFn, timeoutMs: 2500 }
+              )
+            : Promise.resolve({ ok: false });
+
+        const [subRes, stepsRes] = await Promise.all([subPromise, stepPromise]);
+        if (subRes.ok && Array.isArray(subRes.data?.conversations)) {
+          const subs = subRes.data.conversations;
+          item.subagentCount = subs.length;
+          item.activeSubagentCount = subs.filter(
+            (s) => s?.state?.runState === 'RUN_STATE_RUNNING' || s?.state?.runState === 'RUN_STATE_CANCELLING'
+          ).length;
+        }
+        if (stepsRes.ok && Array.isArray(stepsRes.data?.steps)) {
+          item.activity = classifyLiveStepActivity(stepsRes.data.steps);
+        }
+      })
+    );
+  }
 
   return {
     ok: true,
@@ -922,6 +1119,7 @@ export {
   upsertScriptApi,
   deleteScriptApi,
   runScriptApi,
+  classifyLiveStepActivity,
   getLiveTasksApi,
   getStudioStatus,
   applyConfigUpdate,
