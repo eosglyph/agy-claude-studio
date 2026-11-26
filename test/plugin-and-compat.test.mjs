@@ -2742,3 +2742,255 @@ test('receivePrerelease config defaults off, compareSemver orders prereleases, a
   const studioHtml = fs.readFileSync(path.join(ROOT_DIR, 'sidecars', 'studio', 'index.html'), 'utf8');
   assert.ok(studioHtml.includes('chk-receive-prerelease') && studioHtml.includes('接受测试版本推送'));
 });
+
+test('compactPreset continue mode and persistent /btw side-question restore & composer chip hint work end-to-end', async () => {
+  // 1. Validate compactPreset 'continue' in config & Studio HTML
+  assert.equal(cdp.validateConfigSetting('compactPreset', 'continue'), true);
+  assert.equal(cdp.sanitizeConfig({ compactPreset: 'continue' }).compactPreset, 'continue');
+  const studioHtml = fs.readFileSync(path.join(ROOT_DIR, 'sidecars', 'studio', 'index.html'), 'utf8');
+  assert.ok(studioHtml.includes("['continue', '继续工作']"), 'Studio UI includes continue compact preset');
+  assert.ok(studioHtml.includes('id="live-btw-block"') && studioHtml.includes('/api/side-question/open'), 'Studio UI includes persistent /btw dock block');
+
+  // 2. Runtime sandbox test: /btw chip conversion + gray hint + Redux side-question listing & restore
+  const timers = new Set();
+  const dispatched = [];
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      parentNode: null,
+      children,
+      childNodes: children,
+      isConnected: true,
+      _text: opts.text || '',
+      style: { _props: {}, setProperty(k, v) { this._props[k] = String(v); }, removeProperty(k) { delete this._props[k]; } },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get id() { return attrs.get('id') || ''; },
+      set id(v) { attrs.set('id', String(v)); },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      insertBefore(c) { return this.appendChild(c); },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+          this.parentNode = null;
+        }
+      },
+      focus() {},
+      click() {
+        if (typeof opts.onClick === 'function') opts.onClick();
+        else if (this.parentElement && typeof this.parentElement.click === 'function') this.parentElement.click();
+      },
+      dispatchEvent() {},
+      addEventListener() {},
+      removeEventListener() {},
+      getBoundingClientRect: () => ({ left: 10, top: 8, width: 60, height: 22, right: 70, bottom: 30 }),
+      matches(sel) {
+        return sel.split(',').some((s) => {
+          const t = s.trim();
+          if (t === '[role="option"]') return attrs.get('role') === 'option';
+          return false;
+        });
+      },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (sel === '[data-testid="conversation-view"]' && cur.getAttribute('data-testid') === 'conversation-view') return cur;
+          if (sel === '[data-testid="agent-input-box"]' && cur.getAttribute('data-testid') === 'agent-input-box') return cur;
+          if (sel === '.surface-composer-card' && cur.classList.contains('surface-composer-card')) return cur;
+          if (sel === '[data-cascade-id]' && cur.hasAttribute('data-cascade-id')) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const parts = sel.split(',').map((s) => s.trim());
+        const walk = (n) => {
+          for (const c of n.children) {
+            const ok = parts.some((p) => {
+              if (p === '[data-testid="agent-input-box"] .surface-composer-card') return c.classList.contains('surface-composer-card');
+              if (p === '[data-testid="agent-input-box"]') return c.getAttribute('data-testid') === 'agent-input-box';
+              if (p === '[data-testid="agent-input-box"] [contenteditable="true"]') return c.getAttribute('contenteditable') === 'true';
+              if (p === '[contenteditable="true"]') return c.getAttribute('contenteditable') === 'true';
+              if (p === '.ag-cs-compact-hint') return c.classList.contains('ag-cs-compact-hint');
+              if (p === '[data-lexical-decorator="true"]') return c.getAttribute('data-lexical-decorator') === 'true';
+              if (p === '[data-mention-menu] [role="option"]' || p === '[role="option"]') return c.getAttribute('role') === 'option';
+              if (p === '[data-testid="menu-option-label"]') return c.getAttribute('data-testid') === 'menu-option-label';
+              if (p === '[data-aux-pane-open]') return c.hasAttribute('data-aux-pane-open');
+              if (p === '[data-testid="toggle-aux-sidebar"]') return c.getAttribute('data-testid') === 'toggle-aux-sidebar';
+              return false;
+            });
+            if (ok) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const convoId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const docEl = makeEl('html');
+  const head = docEl.appendChild(makeEl('head'));
+  const body = docEl.appendChild(makeEl('body', { className: 'theme-standalone' }));
+  const root = body.appendChild(makeEl('div', { attrs: { id: 'root' } }));
+  const conv = root.appendChild(makeEl('div', { attrs: { 'data-testid': 'conversation-view', 'data-cascade-id': convoId } }));
+  const inputBox = conv.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+  const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  const edWrap = card.appendChild(makeEl('div', { className: 'ed-wrap' }));
+  const ed = edWrap.appendChild(makeEl('div', { attrs: { contenteditable: 'true' } }));
+  const auxPane = root.appendChild(makeEl('div', { attrs: { 'data-aux-pane-open': 'false' } }));
+  let auxToggleClicks = 0;
+  auxPane.appendChild(makeEl('button', { attrs: { 'data-testid': 'toggle-aux-sidebar' }, onClick: () => { auxToggleClicks++; } }));
+
+  const menu = body.appendChild(makeEl('div', { attrs: { 'data-mention-menu': '1' } }));
+  let btwOptionClicks = 0;
+  const btwOpt = menu.appendChild(makeEl('div', {
+    attrs: { role: 'option' },
+    onClick: () => {
+      btwOptionClicks++;
+      ed.textContent = '';
+      ed.appendChild(makeEl('span', { attrs: { 'data-lexical-decorator': 'true' }, text: 'btw' }));
+    },
+  }));
+  btwOpt.appendChild(makeEl('span', { attrs: { 'data-testid': 'menu-option-label' }, text: 'btw' }));
+
+  const reduxState = {
+    sideQuestion: {
+      states: {
+        [convoId]: {
+          question: '这个配置怎么写？',
+          cascadeId: 'fork-111',
+          minimized: true,
+          mode: 'btw',
+          history: [{ question: '这个配置怎么写？', cascadeId: 'fork-111', startTimestamp: 1700000000, mode: 'btw' }],
+          currentIndex: 0,
+        },
+      },
+    },
+    ephemeralFork: { forks: {} },
+    sidePanelV2: {
+      conversationPanes: {
+        [convoId]: {
+          tabs: [],
+          closedTabs: [
+            { tab: { id: 'side_question__fork-111', content: { type: 'sideQuestionView', sideQuestionView: { cascadeId: 'fork-111' } } } },
+          ],
+        },
+      },
+    },
+  };
+  root.__reactContainer$test = {
+    current: {
+      memoizedProps: {
+        value: {
+          store: {
+            getState: () => reduxState,
+            dispatch: (act) => dispatched.push(act),
+          },
+        },
+      },
+    },
+  };
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    readyState: 'complete',
+    visibilityState: 'visible',
+    title: 'Test - Antigravity',
+    getElementById: (id) => (id === 'root' ? root : null),
+    querySelector: (sel) => docEl.querySelector(sel),
+    querySelectorAll: (sel) => docEl.querySelectorAll(sel),
+    createElement: (tag) => makeEl(tag),
+    execCommand(cmd, _ui, val) {
+      if (cmd === 'insertText') {
+        ed.textContent = String(val || '');
+        return true;
+      }
+      return true;
+    },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+
+  const sandbox = {
+    document: doc,
+    location: { href: `https://127.0.0.1:2015/c/${convoId}`, protocol: 'https:', hostname: '127.0.0.1', pathname: `/c/${convoId}` },
+    getComputedStyle: () => ({ getPropertyValue: () => '', paddingRight: '8px' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl, RegExp,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, language: 'zh-CN', compactPreset: 'continue' }),
+      sandbox
+    );
+
+    // A. Reads existing closed/minimized side question cleanly
+    const sqSnap = sandbox.window.__agClaudeStudio.getSideQuestionsState(convoId);
+    assert.equal(sqSnap.ok, true);
+    assert.equal(sqSnap.items.length, 1);
+    assert.equal(sqSnap.items[0].cascadeId, 'fork-111');
+    assert.equal(sqSnap.items[0].question, '这个配置怎么写？');
+
+    // B. Clicking existing entry dispatches restore + sidePanelV2/setContent and opens aux pane
+    const openRes = sandbox.window.__agClaudeStudio.openSideQuestion({ conversationId: convoId, cascadeId: 'fork-111', index: 0 });
+    assert.equal(openRes.ok, true);
+    assert.equal(openRes.action, 'restored');
+    assert.ok(dispatched.some((a) => a.type === 'sideQuestion/restoreSideQuestion' && a.payload === convoId));
+    assert.ok(dispatched.some((a) => a.type === 'sidePanelV2/setContent' && a.payload?.content?.type === 'sideQuestionView'));
+    assert.equal(auxToggleClicks, 1, 'Opens closed aux pane when restoring sideQuestionView tab');
+
+    // C. Clicking forceNew inserts /btw, converts to chip, and shows gray ghost guide hint
+    const newRes = sandbox.window.__agClaudeStudio.openSideQuestion({ conversationId: convoId, forceNew: true });
+    assert.equal(newRes.ok, true);
+    assert.equal(newRes.action, 'composer_btw');
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(btwOptionClicks, 1, 'Auto-selects /btw menu option into native chip');
+    const hint = edWrap.querySelector('.ag-cs-compact-hint');
+    assert.ok(hint, 'Renders gray ghost hint next to standalone /btw chip');
+    assert.equal(hint.getAttribute('data-ag-cs-hint-kind'), 'btw');
+    assert.ok(hint.textContent.includes('不影响当前会话'), 'Hint explains /btw does not interrupt current chat');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});

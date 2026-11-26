@@ -287,6 +287,86 @@ async function showScriptOutputInHostChat(data) {
   return lastResult;
 }
 
+async function queryHostSideQuestions(preferredConversationId = '') {
+  const reqId = String(preferredConversationId || '').trim();
+  const ports = cdp.readActivePorts();
+  let fallback = { ok: false, conversationId: reqId, items: [] };
+  for (const port of ports) {
+    let pages = [];
+    try {
+      pages = await cdp.listPages(port);
+    } catch {
+      continue;
+    }
+    const candidates = pages.filter((p) => p?.webSocketDebuggerUrl && cdp.isAntigravityPageTarget(p));
+    candidates.sort((a, b) => {
+      const aMatch = reqId && String(a.url || '').includes(reqId) ? 1 : 0;
+      const bMatch = reqId && String(b.url || '').includes(reqId) ? 1 : 0;
+      return bMatch - aMatch;
+    });
+    for (const p of candidates) {
+      let sess = null;
+      try {
+        sess = await cdp.CdpSession.connect(p.webSocketDebuggerUrl);
+        const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.getSideQuestionsState === "function") ? api.getSideQuestionsState(${JSON.stringify(reqId)}) : null; })()`;
+        const res = await sess.evaluate(expr, false);
+        if (res && res.ok) {
+          if ((Array.isArray(res.items) && res.items.length > 0) || !reqId || res.conversationId === reqId) {
+            return res;
+          }
+          fallback = res;
+        }
+      } catch {
+        // try next target
+      } finally {
+        sess?.close();
+      }
+    }
+  }
+  return fallback;
+}
+
+async function openSideQuestionInHost(data = {}) {
+  const payload = {
+    conversationId: String(data?.conversationId || '').trim(),
+    cascadeId: String(data?.cascadeId || '').trim(),
+    tabId: String(data?.tabId || '').trim(),
+    index: Number.isInteger(data?.index) ? data.index : null,
+    forceNew: Boolean(data?.forceNew),
+  };
+  const ports = cdp.readActivePorts();
+  let lastResult = { ok: false, status: 'cdp_unavailable' };
+  for (const port of ports) {
+    let pages = [];
+    try {
+      pages = await cdp.listPages(port);
+    } catch {
+      continue;
+    }
+    const candidates = pages.filter((p) => p?.webSocketDebuggerUrl && cdp.isAntigravityPageTarget(p));
+    candidates.sort((a, b) => {
+      const aMatch = payload.conversationId && String(a.url || '').includes(payload.conversationId) ? 1 : 0;
+      const bMatch = payload.conversationId && String(b.url || '').includes(payload.conversationId) ? 1 : 0;
+      return bMatch - aMatch;
+    });
+    for (const p of candidates) {
+      let sess = null;
+      try {
+        sess = await cdp.CdpSession.connect(p.webSocketDebuggerUrl);
+        const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.openSideQuestion === "function") ? api.openSideQuestion(${JSON.stringify(payload)}) : { ok: false, status: "not_injected" }; })()`;
+        const res = await sess.evaluate(expr, false);
+        if (res && res.ok) return res;
+        if (res) lastResult = res;
+      } catch {
+        // try next window
+      } finally {
+        sess?.close();
+      }
+    }
+  }
+  return lastResult;
+}
+
 function parseSemver(raw) {
   const clean = String(raw || '').trim().replace(/^v/i, '').split('+')[0];
   if (!clean) return null;
@@ -1608,7 +1688,17 @@ function normalizeChildSubagent(conv, trajSummary) {
   };
 }
 
-async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null, allowCdpFallback = true } = {}) {
+async function getLiveTasksApi({
+  env = process.env,
+  fetchFn = typeof fetch === 'function' ? fetch : null,
+  allowCdpFallback = true,
+  conversationId = '',
+} = {}) {
+  const reqConvoId = String(conversationId || '').trim();
+  const sideQPromise = allowCdpFallback
+    ? queryHostSideQuestions(reqConvoId).catch(() => ({ ok: false, conversationId: reqConvoId, items: [] }))
+    : Promise.resolve({ ok: false, conversationId: reqConvoId, items: [] });
+
   const listRes = await callConversationService(
     'ListConversations',
     { pageSize: 30, includeArchived: false },
@@ -1616,7 +1706,12 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
   );
   if (!listRes.ok) {
     if (allowCdpFallback) {
-      return getLiveTasksCdpFallback();
+      const [fallback, sideQ] = await Promise.all([getLiveTasksCdpFallback(), sideQPromise]);
+      return {
+        ...fallback,
+        sideQuestionConvoId: sideQ?.conversationId || reqConvoId || '',
+        sideQuestions: Array.isArray(sideQ?.items) ? sideQ.items : [],
+      };
     }
     return {
       ok: true,
@@ -1625,6 +1720,8 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
       reason: listRes.reason || 'unavailable',
       running: [],
       recent: [],
+      sideQuestionConvoId: reqConvoId || '',
+      sideQuestions: [],
       checkedAt: new Date().toISOString(),
     };
   }
@@ -1698,12 +1795,16 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
     );
   }
 
+  const sideQ = await sideQPromise;
+
   return {
     ok: true,
     available: true,
     source: 'conversation_service',
     running,
     recent,
+    sideQuestionConvoId: sideQ?.conversationId || reqConvoId || '',
+    sideQuestions: Array.isArray(sideQ?.items) ? sideQ.items : [],
     totalCount: normalized.length,
     checkedAt: new Date().toISOString(),
   };
@@ -2414,7 +2515,10 @@ function registerStudioApis(app, ResponseClass = globalThis.Response) {
   api('/api/notify/read', () => getNotifyConfigApi());
   api('/api/notify', async (data) => saveNotifyConfigApi(data));
   api('/api/notify/test', async (data) => testNotifyApi(data));
-  api('/api/live-tasks', async () => getLiveTasksApi());
+  api('/api/live-tasks', async (data) =>
+    getLiveTasksApi({ conversationId: String(data?.conversationId || '').trim() })
+  );
+  api('/api/side-question/open', async (data) => openSideQuestionInHost(data));
   api('/api/conversation-inspector', async (data) => {
     return getConversationInspectorApi({ conversationId: String(data?.conversationId || '').trim() });
   });

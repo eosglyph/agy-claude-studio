@@ -32,6 +32,13 @@
       'Optional: guide compaction (e.g. keep open plans, drop finished details) · Enter for default',
       '任意：圧縮の指示を入力（例：未完の計画を残し完了分を省略）・Enter で標準圧縮',
     ],
+    btwGuideHint: [
+      '旁支提问：可在不影响当前会话进度的情况下随时提问，输入问题后回车即可',
+      '旁支提問：可在不影響目前對話進度的情況下隨時提問，輸入問題後按 Enter 即可',
+      '旁支提問：可以喺唔影響而家對話進度嘅情況下隨時發問，打完問題按 Enter 就得',
+      'Side question: ask anything without interrupting the current chat · type and press Enter',
+      'サイド質問：現在の会話の進行を妨げずに質問できます・入力して Enter',
+    ],
     compactPresetClean: [
       '丢弃已完成任务的琐碎过程与历史噪音，保留核心业务逻辑框架、已确定的关键约束，以及当前进行中任务的全部细节和待办计划。',
       '略過已完成任務的瑣碎過程與歷史雜訊，保留核心業務邏輯框架、已確定的關鍵約束，以及目前進行中任務的全部細節與待辦計畫。',
@@ -45,6 +52,13 @@
       '壓縮已完成任務嘅歷史過程同冗餘輸出；完整保留而家做緊嘅任務實作細節、未完成待辦、核心業務架構，同埋關鍵檔案路徑同踩過嘅坑。',
       'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.',
       '完了済みタスクの経緯と冗長な出力を圧縮し、進行中タスクの実装詳細、未完了TODO、中核アーキテクチャ、主要ファイルパスと既知の落とし穴を完全に残してください。',
+    ],
+    compactPresetContinue: [
+      '丢弃已完成任务的琐碎过程与历史噪音，完整保留核心架构、已确定约束、当前被打断任务的全流程细节与剩余待办；压缩完成后请直接衔接进度，继续推进刚才未完成的工作。',
+      '略過已完成任務的瑣碎過程與歷史雜訊，完整保留核心架構、已確定約束、目前被打斷任務的全流程細節與剩餘待辦；壓縮完成後請直接銜接進度，繼續推進剛才未完成的工作。',
+      '丟走已完成任務嘅瑣碎過程同歷史雜訊，完整保留核心架構、已確定約束、啱啱被打斷任務嘅全流程細節同剩餘待辦；壓縮完之後請直接駁返進度，繼續推進啱啱未做完嘅工作。',
+      'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of the interrupted work, and remaining TODOs. Right after compaction completes, resume and continue executing the unfinished task.',
+      '完了済みタスクの冗長な経緯やログを省き、中核アーキテクチャ、確定した制約、中断中タスクの全詳細と残りのTODOを完全に保持してください。圧縮完了後はそのまま進捗を引き継ぎ、未完了の作業を継続してください。',
     ],
     tabOverview: ['概览', '概覽', '概覽', 'Overview', '概要'],
     tabModels: ['模型', '模型', '模型', 'Models', 'モデル'],

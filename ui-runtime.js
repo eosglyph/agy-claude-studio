@@ -1992,18 +1992,28 @@
     return out;
   }
 
-  function isCompactMentionNode(node) {
+  function isSlashMentionNode(node, cmdName) {
     if (!node || typeof node !== 'object') return false;
     if (node.type !== 'beautifulMention' && node.type !== 'contextScopeItemMention') return false;
-    if (cleanCompactCmd(node.value) === 'compact' && (!node.trigger || node.trigger === '/')) {
+    const target = String(cmdName || '').toLowerCase();
+    if (!target) return false;
+    if (cleanCompactCmd(node.value) === target && (!node.trigger || node.trigger === '/')) {
       return true;
     }
     const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
-    return Boolean(rawData && /slashCommand/i.test(rawData) && /\bcompact\b/i.test(rawData));
+    if (!rawData) return false;
+    const cmdRe = new RegExp(`\\b${target}\\b`, 'i');
+    return Boolean((/slashCommand|recipe/i.test(rawData) || target === 'btw') && cmdRe.test(rawData));
   }
 
-  function findStandaloneCompactChip(ed) {
+  function isCompactMentionNode(node) {
+    return isSlashMentionNode(node, 'compact');
+  }
+
+  function findStandaloneSlashChip(ed, cmdName) {
     if (!ed || ed._agCsComposing) return null;
+    const target = String(cmdName || '').toLowerCase();
+    if (!target) return null;
 
     const lex = ed.__lexicalEditor;
     if (lex && typeof lex.getEditorState === 'function') {
@@ -2012,42 +2022,50 @@
         const paras = Array.isArray(root?.children) ? root.children : [];
         const nonEmpty = paras.filter((p) => Array.isArray(p?.children) && p.children.length > 0);
         if (nonEmpty.length !== 1) return null;
-        let compactMention = null;
+        let slashMention = null;
         for (const node of nonEmpty[0].children) {
-          if (isCompactMentionNode(node)) {
-            if (compactMention) return null;
-            compactMention = node;
+          if (isSlashMentionNode(node, target)) {
+            if (slashMention) return null;
+            slashMention = node;
           } else if (node?.type === 'text' && cleanCompactCmd(node.text) === '') {
             continue;
           } else {
             return null;
           }
         }
-        if (!compactMention) return null;
+        if (!slashMention) return null;
       } catch {}
     } else {
       if (ed.querySelectorAll('p').length > 1) return null;
-      if (cleanCompactCmd(getNonIconText(ed)) !== 'compact') return null;
+      if (cleanCompactCmd(getNonIconText(ed)) !== target) return null;
     }
 
     const decorators = Array.from(ed.querySelectorAll('[data-lexical-decorator="true"]'));
     for (const d of decorators) {
-      if (cleanCompactCmd(getNonIconText(d)) === 'compact') return d;
+      if (cleanCompactCmd(getNonIconText(d)) === target) return d;
     }
     const bdis = Array.from(ed.querySelectorAll('bdi'));
     for (const b of bdis) {
-      if (cleanCompactCmd(getNonIconText(b)) === 'compact') return b;
+      if (cleanCompactCmd(getNonIconText(b)) === target) return b;
     }
     const spans = Array.from(ed.querySelectorAll('span'));
     for (const sp of spans) {
       if (
-        cleanCompactCmd(getNonIconText(sp)) === 'compact' &&
+        cleanCompactCmd(getNonIconText(sp)) === target &&
         sp.querySelector('[data-symbol-name], .google-symbols, svg')
       ) {
         return sp;
       }
     }
     return null;
+  }
+
+  function findStandaloneCompactChip(ed) {
+    return findStandaloneSlashChip(ed, 'compact');
+  }
+
+  function findStandaloneBtwChip(ed) {
+    return findStandaloneSlashChip(ed, 'btw');
   }
 
   function removeCompactGuideHint(wrap) {
@@ -2118,7 +2136,12 @@
       } catch {}
     }
 
-    const chip = findStandaloneCompactChip(ed);
+    let chip = findStandaloneCompactChip(ed);
+    let hintKind = 'compact';
+    if (!chip) {
+      chip = findStandaloneBtwChip(ed);
+      hintKind = 'btw';
+    }
     if (!chip) {
       removeCompactGuideHint(wrap);
       return;
@@ -2132,9 +2155,15 @@
       hint.setAttribute('data-ag-no-i18n', '');
       wrap.appendChild(hint);
     }
+    if (hint.getAttribute('data-ag-cs-hint-kind') !== hintKind) {
+      hint.setAttribute('data-ag-cs-hint-kind', hintKind);
+    }
     const hintText =
-      ui?.compactGuideHint ||
-      'Optional: guide compaction (e.g. keep open plans, drop finished details) · Enter for default';
+      hintKind === 'btw'
+        ? ui?.btwGuideHint ||
+          'Side question: ask anything without interrupting the current chat · type and press Enter'
+        : ui?.compactGuideHint ||
+          'Optional: guide compaction (e.g. keep open plans, drop finished details) · Enter for default';
     if (hint.textContent !== hintText) {
       hint.textContent = hintText;
     }
@@ -2170,9 +2199,10 @@
     if (hint.style.right !== rightVal) hint.style.right = rightVal;
   }
 
-  function tryAutoSelectCompactMenu(ed) {
-    if (!ed || !ed.isConnected || findStandaloneCompactChip(ed)) return true;
-    if (cleanCompactCmd(getNonIconText(ed)) !== 'compact') return false;
+  function tryAutoSelectSlashMenu(ed, cmdName) {
+    const target = String(cmdName || '').toLowerCase();
+    if (!target || !ed || !ed.isConnected || findStandaloneSlashChip(ed, target)) return true;
+    if (cleanCompactCmd(getNonIconText(ed)) !== target) return false;
     const candidates = Array.from(
       new Set(
         document.querySelectorAll(
@@ -2180,24 +2210,30 @@
         )
       )
     );
+    const cmdBoundaryRe = new RegExp(`\\b${target}\\b`, 'i');
+    const cmdPrefixRe = new RegExp(`^\\/?${target}\\b`, 'i');
     for (const el of candidates) {
       if (!el || !el.isConnected) continue;
       if (typeof el.getAttribute === 'function' && el.getAttribute('aria-disabled') === 'true') continue;
       const labelEl = typeof el.querySelector === 'function' ? el.querySelector('[data-testid="menu-option-label"]') : null;
-      let isCompactOption = false;
+      let isTargetOption = false;
       if (labelEl) {
-        isCompactOption = cleanCompactCmd(getNonIconText(labelEl)) === 'compact';
+        isTargetOption = cleanCompactCmd(getNonIconText(labelEl)) === target;
       } else {
         const txt = getNonIconText(el).replace(/\s+/g, ' ').trim();
         if (!txt || txt.length > 220) continue;
-        isCompactOption =
-          /\bcompact\b/i.test(txt) &&
-          (/compact the conversation/i.test(txt) ||
-            (/^compact\b/i.test(txt) &&
+        const descMatch =
+          target === 'compact'
+            ? /compact the conversation/i.test(txt)
+            : /side question|旁支|サイド質問|without interrupting/i.test(txt);
+        isTargetOption =
+          cmdBoundaryRe.test(txt) &&
+          (descMatch ||
+            (cmdPrefixRe.test(txt) &&
               typeof el.matches === 'function' &&
               el.matches('[role="option"], [role="listbox"] > div, [role="listbox"] button')));
       }
-      if (!isCompactOption) continue;
+      if (!isTargetOption) continue;
       const clickableTarget =
         (labelEl && labelEl.parentElement && labelEl.parentElement !== el ? labelEl.parentElement : null) ||
         (typeof el.querySelector === 'function'
@@ -2228,6 +2264,10 @@
     return false;
   }
 
+  function tryAutoSelectCompactMenu(ed) {
+    return tryAutoSelectSlashMenu(ed, 'compact');
+  }
+
   function resolveCompactPresetText(ui) {
     const mode = cfg?.compactPreset || 'clean';
     if (mode === 'clean') {
@@ -2240,6 +2280,12 @@
       return String(
         ui?.compactPresetDev ||
           'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.'
+      ).trim();
+    }
+    if (mode === 'continue') {
+      return String(
+        ui?.compactPresetContinue ||
+          'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of the interrupted work, and remaining TODOs. Right after compaction completes, resume and continue executing the unfinished task.'
       ).trim();
     }
     if (mode === 'custom') {
@@ -2284,6 +2330,316 @@
       return true;
     } catch {
       return false;
+    }
+  }
+
+  function findPrimaryComposerTarget(scopeEl) {
+    if (scopeEl) {
+      const scopedBox = scopeEl.closest?.('[data-testid="agent-input-box"]') || scopeEl;
+      const card =
+        scopeEl.closest?.('.surface-composer-card') ||
+        scopedBox?.querySelector?.('.surface-composer-card') ||
+        scopeEl;
+      const ed =
+        scopedBox?.querySelector?.('[contenteditable="true"]') ||
+        document.querySelector('[data-testid="agent-input-box"] [contenteditable="true"]');
+      return { card, ed };
+    }
+    const cards = Array.from(document.querySelectorAll('[data-testid="agent-input-box"] .surface-composer-card'));
+    const primaryCard =
+      cards.find((c) => !c.closest?.('[data-testid="subagent-tab-conversation"]')) || cards[0] || null;
+    const ed =
+      primaryCard?.querySelector?.('[contenteditable="true"]') ||
+      document.querySelector('[data-testid="agent-input-box"] [contenteditable="true"]');
+    return { card: primaryCard, ed };
+  }
+
+  function fillBtwCommand(scopeEl) {
+    const { card, ed } = findPrimaryComposerTarget(scopeEl);
+    if (!ed) return false;
+    try {
+      const ui = uiText(getLang());
+      if (findStandaloneBtwChip(ed)) {
+        ed.focus();
+        syncCompactGuideHint(card, ui);
+        return true;
+      }
+      if (typeof window !== 'undefined' && typeof window.focus === 'function') {
+        try {
+          window.focus();
+        } catch {}
+      }
+      ed.focus();
+      let inserted = false;
+      if (typeof document.execCommand === 'function') {
+        document.execCommand('selectAll', false, null);
+        inserted = Boolean(document.execCommand('insertText', false, '/btw'));
+      }
+      if (!inserted) {
+        if (typeof InputEvent === 'function') {
+          ed.dispatchEvent(
+            new InputEvent('beforeinput', { bubbles: true, cancelable: true, data: '/btw', inputType: 'insertText' })
+          );
+        }
+        if (cleanCompactCmd(getNonIconText(ed)) !== 'btw') {
+          ed.textContent = '/btw';
+          if (typeof InputEvent === 'function') {
+            ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: '/btw', inputType: 'insertText' }));
+          }
+        }
+      }
+      const delays = [60, 100, 140, 200, 260];
+      let step = 0;
+      const refreshHint = () => {
+        if (!destroyed && ed.isConnected && card) syncCompactGuideHint(card, uiText(getLang()));
+      };
+      const runAttempt = () => {
+        if (destroyed || !ed.isConnected) return;
+        if (tryAutoSelectSlashMenu(ed, 'btw')) {
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(refreshHint);
+          setTimeout(refreshHint, 50);
+          setTimeout(refreshHint, 140);
+          return;
+        }
+        if (step < delays.length) {
+          setTimeout(runAttempt, delays[step++]);
+        }
+      };
+      setTimeout(runAttempt, delays[step++]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function findHostReduxStore() {
+    try {
+      const rootEl = document.getElementById('root') || document.body?.firstElementChild;
+      if (!rootEl) return null;
+      const fk = Object.keys(rootEl).find((k) => k.startsWith('__reactContainer') || k.startsWith('__reactFiber'));
+      const start = fk ? rootEl[fk]?.current || rootEl[fk] : null;
+      if (!start) return null;
+      const queue = [start];
+      let visited = 0;
+      while (queue.length && visited < 15000) {
+        const f = queue.shift();
+        visited++;
+        const val = f?.memoizedProps?.value;
+        if (
+          val &&
+          typeof val === 'object' &&
+          val.store &&
+          typeof val.store.getState === 'function' &&
+          typeof val.store.dispatch === 'function'
+        ) {
+          return val.store;
+        }
+        if (f?.child) queue.push(f.child);
+        if (f?.sibling) queue.push(f.sibling);
+      }
+    } catch {}
+    return null;
+  }
+
+  function resolveActiveConversationIdForHost(preferredId, store) {
+    const cleanPref = normalizeCascadeId(preferredId);
+    if (cleanPref) return cleanPref;
+    try {
+      const primaryBox = Array.from(document.querySelectorAll('[data-testid="agent-input-box"]')).find(
+        (b) => !b.closest?.('[data-testid="subagent-tab-conversation"]')
+      );
+      const fromDom = resolveCascadeId(primaryBox);
+      if (fromDom) return fromDom;
+    } catch {}
+    try {
+      const m = String(location?.pathname || '').match(/\/c\/([0-9a-f-]{8,})/i);
+      if (m && m[1]) return normalizeCascadeId(m[1]) || m[1];
+    } catch {}
+    try {
+      const layout = store?.getState?.()?.multiConvoLayout;
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return '';
+        if (typeof node.cascadeId === 'string' && node.cascadeId) return node.cascadeId;
+        if (Array.isArray(node.children)) {
+          for (const ch of node.children) {
+            const hit = walk(ch);
+            if (hit) return hit;
+          }
+        }
+        return '';
+      };
+      const fromLayout = walk(layout?.rootNode);
+      if (fromLayout) return normalizeCascadeId(fromLayout) || fromLayout;
+    } catch {}
+    return '';
+  }
+
+  function getSideQuestionsState(preferredConversationId = '') {
+    const store = findHostReduxStore();
+    const cid = resolveActiveConversationIdForHost(preferredConversationId, store);
+    if (!store || !cid) {
+      return { ok: true, conversationId: cid || '', items: [] };
+    }
+    const state = store.getState() || {};
+    const pane = state.sidePanelV2?.conversationPanes?.[cid] || {};
+    const openTabs = Array.isArray(pane.tabs) ? pane.tabs : [];
+    const closedTabs = Array.isArray(pane.closedTabs) ? pane.closedTabs : [];
+    const openSideTabIds = new Set(
+      openTabs
+        .filter((t) => t?.content?.type === 'sideQuestionView')
+        .map((t) => String(t.id || ''))
+    );
+
+    const items = [];
+    const seenKeys = new Set();
+    const pushItem = (raw) => {
+      const cascadeId = String(raw.cascadeId || '').trim();
+      const tabId =
+        String(raw.tabId || '').trim() ||
+        (cascadeId ? `side_question__${cascadeId}` : 'side_question__draft');
+      const question = String(raw.question || '').trim();
+      const dedupeKey = cascadeId ? `c:${cascadeId}` : tabId ? `t:${tabId}:${question.slice(0, 48)}` : `q:${question}`;
+      if (seenKeys.has(dedupeKey)) return;
+      seenKeys.add(dedupeKey);
+      items.push({
+        id: cascadeId || tabId || `sq_${items.length}`,
+        cascadeId,
+        tabId,
+        question,
+        mode: String(raw.mode || 'btw'),
+        minimized: Boolean(raw.minimized),
+        isOpenTab: openSideTabIds.has(tabId),
+        index: Number.isInteger(raw.index) ? raw.index : null,
+        startTimestamp: Number(raw.startTimestamp || 0) || 0,
+      });
+    };
+
+    const sqState = state.sideQuestion?.states?.[cid];
+    if (sqState && typeof sqState === 'object') {
+      const hist = Array.isArray(sqState.history) && sqState.history.length > 0
+        ? sqState.history
+        : sqState.question || sqState.cascadeId
+        ? [{ question: sqState.question, cascadeId: sqState.cascadeId, startTimestamp: sqState.startTimestamp, mode: sqState.mode }]
+        : [];
+      hist.forEach((h, idx) => {
+        if (!h || (!h.question && !h.cascadeId)) return;
+        pushItem({
+          cascadeId: h.cascadeId || '',
+          question: h.question || '',
+          mode: h.mode || sqState.mode || 'btw',
+          minimized: Boolean(sqState.minimized),
+          index: idx,
+          startTimestamp: h.startTimestamp || 0,
+        });
+      });
+    }
+
+    const forks = state.ephemeralFork?.forks || {};
+    for (const [forkId, meta] of Object.entries(forks)) {
+      if (!meta || meta.parentConversationId !== cid) continue;
+      pushItem({
+        cascadeId: forkId,
+        question: meta.question || '',
+        mode: 'btw',
+        minimized: !openSideTabIds.has(`side_question__${forkId}`),
+        startTimestamp: meta.startTimestamp || 0,
+      });
+    }
+
+    for (const tab of openTabs) {
+      if (tab?.content?.type !== 'sideQuestionView') continue;
+      const fCid = String(tab.content?.sideQuestionView?.cascadeId || '').trim();
+      pushItem({
+        cascadeId: fCid,
+        tabId: String(tab.id || ''),
+        question: String(tab.content?.sideQuestionView?.question || '').trim(),
+        mode: 'btw',
+        minimized: false,
+      });
+    }
+
+    for (const entry of closedTabs) {
+      const tab = entry?.tab || entry;
+      if (tab?.content?.type !== 'sideQuestionView') continue;
+      const fCid = String(tab.content?.sideQuestionView?.cascadeId || '').trim();
+      pushItem({
+        cascadeId: fCid,
+        tabId: String(tab.id || ''),
+        question: String(tab.content?.sideQuestionView?.question || '').trim(),
+        mode: 'btw',
+        minimized: true,
+      });
+    }
+
+    items.sort((a, b) => (b.startTimestamp || 0) - (a.startTimestamp || 0));
+    return { ok: true, conversationId: cid, items };
+  }
+
+  function openSideQuestion(opts = {}) {
+    const store = findHostReduxStore();
+    const cid = resolveActiveConversationIdForHost(opts?.conversationId || '', store);
+    if (opts?.forceNew) {
+      const filled = fillBtwCommand();
+      return { ok: filled, action: filled ? 'composer_btw' : 'composer_not_found', conversationId: cid };
+    }
+
+    const snap = getSideQuestionsState(cid);
+    const items = Array.isArray(snap.items) ? snap.items : [];
+    const reqCascadeId = String(opts?.cascadeId || '').trim();
+    const reqTabId = String(opts?.tabId || '').trim();
+    const reqIndex = Number.isInteger(opts?.index) ? opts.index : null;
+
+    let target = null;
+    if (reqCascadeId) {
+      target = items.find((it) => it.cascadeId === reqCascadeId) || { cascadeId: reqCascadeId, tabId: reqTabId || `side_question__${reqCascadeId}` };
+    } else if (reqTabId) {
+      target = items.find((it) => it.tabId === reqTabId) || { cascadeId: '', tabId: reqTabId };
+    } else if (reqIndex !== null) {
+      target = items.find((it) => it.index === reqIndex) || items[0] || null;
+    } else {
+      target = items[0] || null;
+    }
+
+    if (!target || !store || !cid) {
+      const filled = fillBtwCommand();
+      return { ok: filled, action: filled ? 'composer_btw' : 'composer_not_found', conversationId: cid };
+    }
+
+    try {
+      const sqState = store.getState()?.sideQuestion?.states?.[cid];
+      if (sqState) {
+        const idxToSelect = reqIndex !== null ? reqIndex : Number.isInteger(target.index) ? target.index : null;
+        if (idxToSelect !== null) {
+          store.dispatch({ type: 'sideQuestion/setSideQuestionIndex', payload: { conversationId: cid, index: idxToSelect } });
+        }
+        store.dispatch({ type: 'sideQuestion/restoreSideQuestion', payload: cid });
+      }
+
+      const tabId = target.tabId || (target.cascadeId ? `side_question__${target.cascadeId}` : 'side_question__draft');
+      const sideQuestionView = target.cascadeId ? { cascadeId: target.cascadeId } : {};
+      store.dispatch({
+        type: 'sidePanelV2/setContent',
+        payload: {
+          panelScope: { kind: 'cascadeId', cascadeId: cid },
+          content: { type: 'sideQuestionView', sideQuestionView },
+          tabId,
+          keepOpen: true,
+        },
+      });
+
+      const auxPane = document.querySelector('[data-aux-pane-open]');
+      if (auxPane && auxPane.getAttribute('data-aux-pane-open') === 'false') {
+        const toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+        if (toggleBtn && typeof toggleBtn.click === 'function') toggleBtn.click();
+      }
+      const toolbarBtn = document.querySelector('[data-testid="side-question-toolbar-button"]');
+      if (toolbarBtn && typeof toolbarBtn.click === 'function' && store.getState()?.sideQuestion?.states?.[cid]?.minimized) {
+        toolbarBtn.click();
+      }
+      return { ok: true, action: 'restored', conversationId: cid, cascadeId: target.cascadeId || '', tabId };
+    } catch {
+      const filled = fillBtwCommand();
+      return { ok: filled, action: filled ? 'composer_btw' : 'error', conversationId: cid };
     }
   }
 
@@ -9159,6 +9515,15 @@
     },
     closeScriptOutputCard() {
       closeScriptOutputCard();
+    },
+    fillBtwCommand(scopeEl) {
+      return fillBtwCommand(scopeEl);
+    },
+    getSideQuestionsState(conversationId) {
+      return getSideQuestionsState(conversationId);
+    },
+    openSideQuestion(opts) {
+      return openSideQuestion(opts);
     },
     getState() {
       return {

@@ -161,7 +161,7 @@ const CONFIG_VALIDATORS = {
   sidebarRestyle: 'boolean',
   sidebarCompact: 'boolean',
   placeholderStyle: ['studio', 'host'],
-  compactPreset: ['empty', 'clean', 'dev', 'custom'],
+  compactPreset: ['empty', 'clean', 'dev', 'continue', 'custom'],
   periodicSelector: 'boolean',
   orchestratorSwitch: 'boolean',
   pluginPageTranslate: 'boolean',

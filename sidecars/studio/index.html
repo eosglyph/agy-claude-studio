@@ -1974,6 +1974,152 @@
       color: var(--ok);
       font-weight: 550;
     }
+    .cd-btw-block {
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px dashed var(--divider-col);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .cd-btw-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .cd-btw-heading {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted-fg);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    button.cd-btw-new-btn {
+      width: auto;
+      min-height: 20px;
+      padding: 1px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border-col);
+      background: var(--control-bg);
+      color: var(--muted-fg);
+      font-size: 10.5px;
+      font-weight: 550;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+    button.cd-btw-new-btn:hover {
+      background: var(--control-hover);
+      color: var(--fg);
+      border-color: color-mix(in srgb, var(--brand-accent) 42%, var(--border-col));
+    }
+    .cd-btw-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    button.cd-btw-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 9px;
+      border-radius: 9px;
+      border: 1px solid var(--border-col);
+      background: var(--control-bg);
+      color: var(--fg);
+      text-align: left;
+      cursor: pointer;
+      transition: background 120ms ease, border-color 120ms ease;
+    }
+    button.cd-btw-row:hover {
+      background: var(--control-hover);
+      border-color: color-mix(in srgb, var(--brand-accent) 45%, var(--border-col));
+    }
+    button.cd-btw-row.is-empty-entry {
+      border-style: dashed;
+      background: transparent;
+    }
+    button.cd-btw-row.is-empty-entry:hover {
+      background: var(--control-bg);
+    }
+    .cd-btw-row-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      flex: 1;
+    }
+    .cd-btw-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px;
+      height: 18px;
+      border-radius: 5px;
+      background: color-mix(in srgb, var(--brand-accent) 13%, transparent);
+      color: var(--brand-accent);
+      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-size: 10.5px;
+      font-weight: 650;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cd-btw-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+      flex: 1;
+    }
+    .cd-btw-title {
+      font-size: 12px;
+      font-weight: 550;
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cd-btw-sub {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cd-btw-row-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .cd-btw-state {
+      font-size: 10px;
+      font-weight: 550;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--panel-bg);
+      border: 1px solid var(--border-col);
+      color: var(--muted-fg);
+      white-space: nowrap;
+    }
+    .cd-btw-state.is-open {
+      color: var(--ok);
+      border-color: color-mix(in srgb, var(--ok) 35%, var(--border-col));
+    }
+    .cd-btw-arrow {
+      color: var(--muted-fg);
+      display: inline-flex;
+      align-items: center;
+      transition: transform 120ms ease, color 120ms ease;
+    }
+    button.cd-btw-row:hover .cd-btw-arrow {
+      color: var(--brand-accent);
+      transform: translateX(2px);
+    }
     .cd-sub-state.is-error {
       color: #d65745;
     }
@@ -2143,6 +2289,7 @@
         <div class="cd-live-list" id="live-tasks-list">
           <div class="cd-empty">…</div>
         </div>
+        <div class="cd-btw-block" id="live-btw-block"></div>
       </div>
     </div>
   </div>
@@ -2694,6 +2841,7 @@
               ['empty', '空白（手动输入）'],
               ['clean', '精简降噪（推荐）'],
               ['dev', '开发实战'],
+              ['continue', '继续工作'],
               ['custom', '自定义文案'],
             ],
           ],
@@ -2859,6 +3007,7 @@
               ['empty', '空白（手動輸入）'],
               ['clean', '精簡降噪（推薦）'],
               ['dev', '開發實戰'],
+              ['continue', '繼續工作'],
               ['custom', '自訂文案'],
             ],
           ],
@@ -3024,6 +3173,7 @@
               ['empty', '空白（手動輸入）'],
               ['clean', '精簡降噪（推薦）'],
               ['dev', '開發實戰'],
+              ['continue', '繼續工作'],
               ['custom', '自訂文案'],
             ],
           ],
@@ -3189,6 +3339,7 @@
               ['empty', 'Empty (Manual)'],
               ['clean', 'Clean Focus (Recommended)'],
               ['dev', 'Dev Deep-Keep'],
+              ['continue', 'Continue Work'],
               ['custom', 'Custom Prompt'],
             ],
           ],
@@ -3354,6 +3505,7 @@
               ['empty', '空（手動入力）'],
               ['clean', 'ノイズ除去（おすすめ）'],
               ['dev', '開発実践'],
+              ['continue', '作業継続'],
               ['custom', 'カスタム'],
             ],
           ],
@@ -3387,6 +3539,7 @@
       'zh-CN': {
         clean: '丢弃已完成任务的琐碎过程与历史噪音，保留核心业务逻辑框架、已确定的关键约束，以及当前进行中任务的全部细节和待办计划。',
         dev: '压缩已完成任务的历史过程与冗余输出；完整保留当前进行中任务的实现细节、未完成待办、核心业务架构，以及关键文件路径与已踩过的坑。',
+        continue: '丢弃已完成任务的琐碎过程与历史噪音，完整保留核心架构、已确定约束、当前被打断任务的全流程细节与剩余待办；压缩完成后请直接衔接进度，继续推进刚才未完成的工作。',
         placeholder: '输入你希望点击 /compact 后自动填入的压缩要求…',
         hint: '直接修改上方文字并点保存，会自动切为「自定义文案」',
         saveBtn: '保存文案',
@@ -3394,6 +3547,7 @@
       'zh-TW': {
         clean: '略過已完成任務的瑣碎過程與歷史雜訊，保留核心業務邏輯框架、已確定的關鍵約束，以及目前進行中任務的全部細節與待辦計畫。',
         dev: '壓縮已完成任務的歷史過程與冗餘輸出；完整保留目前進行中任務的實作細節、未完成待辦、核心業務架構，以及關鍵檔案路徑與踩過的坑。',
+        continue: '略過已完成任務的瑣碎過程與歷史雜訊，完整保留核心架構、已確定約束、目前被打斷任務的全流程細節與剩餘待辦；壓縮完成後請直接銜接進度，繼續推進剛才未完成的工作。',
         placeholder: '輸入點擊 /compact 後希望自動填入的壓縮要求…',
         hint: '直接修改上方文字並點儲存，會自動切為「自訂文案」',
         saveBtn: '儲存文案',
@@ -3401,6 +3555,7 @@
       yue: {
         clean: '丟走已完成任務嘅瑣碎過程同歷史雜訊，保留核心業務邏輯框架、已確定嘅關鍵約束，同埋而家做緊嘅任務全部細節同待辦計畫。',
         dev: '壓縮已完成任務嘅歷史過程同冗餘輸出；完整保留而家做緊嘅任務實作細節、未完成待辦、核心業務架構，同埋關鍵檔案路徑同踩過嘅坑。',
+        continue: '丟走已完成任務嘅瑣碎過程同歷史雜訊，完整保留核心架構、已確定約束、啱啱被打斷任務嘅全流程細節同剩餘待辦；壓縮完之後請直接駁返進度，繼續推進啱啱未做完嘅工作。',
         placeholder: '輸入撳 /compact 之後想自動填入嘅壓縮要求…',
         hint: '直接改上面段字再撳儲存，會自動轉做「自訂文案」',
         saveBtn: '儲存文案',
@@ -3408,6 +3563,7 @@
       en: {
         clean: 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.',
         dev: 'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.',
+        continue: 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of the interrupted work, and remaining TODOs. Right after compaction completes, resume and continue executing the unfinished task.',
         placeholder: 'Enter the compaction directive to pre-fill after clicking /compact…',
         hint: 'Editing and saving switches automatically to Custom Prompt',
         saveBtn: 'Save Prompt',
@@ -3415,6 +3571,7 @@
       ja: {
         clean: '完了済みタスクの冗長な経緯やログを省き、中核の業務ロジック構造、確定した制約、進行中タスクの詳細と未完了のTODOを保持してください。',
         dev: '完了済みタスクの経緯と冗長な出力を圧縮し、進行中タスクの実装詳細、未完了TODO、中核アーキテクチャ、主要ファイルパスと既知の落とし穴を完全に残してください。',
+        continue: '完了済みタスクの冗長な経緯やログを省き、中核アーキテクチャ、確定した制約、中断中タスクの全詳細と残りのTODOを完全に保持してください。圧縮完了後はそのまま進捗を引き継ぎ、未完了の作業を継続してください。',
         placeholder: '/compact 押下後に自動入力する圧縮指示を入力…',
         hint: '編集して保存すると自動的に「カスタム」に切り替わります',
         saveBtn: '指示を保存',
@@ -4791,6 +4948,8 @@
                   ? cpCopy.clean
                   : presetMode === 'dev'
                   ? cpCopy.dev
+                  : presetMode === 'continue'
+                  ? cpCopy.continue
                   : String(cfg.compactCustomText || '');
               const box = document.createElement('div');
               box.className = 'compact-preset-box';
@@ -5198,7 +5357,7 @@
     document.getElementById('btn-refresh').addEventListener('click', refreshStatus);
 
     // ── Live Activity & Custom Scripts ──
-    let liveTasksState = { available: true, running: [], recent: [], checkedAt: null, source: '' };
+    let liveTasksState = { available: true, running: [], recent: [], sideQuestions: [], sideQuestionConvoId: '', checkedAt: null, source: '' };
     const expandedLiveSubagents = new Set();
     let customScripts = [];
     const scriptRunOutputs = new Map();
@@ -5223,6 +5382,16 @@
           liveUnavailable: 'Live conversation API unavailable (will retry)',
           liveRefresh: 'Refresh',
           liveUpdatedAt: (t) => `Updated ${t}`,
+          btwHeading: (n) => (n > 0 ? `Side Questions (${n})` : 'Side Question'),
+          btwTitle: 'Side Question',
+          btwEmptySub: 'Ask without interrupting the current chat',
+          btwNewBtn: '+ /btw',
+          btwOpenState: 'Open',
+          btwClosedState: 'Closed',
+          btwUntitled: 'Side Question Thread',
+          btwJumpTip: 'Click to jump back to this side question',
+          btwStartTip: 'Insert /btw command chip in composer',
+          btwFailedToast: 'Could not reach host window to open /btw',
           scriptsTitle: 'Custom Scripts',
           scriptsCount: (n) => `${n} script${n === 1 ? '' : 's'}`,
           scriptsEmpty: 'Add local Node, Python, or Shell scripts to run with one click.',
@@ -5270,6 +5439,16 @@
           liveUnavailable: '会話ステータス API を取得できませんでした',
           liveRefresh: '更新',
           liveUpdatedAt: (t) => `${t} 更新`,
+          btwHeading: (n) => (n > 0 ? `サイド質問 (${n})` : 'サイド質問'),
+          btwTitle: 'サイド質問',
+          btwEmptySub: '現在の会話を止めずに割り込み質問できます',
+          btwNewBtn: '+ /btw',
+          btwOpenState: '表示中',
+          btwClosedState: '閉じた状態',
+          btwUntitled: 'サイド質問スレッド',
+          btwJumpTip: 'クリックしてこのサイド質問へ移動',
+          btwStartTip: '入力欄に /btw コマンドチップを挿入',
+          btwFailedToast: 'ホストウィンドウに接続できませんでした',
           scriptsTitle: 'カスタムスクリプト',
           scriptsCount: (n) => `${n} 件`,
           scriptsEmpty: 'ローカルの Node / Python / Shell スクリプトを登録してワンクリックで実行できます。',
@@ -5319,6 +5498,21 @@
         liveUnavailable: isTrad ? '暫時無法讀取會話狀態，稍後自動重試' : '暂时无法读取会话状态，稍后自动重试',
         liveRefresh: isTrad ? '重新整理' : '刷新',
         liveUpdatedAt: (t) => (isTrad ? `更新於 ${t}` : `更新于 ${t}`),
+        btwHeading: (n) => (isTrad ? (n > 0 ? `旁支提問 (${n})` : '旁支提問') : n > 0 ? `旁支提问 (${n})` : '旁支提问'),
+        btwTitle: isTrad ? '旁支提問' : '旁支提问',
+        btwEmptySub:
+          lang === 'yue'
+            ? '唔會打斷而家對話，隨時插空問問題'
+            : isTrad
+            ? '在不影響目前對話的基礎上隨時提問'
+            : '在不影响当前会话的基础上随时提问',
+        btwNewBtn: '+ /btw',
+        btwOpenState: isTrad ? '已開啟' : '已打开',
+        btwClosedState: isTrad ? '已關閉' : '已关闭',
+        btwUntitled: isTrad ? '旁支提問' : '旁支提问',
+        btwJumpTip: isTrad ? '點擊跳回此旁支提問' : '点击跳转回此旁支提问',
+        btwStartTip: isTrad ? '點擊在輸入框插入 /btw 命令並提問' : '点击在输入框插入 /btw 命令并提问',
+        btwFailedToast: isTrad ? '未能連線主視窗以開啟旁支提問' : '未能连接主窗口以打开旁支提问',
         scriptsTitle: isTrad ? '自訂腳本' : '自定义脚本',
         scriptsCount: (n) => (isTrad ? `${n} 個` : `${n} 个`),
         scriptsEmpty: isTrad
@@ -5384,6 +5578,8 @@
       const listEl = document.getElementById('live-tasks-list');
       if (!listEl) return;
       listEl.innerHTML = '';
+
+      renderLiveBtwBlock(c);
 
       if (!liveTasksState.available) {
         const empty = document.createElement('div');
@@ -5639,9 +5835,162 @@
       }
     }
 
+    async function triggerSideQuestionOpen(payload = {}) {
+      const lang = currentConfig?.language || 'zh-CN';
+      const c = getOverviewExtrasCopy(lang);
+      const targetConvoId =
+        String(payload?.conversationId || liveTasksState.sideQuestionConvoId || activeConversationId || '').trim();
+      try {
+        const res = await apiFetch('/api/side-question/open', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversationId: targetConvoId,
+            cascadeId: payload?.cascadeId || '',
+            tabId: payload?.tabId || '',
+            index: Number.isInteger(payload?.index) ? payload.index : null,
+            forceNew: Boolean(payload?.forceNew),
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          showToast(c.btwFailedToast, 'err');
+          return;
+        }
+        setTimeout(() => {
+          loadLiveTasks().catch(() => {});
+        }, 350);
+      } catch {
+        showToast(c.btwFailedToast, 'err');
+      }
+    }
+
+    function renderLiveBtwBlock(c) {
+      const block = document.getElementById('live-btw-block');
+      if (!block) return;
+      block.innerHTML = '';
+
+      const items = Array.isArray(liveTasksState.sideQuestions) ? liveTasksState.sideQuestions : [];
+      const convoId = liveTasksState.sideQuestionConvoId || activeConversationId || '';
+      const arrowSvg =
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
+
+      if (items.length === 0) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'cd-btw-row is-empty-entry';
+        row.title = c.btwStartTip;
+
+        const left = document.createElement('span');
+        left.className = 'cd-btw-row-left';
+        const pill = document.createElement('span');
+        pill.className = 'cd-btw-pill';
+        pill.textContent = '/btw';
+        const copy = document.createElement('span');
+        copy.className = 'cd-btw-copy';
+        const title = document.createElement('span');
+        title.className = 'cd-btw-title';
+        title.textContent = c.btwTitle;
+        const sub = document.createElement('span');
+        sub.className = 'cd-btw-sub';
+        sub.textContent = c.btwEmptySub;
+        copy.appendChild(title);
+        copy.appendChild(sub);
+        left.appendChild(pill);
+        left.appendChild(copy);
+
+        const right = document.createElement('span');
+        right.className = 'cd-btw-row-right';
+        const arrow = document.createElement('span');
+        arrow.className = 'cd-btw-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.innerHTML = arrowSvg;
+        right.appendChild(arrow);
+
+        row.appendChild(left);
+        row.appendChild(right);
+        row.addEventListener('click', () => {
+          triggerSideQuestionOpen({ conversationId: convoId, forceNew: true });
+        });
+        block.appendChild(row);
+        return;
+      }
+
+      const head = document.createElement('div');
+      head.className = 'cd-btw-head';
+      const heading = document.createElement('span');
+      heading.className = 'cd-btw-heading';
+      heading.textContent = c.btwHeading(items.length);
+      const newBtn = document.createElement('button');
+      newBtn.type = 'button';
+      newBtn.className = 'cd-btw-new-btn';
+      newBtn.textContent = c.btwNewBtn;
+      newBtn.title = c.btwStartTip;
+      newBtn.addEventListener('click', () => {
+        triggerSideQuestionOpen({ conversationId: convoId, forceNew: true });
+      });
+      head.appendChild(heading);
+      head.appendChild(newBtn);
+      block.appendChild(head);
+
+      const list = document.createElement('div');
+      list.className = 'cd-btw-list';
+      for (const sq of items.slice(0, 5)) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'cd-btw-row';
+        row.title = sq.question ? `${c.btwJumpTip}\n${sq.question}` : c.btwJumpTip;
+
+        const left = document.createElement('span');
+        left.className = 'cd-btw-row-left';
+        const pill = document.createElement('span');
+        pill.className = 'cd-btw-pill';
+        pill.textContent = '/btw';
+        const copy = document.createElement('span');
+        copy.className = 'cd-btw-copy';
+        const title = document.createElement('span');
+        title.className = 'cd-btw-title';
+        title.textContent = sq.question || c.btwUntitled;
+        copy.appendChild(title);
+        left.appendChild(pill);
+        left.appendChild(copy);
+
+        const right = document.createElement('span');
+        right.className = 'cd-btw-row-right';
+        const st = document.createElement('span');
+        const isOpen = Boolean(sq.isOpenTab && !sq.minimized);
+        st.className = `cd-btw-state${isOpen ? ' is-open' : ''}`;
+        st.textContent = isOpen ? c.btwOpenState : c.btwClosedState;
+        const arrow = document.createElement('span');
+        arrow.className = 'cd-btw-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.innerHTML = arrowSvg;
+        right.appendChild(st);
+        right.appendChild(arrow);
+
+        row.appendChild(left);
+        row.appendChild(right);
+        row.addEventListener('click', () => {
+          triggerSideQuestionOpen({
+            conversationId: convoId,
+            cascadeId: sq.cascadeId || '',
+            tabId: sq.tabId || '',
+            index: Number.isInteger(sq.index) ? sq.index : null,
+            forceNew: false,
+          });
+        });
+        list.appendChild(row);
+      }
+      block.appendChild(list);
+    }
+
     async function loadLiveTasks() {
       try {
-        const res = await apiFetch('/api/live-tasks');
+        const res = await apiFetch('/api/live-tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversationId: activeConversationId || '' }),
+        });
         if (!res.ok) return;
         const data = await res.json();
         if (data && data.ok) {
