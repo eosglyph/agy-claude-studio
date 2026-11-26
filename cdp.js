@@ -147,7 +147,7 @@ const CONFIG_VALIDATORS = {
   composerRestyle: 'boolean',
   mascot: ['crab', 'off'],
   logoInk: ['accent', 'foreground'],
-  pinRightPane: ['off', 'usage-monitor', 'studio'],
+  pinRightPane: ['off', 'studio'],
   usageStatsEnabled: 'boolean',
   inlineStats: 'boolean',
   ringMode: ['context', 'quota'],
@@ -236,7 +236,10 @@ function sanitizeConfig(raw) {
     }
   }
   if (raw.pinRightPane === undefined && typeof raw.pinUsageMonitorPane === 'boolean') {
-    out.pinRightPane = raw.pinUsageMonitorPane ? 'usage-monitor' : 'off';
+    out.pinRightPane = 'off';
+  }
+  if (out.pinRightPane === 'usage-monitor') {
+    out.pinRightPane = 'off';
   }
   if (!CONFIG_VALIDATORS.pinRightPane.includes(out.pinRightPane)) {
     out.pinRightPane = DEFAULT_CONFIG.pinRightPane;
@@ -941,13 +944,28 @@ const REMOVE_EXPRESSION = `(() => {
     root.removeAttribute('data-ag-cs-cjk');
     root.removeAttribute('data-ag-custom-theme');
     root.removeAttribute('data-aux-pane-maximized');
+    root.removeAttribute('data-ag-cs-dock-dragging');
     if (root.style && typeof root.style.removeProperty === 'function') {
       root.style.removeProperty('--antigravity-active-theme-id');
     }
     if (root.getAttribute('data-ag-cjk') === '1') root.removeAttribute('data-ag-cjk');
   }
+  document.querySelectorAll('[data-ag-cs-dock-open]').forEach((el) => {
+    el.removeAttribute('data-ag-cs-dock-open');
+    el.style?.removeProperty?.('--ag-cs-dock-w');
+  });
+  document.querySelectorAll('[data-ag-cs-docked-slot]').forEach((slot) => {
+    slot.removeAttribute('data-ag-cs-docked-slot');
+    const ov = slot.parentElement;
+    if (ov?.style?.removeProperty) {
+      ov.style.removeProperty('--ag-cs-dock-slot-left');
+      ov.style.removeProperty('--ag-cs-dock-slot-top');
+      ov.style.removeProperty('--ag-cs-dock-slot-width');
+      ov.style.removeProperty('--ag-cs-dock-slot-height');
+    }
+  });
   const nodes = document.querySelectorAll(
-    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
+    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-pinned-dock, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
   );
   nodes.forEach((n) => n.remove());
   try {

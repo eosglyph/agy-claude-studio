@@ -698,7 +698,7 @@ test('usage-monitor footer capsule is never mutated in Shadow DOM and legacy spl
   }
 });
 
-test('openUsageMonitorPane switches existing tab or opens via host sidecar link bridge, and pinUsageMonitorPane triggers once per conversation', async () => {
+test('openStudioPane switches existing tab or opens via host sidecar link bridge, and pinRightPane studio triggers once per conversation', async () => {
   const makeEl = (tag, { id = '', className = '', attrs = {}, text = '' } = {}) => {
     const el = {
       tagName: tag.toUpperCase(),
@@ -726,6 +726,7 @@ test('openUsageMonitorPane switches existing tab or opens via host sidecar link 
       hasAttribute(k) { return this.attrs.has(k); },
       removeAttribute(k) { this.attrs.delete(k); },
       appendChild(c) { c.parentElement = this; this.children.push(c); return c; },
+      append(...nodes) { for (const c of nodes) this.appendChild(c); },
       remove() { if (this.parentElement) { const i = this.parentElement.children.indexOf(this); if (i >= 0) this.parentElement.children.splice(i, 1); this.parentElement = null; } },
       addEventListener() {},
       removeEventListener() {},
@@ -774,7 +775,7 @@ test('openUsageMonitorPane switches existing tab or opens via host sidecar link 
 
   const auxPane = root.appendChild(makeEl('div', { attrs: { 'data-aux-pane-open': 'false' } }));
   const toggleBtn = auxPane.appendChild(makeEl('button', { attrs: { 'data-testid': 'toggle-aux-sidebar' } }));
-  const strip = auxPane.appendChild(makeEl('div', { attrs: { 'data-side-panel-strip': '', 'data-active-tab-id': 'sidecar__agy-claude-studio/studio__/' } }));
+  const strip = auxPane.appendChild(makeEl('div', { attrs: { 'data-side-panel-strip': '', 'data-active-tab-id': 'browser__google' } }));
 
   const sidecarCalls = [];
   root.__reactContainer$test = {
@@ -782,7 +783,7 @@ test('openUsageMonitorPane switches existing tab or opens via host sidecar link 
       child: {
         memoizedProps: {
           value: {
-            resolveSidecarLink: (t) => (/usage-monitor\/panel|agy-claude-studio\/studio/.test(t) ? { title: t } : null),
+            resolveSidecarLink: (t) => (/agy-claude-studio\/studio/.test(t) ? { title: t } : null),
             onSidecarLinkClick: (t) => { sidecarCalls.push(t); },
           },
         },
@@ -827,35 +828,277 @@ test('openUsageMonitorPane switches existing tab or opens via host sidecar link 
   sandbox.globalThis = sandbox;
 
   try {
-    // 1. With pinRightPane: 'usage-monitor' and no tab yet -> opens via host sidecar link bridge ONCE for convo-aaa
+    // 1. With pinRightPane: 'studio' and no tab yet -> opens via host sidecar link bridge ONCE for convo-1
     vm.runInNewContext(
-      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'usage-monitor' }),
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' }),
       sandbox
     );
-    assert.deepEqual(sidecarCalls, ['usage-monitor/panel/'], 'Auto-opens Usage Monitor pane once when entering conversation');
+    assert.deepEqual(sidecarCalls, ['agy-claude-studio/studio/'], 'Auto-opens Claude Studio pane once when entering conversation');
 
     // Re-syncing same conversation must NOT re-trigger (polite: never steals focus!)
-    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'usage-monitor' });
-    assert.equal(sidecarCalls.length, 1, 'Must not re-open Usage Monitor within the same conversation');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(sidecarCalls.length, 1, 'Must not re-open Claude Studio within the same conversation');
 
     // 2. Switching to a new conversation triggers once again
     conv.setAttribute('data-cascade-id', '22222222-2222-4222-8222-222222222222');
-    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'usage-monitor' });
-    assert.equal(sidecarCalls.length, 2, 'Auto-opens Usage Monitor once when switching to a new conversation');
-
-    // 2b. Switching pinRightPane to 'studio' opens Claude Studio sidecar pane
     sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
-    assert.deepEqual(sidecarCalls[2], 'agy-claude-studio/studio/', 'Auto-opens Claude Studio pane when pinRightPane is studio');
+    assert.equal(sidecarCalls.length, 2, 'Auto-opens Claude Studio once when switching to a new conversation');
 
-    // 3. Explicit openUsageMonitorPane when tab already exists expands closed pane & clicks tab
-    const umTabBtn = strip.appendChild(makeEl('button', { text: '用量监控' }));
-    const res = sandbox.window.__agClaudeStudio.openUsageMonitorPane({ forceSwitch: true });
+    // 2b. Legacy usage-monitor target is no longer supported
+    const umRes = sandbox.window.__agClaudeStudio.openRightSidecarPane('usage-monitor');
+    assert.equal(umRes.ok, false);
+    assert.equal(umRes.status, 'invalid_target');
+
+    // 3. Explicit openStudioPane when tab already exists expands closed pane & clicks tab
+    const studioTabBtn = strip.appendChild(makeEl('button', { text: 'Claude Studio' }));
+    const res = sandbox.window.__agClaudeStudio.openStudioPane({ forceSwitch: true });
     assert.equal(res.ok, true);
     assert.equal(res.status, 'switched');
     assert.equal(toggleBtn.clicks, 1, 'Expands closed aux pane before switching tab');
-    assert.equal(umTabBtn.clicks, 1, 'Clicks existing Usage Monitor tab');
+    assert.equal(studioTabBtn.clicks, 1, 'Clicks existing Claude Studio tab');
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('persistent 3-column Claude Studio dock mounts when switching to Browser tab, collapses cleanly, yields on Studio tab, and cleans up on REMOVE_EXPRESSION', async () => {
+  const makeEl = (tag, { id = '', className = '', attrs = {}, text = '', rect = null } = {}) => {
+    const styleProps = new Map();
+    const classes = new Set((className || '').split(/\s+/).filter(Boolean));
+    const listeners = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      id,
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); for (const c of String(v || '').split(/\s+/).filter(Boolean)) classes.add(c); },
+      attrs: new Map(Object.entries(attrs)),
+      children: [],
+      parentElement: null,
+      textContent: text,
+      innerHTML: '',
+      get isConnected() {
+        let cur = this;
+        while (cur) {
+          if (cur === docEl) return true;
+          cur = cur.parentElement;
+        }
+        return false;
+      },
+      get firstElementChild() { return this.children[0] || null; },
+      style: {
+        setProperty(k, v) { styleProps.set(k, String(v)); },
+        getPropertyValue(k) { return styleProps.get(k) || ''; },
+        removeProperty(k) { styleProps.delete(k); },
+      },
+      classList: {
+        add(...cs) { for (const c of cs) if (c) classes.add(c); },
+        remove(...cs) { for (const c of cs) classes.delete(c); },
+        toggle(c, force) {
+          const on = force === undefined ? !classes.has(c) : Boolean(force);
+          if (on) classes.add(c); else classes.delete(c);
+          return on;
+        },
+        contains(c) { return classes.has(c); },
+      },
+      getBoundingClientRect: () => rect || (
+        classes.has('ag-cs-dock-body')
+          ? { left: 700, top: 70, width: 310, height: 900, right: 1010, bottom: 970 }
+          : { left: 257, top: 30, width: 1664, height: 1002, right: 1921, bottom: 1032 }
+      ),
+      matches: () => false,
+      animate: () => ({ cancel() {}, finish() {} }),
+      setAttribute(k, v) { this.attrs.set(k, String(v)); if (k === 'id') this.id = String(v); },
+      getAttribute(k) { return this.attrs.has(k) ? this.attrs.get(k) : null; },
+      hasAttribute(k) { return this.attrs.has(k); },
+      removeAttribute(k) { this.attrs.delete(k); },
+      appendChild(c) {
+        if (c.parentElement) c.remove();
+        c.parentElement = this;
+        this.children.push(c);
+        return c;
+      },
+      append(...nodes) { for (const c of nodes) this.appendChild(c); },
+      insertBefore(c, ref) {
+        if (c.parentElement) c.remove();
+        c.parentElement = this;
+        const idx = ref ? this.children.indexOf(ref) : -1;
+        if (idx >= 0) this.children.splice(idx, 0, c);
+        else this.children.push(c);
+        return c;
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+        }
+      },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      removeEventListener(ev, fn) {
+        const list = listeners.get(ev);
+        if (!list) return;
+        const i = list.indexOf(fn);
+        if (i >= 0) list.splice(i, 1);
+      },
+      click() {
+        for (const fn of listeners.get('click') || []) fn({ stopPropagation() {}, preventDefault() {} });
+      },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (sel === '[data-testid="sidecar-iframe-slot"]' && cur.getAttribute('data-testid') === 'sidecar-iframe-slot') return cur;
+          if (sel === '[data-testid="conversation-view"]' && cur.getAttribute('data-testid') === 'conversation-view') return cur;
+          if (sel === '[data-testid="agent-input-box"]' && cur.getAttribute('data-testid') === 'agent-input-box') return cur;
+          if (sel === '[data-cascade-id]' && cur.hasAttribute('data-cascade-id')) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const parts = sel.split(',').map((s) => s.trim());
+        const matchOne = (c, p) => {
+          if (p === '[data-testid="conversation-view"]') return c.getAttribute('data-testid') === 'conversation-view';
+          if (p === '[data-testid="aux-pane-split"]') return c.getAttribute('data-testid') === 'aux-pane-split';
+          if (p === '[data-aux-pane-open]') return c.hasAttribute('data-aux-pane-open');
+          if (p === '[data-side-panel-strip]') return c.hasAttribute('data-side-panel-strip');
+          if (p === 'iframe[src*="agy-claude-studio--studio"]') return c.tagName === 'IFRAME' && String(c.getAttribute('src') || '').includes('agy-claude-studio--studio');
+          if (p === '[data-ag-cs-dock-open]') return c.hasAttribute('data-ag-cs-dock-open');
+          if (p === '[data-ag-cs-docked-slot]') return c.hasAttribute('data-ag-cs-docked-slot');
+          if (p === '.ag-cs-pinned-dock') return c.classList.contains('ag-cs-pinned-dock');
+          if (p === '[data-testid="agent-input-box"] .surface-composer-card') return c.classList.contains('surface-composer-card');
+          if (p === '.agy-composer-footer') return c.classList.contains('agy-composer-footer');
+          return false;
+        };
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (parts.some((p) => matchOne(c, p))) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const docEl = makeEl('html');
+  const head = docEl.appendChild(makeEl('head'));
+  const body = docEl.appendChild(makeEl('body', { className: 'theme-light' }));
+  const root = body.appendChild(makeEl('div', { id: 'root' }));
+  const split = root.appendChild(makeEl('div', {
+    attrs: { 'data-testid': 'aux-pane-split' },
+    rect: { left: 257, top: 30, width: 1664, height: 1002, right: 1921, bottom: 1032 },
+  }));
+  const chatCol = split.appendChild(makeEl('div', { attrs: { 'data-testid': 'conversation-view', 'data-cascade-id': '33333333-3333-4333-8333-333333333333' } }));
+  const nativeSplitter = split.appendChild(makeEl('div', { className: 'native-splitter' }));
+  const auxWrap = split.appendChild(makeEl('div', { className: 'aux-wrap' }));
+  const auxPane = auxWrap.appendChild(makeEl('div', { attrs: { 'data-aux-pane-open': 'true' } }));
+  const strip = auxPane.appendChild(makeEl('div', { attrs: { 'data-side-panel-strip': '', 'data-active-tab-id': 'browser__google' } }));
+  const overlay = root.appendChild(makeEl('div', {
+    className: 'sidecar-overlay',
+    rect: { left: 257, top: 30, width: 1664, height: 1002, right: 1921, bottom: 1032 },
+  }));
+  const studioSlot = overlay.appendChild(makeEl('div', { attrs: { 'data-testid': 'sidecar-iframe-slot' } }));
+  studioSlot.appendChild(makeEl('iframe', { attrs: { src: 'https://agy-claude-studio--studio.local/' } }));
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    readyState: 'complete',
+    visibilityState: 'visible',
+    title: 'Dock Test - Antigravity',
+    getElementById: (id) => (id === 'root' ? root : null),
+    querySelector: (sel) => docEl.querySelector(sel),
+    querySelectorAll: (sel) => docEl.querySelectorAll(sel),
+    createElement: (tag) => makeEl(tag),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+
+  const storage = new Map();
+  const timers = new Set();
+  const sandbox = {
+    document: doc,
+    localStorage: {
+      getItem: (k) => (storage.has(k) ? storage.get(k) : null),
+      setItem: (k, v) => { storage.set(k, String(v)); },
+      removeItem: (k) => { storage.delete(k); },
+    },
+    location: { href: 'https://127.0.0.1:2015/c/33333333-3333-4333-8333-333333333333', protocol: 'https:', hostname: '127.0.0.1', pathname: '/c/33333333-3333-4333-8333-333333333333' },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' }),
+      sandbox
+    );
+
+    // 1. Active Browser tab with pinRightPane='studio' -> Dock mounts between chatCol & nativeSplitter and docks live Studio slot
+    const dockEl = split.children[1];
+    assert.ok(dockEl && dockEl.classList.contains('ag-cs-pinned-dock'), 'Dock must insert right before native splitter');
+    assert.equal(split.children[0], chatCol);
+    assert.equal(split.children[2], nativeSplitter);
+    assert.equal(split.getAttribute('data-ag-cs-dock-open'), '1');
+    assert.equal(split.style.getPropertyValue('--ag-cs-dock-w'), '310px');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
+    assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-left'), '443px');
+    assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-top'), '40px');
+    assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-width'), '310px');
+    assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-height'), '900px');
+
+    // 2. Collapsing dock shrinks to 28px rail and releases the docked slot
+    sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(true);
+    assert.equal(dockEl.classList.contains('is-collapsed'), true);
+    assert.equal(split.style.getPropertyValue('--ag-cs-dock-w'), '28px');
+    assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false);
+
+    // Expanding restores docked slot immediately
+    sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(false);
+    assert.equal(dockEl.classList.contains('is-collapsed'), false);
+    assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
+
+    // 3. Switching active tab back to Claude Studio yields cleanly (no duplicate Studio)
+    strip.setAttribute('data-active-tab-id', 'sidecar__agy-claude-studio/studio__/');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.querySelector('.ag-cs-pinned-dock'), null);
+    assert.equal(split.hasAttribute('data-ag-cs-dock-open'), false);
+    assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false);
+
+    // 4. Switching back to Browser remounts dock; REMOVE_EXPRESSION tears everything down cleanly
+    strip.setAttribute('data-active-tab-id', 'browser__google');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.ok(split.querySelector('.ag-cs-pinned-dock'));
+    assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(split.querySelector('.ag-cs-pinned-dock'), null);
+    assert.equal(split.hasAttribute('data-ag-cs-dock-open'), false);
+    assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false);
+    assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-width'), '');
   } finally {
     for (const id of timers) clearTimeout(id);
   }
@@ -951,7 +1194,7 @@ test('cdp.ensureMigratedPluginConfig migrates legacy agy-claude-style plugin_dat
     assert.equal(parsed.palette, 'obsidian');
     assert.equal(parsed.glassEffect, false);
     assert.equal(parsed.usageStatsEnabled, false);
-    assert.equal(parsed.pinRightPane, 'usage-monitor', 'Legacy pinUsageMonitorPane:true migrates to pinRightPane:usage-monitor');
+    assert.equal(parsed.pinRightPane, 'off', 'Legacy pinUsageMonitorPane:true migrates safely to pinRightPane:off after usage-monitor pin removal');
   } finally {
     fs.rmSync(tmpBase, { recursive: true, force: true });
   }
