@@ -124,6 +124,9 @@ test('Windows native policy validates literal filenames without launching Explor
     const env = { ...args.options.env, AGY_SCRIPT: pathToFileURL(script).href };
     const probe = 'Add-Type -LiteralPath $env:AGY_FILE_HELPER -ErrorAction Stop; $t=[AgyClaudeStudio.WindowsFileAction]; if (!$t::Validate($env:AGY_FILE_URI,"open") -or $t::Validate($env:AGY_SCRIPT,"open") -or !$t::Validate($env:AGY_SCRIPT,"reveal")) {exit 1}';
     execFileSync(args.bin, [...args.args.slice(0,-1), probe], { env, windowsHide: true });
+    const helperSrc = readFileSync(new URL('../scripts/WindowsFileAction.cs', import.meta.url), 'utf8');
+    assert.ok(helperSrc.includes('ILFindLastID'), 'Windows reveal must select child PIDL via ILFindLastID for Win11 Explorer');
+    assert.ok(helperSrc.includes('AllowSetForegroundWindow'), 'Windows reveal must allow Explorer foreground activation');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -166,6 +169,42 @@ test('chat file open and reveal actions dispatch only the selected local file UR
   assert.equal(request.mode, 'reveal');
 });
 
+test('Windows explorer.exe /select fast reveal validates local paths, handles spaces/#L fragments, and rejects commas or symlinks', () => {
+  const okFs = {
+    lstatSync: () => ({ isSymbolicLink: () => false }),
+  };
+  const cmd = cdp.buildWindowsExplorerRevealCommand(
+    'file:///d%3A/AGENT/workspace/AGENT%20UI/agy-claude-style/ui-runtime.js#L7512-L7517',
+    { fsApi: okFs, env: { WINDIR: 'C:\\Windows' } }
+  );
+  assert.ok(cmd);
+  assert.equal(cmd.bin, 'C:\\Windows\\explorer.exe');
+  assert.deepEqual(cmd.args, ['/select,"D:\\AGENT\\workspace\\AGENT UI\\agy-claude-style\\ui-runtime.js"']);
+  assert.equal(cmd.options.windowsVerbatimArguments, true);
+
+  // Commas must fall back to SHOpenFolderAndSelectItems (return null here).
+  assert.equal(
+    cdp.buildWindowsExplorerRevealCommand('file:///C:/Temp/报告,1.pdf', { fsApi: okFs }),
+    null
+  );
+  // Reserved device names, quotes, UNC paths, and symlinks must be rejected.
+  for (const bad of [
+    'file:///C:/Temp/CON.txt',
+    'file:///C:/Temp/bad%22name.js',
+    'file:////server/share/cdp.js',
+    'file:///C:/Temp/trailing./cdp.js',
+  ]) {
+    assert.equal(cdp.buildWindowsExplorerRevealCommand(bad, { fsApi: okFs }), null);
+  }
+  const symlinkFs = {
+    lstatSync: (p) => ({ isSymbolicLink: () => p.endsWith('link.js') }),
+  };
+  assert.equal(
+    cdp.buildWindowsExplorerRevealCommand('file:///C:/Temp/link.js', { fsApi: symlinkFs }),
+    null
+  );
+});
+
 test('turning off file actions cancels pending timers and ignores late replies after re-enable', () => {
   const { api, context, body } = makeMenuContext();
   const cleared = [];
@@ -204,4 +243,26 @@ test('chat file copy skips late toast and fallback after teardown', async () => 
   rejectCopy(new Error('clipboard unavailable'));
   await new Promise(setImmediate);
   assert.equal(body.children.length, 0);
+});
+
+test('Windows precompiled native file helper caches cleanly and rejects disallowed open extensions without PowerShell compile overhead', { skip: process.platform !== 'win32' }, async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'agy-fast-helper-'));
+  try {
+    const exePath = await cdp.ensureWindowsFileActionExeAsync(dir);
+    assert.ok(exePath && exePath.endsWith('.exe'));
+    const script = path.join(dir, 'blocked.ps1');
+    writeFileSync(script, 'Write-Output 1');
+    const t0 = Date.now();
+    const res = await cdp.openLocalFileActionAsync({
+      mode: 'open',
+      target: pathToFileURL(script).href,
+      platform: 'win32',
+      cacheDir: dir,
+    });
+    const elapsedMs = Date.now() - t0;
+    assert.equal(res.ok, false);
+    assert.ok(elapsedMs < 1500, `Cached native helper should reject quickly, took ${elapsedMs}ms`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

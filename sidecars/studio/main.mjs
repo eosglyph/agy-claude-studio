@@ -1,6 +1,6 @@
 // Aux Pane Sidecar UI server for Claude Studio (agy-claude-studio).
 // Uses sidecar_sdk and cleans up cleanly via host /healthz watchdog when Antigravity exits.
-import { execFileSync, spawn } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
@@ -13,6 +13,7 @@ const lifecycle = require('../../lifecycle.js');
 const notifyCore = require('../../notify-core.js');
 const scriptsCore = require('../../scripts-core.js');
 const periodicSync = require('../../periodic-sync.js');
+const i18nSync = require('../../i18n-sync.js');
 const { updateConfigSetting, injectOnce } = require('../../inject.js');
 const { removeFromAllWindows } = require('../../remove.js');
 
@@ -99,6 +100,7 @@ async function getStudioStatus() {
 
   let activePort = null;
   let pages = [];
+  let windowCount = 0;
   for (const port of ports) {
     try {
       const list = await cdp.listPages(port);
@@ -107,6 +109,7 @@ async function getStudioStatus() {
         id: p.id,
         title: p.title || p.url || 'Antigravity',
       }));
+      windowCount = list.filter((p) => cdp.isAntigravityPageTarget(p)).length || pages.length;
       if (pages.length > 0) break;
     } catch {}
   }
@@ -118,7 +121,7 @@ async function getStudioStatus() {
   const canRelaunch = Boolean(hostInfo.found || process.platform === 'win32' || process.platform === 'darwin');
 
   const compatInfo = cdp.readI18nCompatData();
-  const updateState = inspectGitRepoState(PLUGIN_ROOT_DIR);
+  const updateState = await inspectGitRepoStateAsyncCached(PLUGIN_ROOT_DIR);
   const hasPluginManifest = existsSync(join(PLUGIN_ROOT_DIR, 'plugin.json'));
   const updateMode = updateState.isGitRepo
     ? updateState.gitClean
@@ -147,6 +150,7 @@ async function getStudioStatus() {
       pluginCount: compatInfo.plugins.length,
       selectorCount: compatInfo.selectors.length,
     },
+    i18nPack: i18nSync.getLocalePackStatus(config.language, cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR),
     notify: notifyCore.getNotifyStatusSummary(resolveNotifyDir()),
     update: {
       isGitRepo: updateState.isGitRepo,
@@ -160,6 +164,7 @@ async function getStudioStatus() {
       port: activePort,
       candidatePorts: ports,
       pageCount: pages.length,
+      windowCount,
       needsCdpRestart: !activePort,
       canRelaunch,
       pages,
@@ -241,6 +246,42 @@ async function openUsageMonitorPaneInHost() {
   return lastResult;
 }
 
+async function showScriptOutputInHostChat(data) {
+  const payload = {
+    name: String(data?.name || 'Script Output').slice(0, 120),
+    ok: Boolean(data?.ok),
+    exitCode: Number.isFinite(Number(data?.exitCode)) ? Number(data.exitCode) : 0,
+    durationMs: Math.max(0, Number(data?.durationMs || 0) || 0),
+    combined: String(data?.combined || '').slice(0, 48000),
+  };
+  const ports = cdp.readActivePorts();
+  let lastResult = { ok: false, status: 'cdp_unavailable' };
+  for (const port of ports) {
+    let pages = [];
+    try {
+      pages = await cdp.listPages(port);
+    } catch {
+      continue;
+    }
+    for (const p of pages) {
+      if (!p?.webSocketDebuggerUrl || !cdp.isAntigravityPageTarget(p)) continue;
+      let sess = null;
+      try {
+        sess = await cdp.CdpSession.connect(p.webSocketDebuggerUrl);
+        const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.showScriptOutputInChat === "function") ? api.showScriptOutputInChat(${JSON.stringify(payload)}) : { ok: false, status: "not_injected" }; })()`;
+        const res = await sess.evaluate(expr, false);
+        if (res && res.ok) return res;
+        if (res) lastResult = res;
+      } catch {
+        // try next window
+      } finally {
+        sess?.close();
+      }
+    }
+  }
+  return lastResult;
+}
+
 function parseSemverParts(raw) {
   const clean = String(raw || '').trim().replace(/^v/i, '').split('-')[0];
   const parts = clean.split('.').map((n) => parseInt(n, 10));
@@ -273,6 +314,49 @@ function inspectGitRepoState(pluginDir = PLUGIN_ROOT_DIR, execFn = execFileSync)
   } catch {
     return { isGitRepo: true, gitClean: false, branch: '' };
   }
+}
+
+const GIT_STATE_CACHE_TTL_MS = 30000;
+const gitStateAsyncCache = new Map(); // resolvedDir -> { at, value, promise }
+
+function execGitAsync(args, cwd, timeoutMs = 5000) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    execFile('git', args, { cwd, encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
+      if (err) return rejectPromise(err);
+      resolvePromise(String(stdout || '').trim());
+    });
+  });
+}
+
+async function inspectGitRepoStateAsyncCached(pluginDir = PLUGIN_ROOT_DIR) {
+  const isGitRepo = Boolean(pluginDir && existsSync(join(pluginDir, '.git')));
+  if (!isGitRepo) return { isGitRepo: false, gitClean: false, branch: '' };
+  const key = resolve(pluginDir);
+  const now = Date.now();
+  const cached = gitStateAsyncCache.get(key);
+  if (cached?.value && now - cached.at < GIT_STATE_CACHE_TTL_MS) {
+    return cached.value;
+  }
+  if (cached?.promise) {
+    return cached.promise;
+  }
+  const run = (async () => {
+    try {
+      const [statusOut, branch] = await Promise.all([
+        execGitAsync(['status', '--porcelain'], pluginDir, 5000),
+        execGitAsync(['rev-parse', '--abbrev-ref', 'HEAD'], pluginDir, 5000).catch(() => ''),
+      ]);
+      const value = { isGitRepo: true, gitClean: statusOut.length === 0, branch };
+      gitStateAsyncCache.set(key, { at: Date.now(), value, promise: null });
+      return value;
+    } catch {
+      const value = { isGitRepo: true, gitClean: false, branch: '' };
+      gitStateAsyncCache.set(key, { at: Date.now(), value, promise: null });
+      return value;
+    }
+  })();
+  gitStateAsyncCache.set(key, { at: cached?.at || 0, value: cached?.value || null, promise: run });
+  return run;
 }
 
 const UPDATE_CHECK_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -464,7 +548,7 @@ function findExtractedStudioRoot(extractDir) {
 const ARCHIVE_SKIP_TOP_NAMES = new Set(['.git', '.github', '.gitignore', 'node_modules', 'dist', 'release', 'releases']);
 const UPDATE_DATA_NAMES = new Set([
   'plugin_data', 'config.json', 'notify.json', 'notify-state.json', 'scripts.json',
-  'periodic-override.json', 'i18n-compat-remote.json', '.watch.pid', '.watch.lock.json',
+  'periodic-override.json', 'i18n-compat-remote.json', 'i18n-packs', '.watch.pid', '.watch.lock.json',
 ]);
 
 function containsUpdatePath(parent, file) {
@@ -801,6 +885,80 @@ async function syncI18nCompatWhitelist({
       error: err?.name === 'AbortError' ? 'timeout' : err?.message || 'sync failed',
     };
   }
+}
+
+async function syncI18nPackApi({
+  lang,
+  fetchFn = typeof fetch === 'function' ? fetch : null,
+  pluginDataDir = cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR,
+  reinjectFn = () => injectOnce({ log: () => {} }),
+} = {}) {
+  const cfg = cdp.readConfig();
+  const targetLang = lang || cfg.language || 'zh-CN';
+  const norm = i18nSync.normalizePackLang(targetLang);
+  if (!norm) {
+    return {
+      ok: true,
+      skippedNative: true,
+      lang: 'en',
+    };
+  }
+  try {
+    const syncRes = await i18nSync.syncLocalePack({
+      lang: norm,
+      pluginDataDir,
+      fetchFn,
+      userAgent: `agy-claude-studio/${cdp.PLUGIN_VERSION}`,
+    });
+    try {
+      await reinjectFn();
+    } catch {}
+    return {
+      ok: true,
+      ...syncRes,
+    };
+  } catch (err) {
+    if (err?.status === 404) {
+      const local = i18nSync.getLocalePackStatus(norm, pluginDataDir);
+      return {
+        ok: true,
+        fallbackToBundled: true,
+        status: 404,
+        ...local,
+      };
+    }
+    return {
+      ok: false,
+      error: err?.name === 'AbortError' ? 'timeout' : err?.message || 'i18n_pack_sync_failed',
+    };
+  }
+}
+
+async function resetI18nPackApi({
+  lang,
+  pluginDataDir = cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR,
+  reinjectFn = () => injectOnce({ log: () => {} }),
+} = {}) {
+  const cfg = cdp.readConfig();
+  const targetLang = lang || cfg.language || 'zh-CN';
+  const norm = i18nSync.normalizePackLang(targetLang);
+  const res = i18nSync.resetLocalePack({ lang: targetLang, pluginDataDir });
+  let switchedToLang = null;
+  if (norm && !i18nSync.isBundledLang(norm) && cfg.language === norm) {
+    if (updateConfigSetting('language', 'zh-CN')) {
+      switchedToLang = 'zh-CN';
+    }
+  }
+  try {
+    await reinjectFn();
+  } catch {}
+  const nextCfg = cdp.readConfig();
+  return {
+    ok: Boolean(res.ok),
+    removed: res.removed || [],
+    switchedToLang,
+    status: i18nSync.getLocalePackStatus(nextCfg.language, pluginDataDir),
+  };
 }
 
 function resolveNotifyDir() {
@@ -2132,6 +2290,8 @@ function registerStudioApis(app, ResponseClass = globalThis.Response) {
     }
   });
   api('/api/sync-i18n-compat', async () => syncI18nCompatWhitelist());
+  api('/api/i18n-pack/sync', async (data) => syncI18nPackApi({ lang: data?.lang }));
+  api('/api/i18n-pack/reset', async (data) => resetI18nPackApi({ lang: data?.lang }));
   api('/api/periodic-sync', async () => syncPeriodicElementsApi());
   api('/api/notify/read', () => getNotifyConfigApi());
   api('/api/notify', async (data) => saveNotifyConfigApi(data));
@@ -2145,6 +2305,7 @@ function registerStudioApis(app, ResponseClass = globalThis.Response) {
   api('/api/scripts', async (data) => upsertScriptApi(data));
   api('/api/scripts/delete', async (data) => deleteScriptApi(data));
   api('/api/scripts/run', async (data) => runScriptApi(data));
+  api('/api/scripts/show-in-chat', async (data) => showScriptOutputInHostChat(data));
   api('/api/relaunch', async () => {
     const res = await relaunchDesktopHost();
     if (!res?.ok) {
@@ -2252,6 +2413,8 @@ export {
   checkStudioUpdate,
   performStudioSelfUpdate,
   syncI18nCompatWhitelist,
+  syncI18nPackApi,
+  resetI18nPackApi,
   syncPeriodicElementsApi,
   resolveNotifyDir,
   resolveScriptsDir,

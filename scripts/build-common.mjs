@@ -25,6 +25,7 @@ function getArtifactNames(version = cdp.PLUGIN_VERSION) {
   return {
     version: cleanVersion,
     windowsInstaller: `Claude-Studio-v${cleanVersion}-Windows-x64.exe`,
+    pluginZip: `Claude-Studio-v${cleanVersion}-plugin.zip`,
     macosDmg: `Claude-Studio-v${cleanVersion}-macOS-universal.dmg`,
     macosApp: 'Claude Studio.app',
   };

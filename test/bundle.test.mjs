@@ -1003,6 +1003,16 @@ test('bottom-right context ring navigates directly to quotas or breakdown tab ba
       set innerHTML(v) { this._html = v; buildChildrenFromHtml(this, v); },
       get innerHTML() { return this._html || ''; },
       appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      insertBefore(c, ref) {
+        c.parentElement = this;
+        c.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      get firstChild() { return children[0] || null; },
+      getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
@@ -1853,6 +1863,16 @@ test('ring and popover stay live despite static trajectorySummaries and non-root
       set innerHTML(v) { this._html = v; buildChildrenFromHtml(this, v); },
       get innerHTML() { return this._html || ''; },
       appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      insertBefore(c, ref) {
+        c.parentElement = this;
+        c.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      get firstChild() { return children[0] || null; },
+      getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
@@ -2472,6 +2492,16 @@ test('streaming Turn 2 response does not hijack #T1 badge, observer ignores exte
       get innerHTML() { return this._html; },
       get lastElementChild() { return children[children.length - 1] || null; },
       appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      insertBefore(c, ref) {
+        c.parentElement = this;
+        c.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      get firstChild() { return children[0] || null; },
+      getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); if (k === 'class') node.className = String(v); },
@@ -4813,6 +4843,237 @@ test('periodic selector sparkle trigger mounts left of model selector, switches 
     assert.equal(body.querySelector('.ag-cs-periodic-trigger'), null);
     assert.equal(body.querySelector('.ag-cs-ps-drawer'), null);
     assert.equal(sandbox.__agCsPeriodicCore, undefined);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('stale async fetchActiveConvo response is discarded when reused composer card navigates to home or empty cascadeId', async () => {
+  const timers = new Set();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const matchesSimple = (n, simple) => {
+      if (!n || n.nodeType !== 1) return false;
+      let rest = simple.trim();
+      const attrMatches = [...rest.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)];
+      for (const m of attrMatches) {
+        const [, k, v] = m;
+        if (v === undefined) {
+          if (!n.hasAttribute(k)) return false;
+        } else if (n.getAttribute(k) !== v) return false;
+      }
+      rest = rest.replace(/\[[^\]]+\]/g, '');
+      const clsMatches = [...rest.matchAll(/\.([a-zA-Z0-9_-]+)/g)];
+      for (const m of clsMatches) if (!n.classList.contains(m[1])) return false;
+      rest = rest.replace(/\.[a-zA-Z0-9_-]+/g, '');
+      const idMatch = rest.match(/#([a-zA-Z0-9_\\.-]+)/);
+      if (idMatch && n.id !== idMatch[1].replace(/\\/g, '')) return false;
+      rest = rest.replace(/#[a-zA-Z0-9_\\.-]+/g, '');
+      if (rest && n.tagName !== rest.toUpperCase()) return false;
+      return true;
+    };
+    const matchesChain = (n, sel) =>
+      sel.split(',').some((part) => {
+        const tokens = part.trim().split(/\s+/).filter(Boolean);
+        if (!tokens.length || !matchesSimple(n, tokens[tokens.length - 1])) return false;
+        let cur = n.parentElement;
+        let idx = tokens.length - 2;
+        while (cur && idx >= 0) {
+          if (matchesSimple(cur, tokens[idx])) idx -= 1;
+          cur = cur.parentElement;
+        }
+        return idx < 0;
+      });
+    const node = {
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      id: attrs.get('id') || '',
+      children,
+      parentElement: null,
+      parentNode: null,
+      isConnected: true,
+      _text: opts.text || '',
+      style: { _props: {}, setProperty(k, v) { this._props[k] = String(v); }, getPropertyValue(k) { return this._props[k] || ''; }, removeProperty(k) { delete this._props[k]; } },
+      classList: { contains: (c) => classes.has(c), add: (c) => classes.add(c), remove: (c) => classes.delete(c) },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v).split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { children.length = 0; this._text = String(v); },
+      set innerHTML(v) { this._html = String(v); },
+      get innerHTML() { return this._html || ''; },
+      appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      insertBefore(c, ref) {
+        c.parentElement = this;
+        c.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      get firstChild() { return children[0] || null; },
+      getContext() { return null; },
+      removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      remove() { if (this.parentElement) this.parentElement.removeChild(this); },
+      setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      addEventListener(ev, cb) { if (!listeners.has(ev)) listeners.set(ev, []); listeners.get(ev).push(cb); },
+      removeEventListener(ev, cb) { const a = listeners.get(ev); if (a) { const i = a.indexOf(cb); if (i >= 0) a.splice(i, 1); } },
+      getBoundingClientRect() { return { left: 0, top: 0, right: 400, bottom: 40, width: 400, height: 40 }; },
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
+      closest(sel) { let cur = this; while (cur) { if (matchesChain(cur, sel)) return cur; cur = cur.parentElement; } return null; },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (matchesChain(c, sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return node;
+  };
+
+  const cascadeA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const html = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body', { className: 'theme-dark' });
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const convView = makeEl('div', { attrs: { 'data-testid': 'conversation-view', 'data-cascade-id': cascadeA } });
+  const inputBox = makeEl('div', { id: 'antigravity.agentSidePanelInputBox', attrs: { 'data-testid': 'agent-input-box' } });
+  const card = makeEl('div', { className: 'surface-composer-card' });
+  const editorEl = makeEl('div', { attrs: { contenteditable: 'true' } });
+  const footer = makeEl('div', { className: 'agy-composer-footer' });
+  card.appendChild(editorEl);
+  card.appendChild(footer);
+  inputBox.appendChild(card);
+  convView.appendChild(inputBox);
+  body.appendChild(convView);
+
+  let resolveFetchA = null;
+  const deferredTrajA = new Promise((resolve) => { resolveFetchA = resolve; });
+  const rootStore = {
+    getState: () => ({
+      trajectorySummaries: {
+        summaries: { [cascadeA]: { stepCount: 2, lastModifiedTime: '2026-11-26T10:00:00Z' } },
+      },
+    }),
+    subscribe: () => () => {},
+  };
+  const rootFiber = {
+    memoizedProps: { store: rootStore },
+    dependencies: {
+      firstContext: {
+        memoizedValue: {
+          getCascadeTrajectory: () => deferredTrajA,
+          retrieveUserQuotaSummary: async () => ({ groups: [] }),
+        },
+      },
+    },
+    return: null,
+  };
+  inputBox.__reactFiber$test = {
+    memoizedProps: { cascadeId: cascadeA },
+    return: rootFiber,
+  };
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    hidden: false,
+    readyState: 'complete',
+    createElement: (t) => makeEl(t),
+    getElementById: (id) => html.querySelector(`#${id}`),
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+
+  const sandbox = {
+    window: null,
+    globalThis: null,
+    document: doc,
+    navigator: { language: 'zh-CN' },
+    location: { pathname: `/conversation/${cascadeA}` },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => setTimeout(() => fn(Date.now()), 5),
+    cancelAnimationFrame: (id) => clearTimeout(id),
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    const res = vm.runInNewContext(cdp.buildInjectExpression(cdp.DEFAULT_CONFIG), sandbox);
+    assert.equal(res.status, 'ok');
+    assert.equal(typeof resolveFetchA, 'function', 'in-flight trajectory request started for cascadeA');
+
+    // Simulate switching to a transient empty-cascadeId state / home view while reusing the exact same card node
+    convView.removeAttribute('data-cascade-id');
+    inputBox.__reactFiber$test.memoizedProps.cascadeId = '';
+    sandbox.location.pathname = '/';
+    const homeWrap = makeEl('div', { className: 'agy-home' });
+    convView.removeChild(inputBox);
+    body.removeChild(convView);
+    homeWrap.appendChild(inputBox);
+    body.appendChild(homeWrap);
+
+    // Trigger sync on Home so card resets to empty home data before stale cascadeA resolves
+    sandbox.window.__agClaudeStudio.refreshConfig(cdp.DEFAULT_CONFIG);
+    await new Promise((r) => setTimeout(r, 25));
+    assert.equal(card._agCsLastData.calls, 0);
+
+    // Now the stale cascadeA trajectory resolves late — must be discarded, never overwriting the Home card
+    resolveFetchA({
+      trajectory: {
+        steps: [
+          { status: 3, step: { case: 'userInput', value: { query: 'Old convo' } } },
+          { status: 3, step: { case: 'plannerResponse', value: { response: 'Old reply' } } },
+        ],
+        generatorMetadata: [
+          {
+            stepIndices: [0, 1],
+            metadata: {
+              value: {
+                modelDisplayName: 'Gemini 4 Neon',
+                usage: { inputTokens: '40000', cacheReadTokens: '10000', outputTokens: '2500' },
+                chatStartMetadata: {
+                  contextWindowMetadata: { estimatedTokensUsed: 50000, maxContextTokens: 256000 },
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    assert.equal(card._agCsLastData.calls, 0, 'stale cascadeA response must not overwrite reused card on Home');
+    const statsBtn = footer.querySelector('.ag-cs-inline-stats');
+    assert.ok(statsBtn && !statsBtn.textContent.includes('52.5K'), 'footer stats must not display stale cascadeA tokens');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
   } finally {
     for (const id of timers) clearTimeout(id);
   }

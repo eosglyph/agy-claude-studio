@@ -20,6 +20,9 @@ on:
       windows_file:
         description: 'Unified Windows x64 installer filename'
         value: ${{ jobs.test-linux.outputs.windows_file }}
+      plugin_zip_file:
+        description: 'Cross-platform native plugin ZIP filename'
+        value: ${{ jobs.test-linux.outputs.plugin_zip_file }}
       macos_file:
         description: 'Unified macOS Universal DMG filename'
         value: ${{ jobs.test-linux.outputs.macos_file }}
@@ -29,12 +32,13 @@ permissions:
 
 jobs:
   test-linux:
-    name: Test & Resolve Metadata (Linux)
+    name: Test & Build Plugin ZIP (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       version: ${{ steps.meta.outputs.version }}
       windows_file: ${{ steps.meta.outputs.windows_file }}
+      plugin_zip_file: ${{ steps.meta.outputs.plugin_zip_file }}
       macos_file: ${{ steps.meta.outputs.macos_file }}
     steps:
       - name: Checkout repository
@@ -60,15 +64,42 @@ jobs:
             const names = getArtifactNames(ver);
             console.log('VERSION=' + JSON.stringify(names.version));
             console.log('WIN_FILE=' + JSON.stringify(names.windowsInstaller));
+            console.log('PLUGIN_ZIP=' + JSON.stringify(names.pluginZip));
             console.log('MAC_FILE=' + JSON.stringify(names.macosDmg));
           ")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "windows_file=$WIN_FILE" >> "$GITHUB_OUTPUT"
+          echo "plugin_zip_file=$PLUGIN_ZIP" >> "$GITHUB_OUTPUT"
           echo "macos_file=$MAC_FILE" >> "$GITHUB_OUTPUT"
-          echo "Resolved build version=$VERSION windows_file=$WIN_FILE macos_file=$MAC_FILE"
+          echo "Resolved build version=$VERSION windows_file=$WIN_FILE plugin_zip_file=$PLUGIN_ZIP macos_file=$MAC_FILE"
 
       - name: Run test suite
         run: npm test
+
+      - name: Build cross-platform native plugin ZIP
+        env:
+          BUILD_VERSION: ${{ steps.meta.outputs.version }}
+          PLUGIN_ZIP_FILE: ${{ steps.meta.outputs.plugin_zip_file }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          node scripts/build-installer.mjs --plugin-zip-only --version "$BUILD_VERSION" --plugin-zip "dist/$PLUGIN_ZIP_FILE"
+          SHA=$(sha256sum "dist/$PLUGIN_ZIP_FILE" | awk '{print $1}')
+          SIZE=$(ls -lh "dist/$PLUGIN_ZIP_FILE" | awk '{print $5}')
+          {
+            echo "### Cross-Platform Native Plugin ZIP"
+            echo "- File: \`${PLUGIN_ZIP_FILE}\`"
+            echo "- Size: ${SIZE}"
+            echo "- SHA256: \`${SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload plugin ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: dist/${{ steps.meta.outputs.plugin_zip_file }}
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error
 
   build-windows:
     name: Test & Build Windows x64 Installer

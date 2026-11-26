@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "agyVersion": "2.35.2",
+  "updatedAt": "2026-11-26",
+  "locales": {
+    "zh-CN": {
+      "file": "zh-CN.json",
+      "label": "简体中文",
+      "bundled": true,
+      "dictCount": 2058,
+      "ruleCount": 130,
+      "timeRuleCount": 9,
+      "sentenceCount": 4,
+      "bytes": 130840,
+      "sha256": "f415dcaf0a0141caf046038331a375198321c44cfdb15f57b16760bcd7256783"
+    },
+    "zh-TW": {
+      "file": "zh-TW.json",
+      "label": "繁體中文",
+      "bundled": true,
+      "dictCount": 2058,
+      "ruleCount": 130,
+      "timeRuleCount": 9,
+      "sentenceCount": 4,
+      "bytes": 132355,
+      "sha256": "1be9fb1d13b60072102d61ef35a58bd17d2428a13276de12ca210eb2cb1040d6"
+    },
+    "yue": {
+      "file": "yue.json",
+      "label": "粵語",
+      "bundled": false,
+      "dictCount": 2058,
+      "ruleCount": 130,
+      "timeRuleCount": 9,
+      "sentenceCount": 4,
+      "bytes": 130149,
+      "sha256": "1f337ad9a690517038f8811c196b4e805e08756f1a1518659ef20a39c17c7a5b"
+    },
+    "ja": {
+      "file": "ja.json",
+      "label": "日本語",
+      "bundled": false,
+      "dictCount": 2058,
+      "ruleCount": 130,
+      "timeRuleCount": 9,
+      "sentenceCount": 4,
+      "bytes": 156583,
+      "sha256": "38c2a3e17d5574406a75e92f1036109308b0e2f8dc0333227da272a28f4a7ca4"
+    }
+  }
+}

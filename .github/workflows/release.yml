@@ -114,46 +114,38 @@ jobs:
       - name: Download compiled release artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: 'windows-x64'
+          path: release-assets
+          merge-multiple: true
+
+      - name: Download cross-platform plugin ZIP
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'plugin-zip'
           path: release-assets
           merge-multiple: true
 
       - name: Verify artifacts and generate SHA256 checksums
         env:
           WIN_FILE: ${{ needs.build-and-test.outputs.windows_file }}
-          MAC_FILE: ${{ needs.build-and-test.outputs.macos_file }}
+          PLUGIN_ZIP: ${{ needs.build-and-test.outputs.plugin_zip_file }}
         run: |
           set -euo pipefail
           cd release-assets
           test -f "$WIN_FILE" || { echo "::error::Missing Windows artifact: $WIN_FILE"; exit 1; }
-          test -f "$MAC_FILE" || { echo "::error::Missing macOS artifact: $MAC_FILE"; exit 1; }
-          ls -lh "$WIN_FILE" "$MAC_FILE"
-          sha256sum "$WIN_FILE" "$MAC_FILE" > SHA256SUMS.txt
+          test -f "$PLUGIN_ZIP" || { echo "::error::Missing Plugin ZIP artifact: $PLUGIN_ZIP"; exit 1; }
+          ls -lh "$WIN_FILE" "$PLUGIN_ZIP"
+          sha256sum "$WIN_FILE" "$PLUGIN_ZIP" > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Prepare Release notes
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
           WIN_FILE: ${{ needs.build-and-test.outputs.windows_file }}
-          MAC_FILE: ${{ needs.build-and-test.outputs.macos_file }}
+          PLUGIN_ZIP: ${{ needs.build-and-test.outputs.plugin_zip_file }}
         run: |
           set -euo pipefail
-          cat > release-notes.md <<EOF
-          ## 📦 开箱即用安装包 / Standalone Downloads
-
-          无需安装 Node.js 或任何运行时依赖，下载后直接运行即可完成配置与无损注入（默认采用 **托管启动模式**——随 Antigravity 启动并自动退出、平时 0 后台常驻；亦可按需切换为 **常驻守护模式** 开启开机自启）：
-
-          - **Windows (x64 / Windows 10 & 11)**：下载 \`${WIN_FILE}\`，双击运行可自由选择「免后台常驻 · 托管启动（推荐）」或「开机自启 · 常驻守护」并安装，使用开始菜单 / 桌面快捷方式 \`Antigravity (Claude Studio)\` 一站式带 CDP 启动并注入。
-          - **macOS (Apple Silicon + Intel Universal)**：下载 \`${MAC_FILE}\`，打开后拖入「应用程序」并运行 \`Claude Studio.app\`，可自由选择「托管启动（推荐）」或「常驻守护（LaunchAgent）」；使用生成的 \`Antigravity (Claude Studio).app\` 或 \`launch-antigravity.command\` 启动即可。
-            > **macOS 首次打开提示说明**：本构建采用 Ad-hoc 签名；若 macOS 提示“无法验证开发者”，请**右键点击 App → 打开**，或在终端执行 \`xattr -cr "/Applications/Claude Studio.app"\` 后再次打开。
-
-          **旧版 Windows 守护进程迁移**：如果曾独立安装 Claude Style，请先用旧版的卸载入口关闭其自启动并卸载，确认旧安装目录里的 \`agy-claude-style-watcher.exe\` 已退出，再安装新版。仅更新插件源码或安装到新的 Claude Studio 目录，不会替换另一个目录中运行的旧进程。
-
-          ### 🔐 SHA256 Checksums
-          \`\`\`text
-          EOF
-          cat release-assets/SHA256SUMS.txt >> release-notes.md
-          echo '```' >> release-notes.md
-
+          : > release-notes.md
           HAS_CHANGELOG=0
           if [ -f CHANGELOG.md ] && command -v python3 >/dev/null 2>&1; then
             if python3 - "$TAG" <<'PY' > changelog-section.md; then
@@ -180,16 +172,30 @@ jobs:
           print(body)
           PY
               {
+                cat changelog-section.md
                 echo ""
                 echo "---"
                 echo ""
-                echo "## 📝 更新日志 / What's Changed"
-                echo ""
-                cat changelog-section.md
               } >> release-notes.md
               HAS_CHANGELOG=1
             fi
           fi
+
+          cat >> release-notes.md <<EOF
+          ## 下载与安装 / Downloads & Install
+
+          本版本采用 **Antigravity 原生插件架构**，安装后即可在右侧栏使用完整的三栏控制室（对话、工具、设置）、手机推送提醒、本地脚本工具箱、内置技能与顶栏一键更新。
+
+          - **Windows 一键安装器（推荐）**：下载 \`${WIN_FILE}\` 双击运行，自动清理旧版 \`v2.1.0 / v2.2.0 / v2.2.1\` 遗留守护进程与旧版插件（完整保留个人配置、推送凭据与自定义脚本），自动部署并启用原生插件，同时创建带定制图标的桌面与开始菜单启动入口。
+          - **macOS / Linux / 跨平台通用插件包**：下载 \`${PLUGIN_ZIP}\` 解压至 \`~/.gemini/config/plugins/\`（形成 \`~/.gemini/config/plugins/agy-claude-studio\`），重启开启本地调试端口的 Antigravity 并在插件列表中启用即可；也可以直接把仓库链接发给 Antigravity 里的 Gemini 自动完成安装。
+            > 维护者目前没有 Mac 真机环境，macOS/Linux 暂不提供独立打包安装器，请使用通用插件包或由 Gemini 按仓库说明协助安装。
+          - **已安装原生插件的用户**：直接在 Antigravity 右侧 **Claude Studio** 面板顶栏点击「升级」即可原地无损更新。
+
+          ### SHA256 Checksums
+          \`\`\`text
+          EOF
+          cat release-assets/SHA256SUMS.txt >> release-notes.md
+          echo '```' >> release-notes.md
           echo "HAS_CHANGELOG=$HAS_CHANGELOG" >> "$GITHUB_ENV"
 
       - name: Create or update GitHub Release

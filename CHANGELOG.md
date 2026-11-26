@@ -2,21 +2,66 @@
 
 All notable changes to **Claude Studio (`agy-claude-studio`)** and its upstream base **AGY Claude Style (`0DNANCY/agy-claude-style`)** are documented in this file.
 
+## [v2.2.3] - 2026-11-26
+
+`v2.2.3` 全面收敛为 Antigravity 原生插件架构：推出全新 Windows 一键原生插件安装器，补齐 Antigravity `v2.35.2` 全量中文本地化并支持粤语、日语按需云端下载，新增 Gemini 娘加载动效与聊天区内嵌宽屏脚本输出卡片，并针对输入框同步、光标测量与侧边栏轮询做了一轮实测驱动的性能优化。
+
+> 注：`v2.2.2` 被猫猫吃掉了，本版本直接从 `v2.2.1` 跳至 `v2.2.3`。
+
+### Windows 一键原生安装器与统一发布产物
+- **开箱即用的原生插件安装**：新版 Windows `.exe` 安装器直接将完整原生插件部署到宿主插件目录并自动启用，同时创建带有定制图标的桌面与开始菜单启动入口，支持自动定位自定义盘符中的 Antigravity 程序。
+- **无损清理旧版遗留**：安装时自动检测并卸载早期 `v2.1.0 / v2.2.0 / v2.2.1` 独立守护进程与旧版 `agy-claude-style` 插件，同时完整保留个人偏好、推送配置与自定义脚本。
+- **跨平台通用插件包**：同步提供精简的跨平台 `plugin.zip` 供 macOS / Linux 及手动安装使用，并在 README 中补充了可直接发给 Gemini 的一键升级指引。
+
+### Antigravity v2.35.2 汉化补齐与按需语言包
+- **补齐新版本界面词条**：覆盖 Antigravity `v2.35.2` 新增的界面提示与蜂群侧栏文案，同时精简了内置语言包体积。
+- **云端按需语言包**：插件默认内置简体中文、繁体中文与英文；粤语和日语改为在设置页按需从 GitHub 手动下载，附带完整性校验，随时可一键更新或恢复默认，原地升级时也会保留已下载的语言包。
+- **插件页翻译胶囊更稳**：遇到 Google 翻译接口临时限流时自动切换备用翻译通道，减少网络报错。
+
+### 界面体验与日常细节打磨
+- **Gemini 娘加载动效**：在「设置 → 界面微调」中新增「加载动效（Gemini发现了新玩具）」开关，开启后可将开屏与面板加载转圈替换为 Gemini 娘形象与头顶刻度环，随时可一键切回原版。
+- **侧边栏更紧凑顺手**：重排右侧 Claude Studio 面板顶栏与三栏切换条，在窄栏宽度下保持单行清爽显示，并修正了顶栏窗口数量统计。
+- **聊天区内嵌宽屏脚本输出**：在工具页运行本地脚本后，可直接把完整 Markdown 输出以可收起/展开的宽屏卡片展示在聊天输入框上方，不影响对话上下文，收起后也能随时重新打开。
+- **Windows 文件右键更流畅**：修复聊天文件右键菜单图标在部分环境下显示偏大的问题；在文件夹中显示文件时改用原生资源管理器定位，消除此前偶发的窗口缩小闪烁。
+
+### 性能与稳定性优化
+- **消除输入框重复计算**：合并输入框同步链路的草稿统计与回合徽标更新，避免同一轮刷新里重复测量草稿和重复扫描历史回合；环绕 HUD 全关时直接跳过多余计算。
+- **光标测量更克制**：未聚焦的输入框不再执行光滑光标的几何与样式读取，并将滚动监听收敛到当前聚焦编辑器及其滚动容器。
+- **异步会话防串写**：切换回首页或新对话时，若旧会话的异步统计结果迟到返回，会直接丢弃而不覆盖当前界面。
+- **侧边栏轮询减负**：设置页状态未变化时不再重复重建表单（避免打断自定义提示词编辑），会话检查器按会话合并在途请求，状态轮询中的仓库状态检测改为异步短缓存。
+
+### Summary (English)
+- **Note**: `v2.2.2` was eaten by the cat — this release jumps directly from `v2.2.1` to `v2.2.3`.
+- **Native Windows 1-Click Installer & Unified Artifacts**: Deploys the full native plugin, automatically cleans up legacy `v2.1.0 / v2.2.0 / v2.2.1` standalone watchers while preserving personal settings, notification credentials, and scripts, and ships alongside a cross-platform `plugin.zip`.
+- **Antigravity v2.35.2 Localization & On-Demand Packs**: Ships Simplified Chinese, Traditional Chinese, and English built-in; Cantonese and Japanese download on demand with integrity checks. Marketplace page translation now falls back cleanly when rate-limited.
+- **UI & Workflow Polish**: Adds the optional Gemini-chan loading spinner toggle, tightens the narrow Studio sidecar header, adds a collapsible wide in-chat output card for local scripts, and fixes Windows file-reveal flicker and context-menu icon sizing.
+- **Performance & Stability**: Deduplicates per-sync draft measurement and turn-badge scans, skips smooth-caret layout reads for unfocused editors, discards late async responses after navigating away from a conversation, and avoids redundant sidecar form rebuilds and blocking status polls.
+
+**Full Changelog**: https://github.com/eosglyph/agy-claude-studio/compare/v2.2.1...v2.2.3
+
+---
+
 ## [v2.2.1] - 2026-11-26
 
-`v2.2.1` 为安全性与体验热修版本：全面加固侧栏/通知/快捷脚本/自升级与本地文件操作边界，新增聊天文件链接右键快捷菜单、插件禁用自动卸载恢复机制，并补齐 `/btw` 提示 5 语言本地化词条。
+`v2.2.1` 是一次聚焦安全性与日常体验的维护更新：收紧了侧边栏通信、手机推送、本地脚本、原地升级与本地文件操作的权限边界，新增聊天文件链接右键菜单，支持关闭插件时自动停注并还原窗口，同时补齐了 `/btw` 提示的 5 语言翻译。
 
-### 安全性加固
-- **侧栏 API 与宿主鉴权隔离**：侧栏 HTTP API 全面改为经宿主 `window.sidecar.fetch` 发送认证 `POST` 请求并校验 `ANTIGRAVITY_SIDECAR_UI_TOKEN`；缺失令牌时拒绝启动侧栏服务，移除宽松 Host 头校验。
-- **通知凭据隔离与超时加固**：通知读取接口仅返回字段保存状态（`savedFields`），支持留空保留与显式清空并在切换通知渠道类型时清理绑定凭据；配置文件以 `O_NOFOLLOW` + `0o600` 写入；HTTP 响应体读取共享超时限制并禁止重定向。
-- **快捷脚本与原地升级防线**：快捷脚本校验工作目录 `cwd`、拦截 `.bat`/`.cmd` 批处理入口、完整过滤 `ANTIGRAVITY_SIDECAR_*` 环境变量前缀，并在超时后终止整个子进程树；原地升级增加受保护数据目录校验与归档替换失败回滚；工作区文件查看校验路径边界并拒绝符号链接/联接点。
-- **三端 CDP 来源与本地文件安全策略**：Node、Windows 原生与 macOS 原生 watcher 统一校验会话页面 URL、主 frame 默认 `executionContextId` 与配置开关，拒绝子 frame 或预览页伪造调用。Windows 共用 [WindowsFileAction.cs](scripts/WindowsFileAction.cs) 拦截 UNC / 映射网络盘 / 逐段重解析点 / ADS 与控制字符，定位动作经 STA 线程调用 Shell API（不再拼接 `explorer.exe /select`）；macOS 解析符号链接后拦截 `.app` 等包目录直接打开并在 Finder 中安全选中；三端打开扩展名白名单（49 项）完全对齐。
+### 聊天文件链接右键菜单
+- **右键直接操作**：右击对话中的本地文件链接或提及胶囊，可直接选择「打开文件」「在文件夹中显示」或「复制完整路径」，查看与定位文件更顺手。
+- **可随时关闭**：设置页提供独立开关；关闭后会立即清理已打开的浮层与待处理状态。
 
-### 新功能与体验修复
-- **聊天文件链接右键菜单**：右击对话区本地文件链接或提及胶囊可一键执行「打开文件」「在文件夹中显示」「复制完整路径」，设置页支持 `fileLinkContextMenu` 一键开关（关闭时即时清理待处理计时器与浮层提示，并丢弃过期回包）。
-- **关闭插件后重启自动停注与清理**：三端 watcher 实时监测宿主 `~/.gemini/config/config.json` 中的 `plugins["agy-claude-studio"].enabled` 状态（半写入 JSON 保留上次判断，无宿主配置默认启用）。禁用插件时立即撤销两个新文档注入脚本并无损卸载已附着窗口界面，不再重启后重复注入；重新开启插件后自动恢复。
-- **新增 5 语言词条**：补齐 `Applies to /btw and messages sent after this turn`（含带/不带句点变体）5 语言翻译。
-- **旧版 Windows 守护进程迁移提示**：发布说明新增从早期 `agy-claude-style` 目录迁移时的旧版 `agy-claude-style-watcher.exe` 卸载指引。
+### 关闭插件自动停注与还原
+- **随插件开关即时响应**：在 Antigravity 插件管理中停用 Claude Studio 后，后台守护会立即停止注入并无损还原已打开的窗口。
+- **重启不再重复注入**：停用状态下重启 Antigravity 不会再自动注入；重新启用插件后会自动恢复。
+
+### 本地安全加固
+- **侧边栏通信鉴权**：侧边栏与宿主之间的通信改用令牌校验，未携带有效凭据的请求会被直接拒绝。
+- **手机推送凭据保护**：已保存的推送密钥不再以明文返回界面，编辑时留空即可沿用旧值，也可手动清空；切换推送渠道时会自动清除上一渠道的旧密钥。敏感配置以更严格的本机文件权限写入，网络请求禁止意外跳转并受统一超时限制。
+- **本地脚本与原地升级校验**：本地脚本运行前会校验工作目录并拦截批处理入口，运行环境与侧边栏内部变量隔离，超时后会终止整个子进程树；原地升级增加了个人数据保护校验，并在替换失败时自动回滚。
+- **跨平台文件操作限制**：统一三端的文件打开与定位规则——仅常见文档与媒体文件支持直接打开，脚本和可执行程序仅允许在文件夹中显示或复制路径；拦截网络共享路径、异常软链接及特殊应用包误启动，并仅响应来自主会话窗口的调用。
+
+### 本地化补齐与迁移说明
+- **补齐 5 语言词条**：补充了 `/btw` 等新增界面提示的 5 语言翻译。
+- **旧版 Windows 守护迁移提醒**：发布说明中补充了从早期 `agy-claude-style` 迁移时卸载旧版守护进程的核对指引。
 
 **Full Changelog**: https://github.com/eosglyph/agy-claude-studio/compare/v2.2.0...v2.2.1
 
@@ -70,12 +115,25 @@ All notable changes to **Claude Studio (`agy-claude-studio`)** and its upstream 
 
 ## [v2.1.0] - 2026-11-22
 
-**Claude Studio Edition** — 基于上游 `0DNANCY/agy-claude-style v2.1.0` 独立演进并重塑为 **Claude Studio (`eosglyph/agy-claude-studio`)**：
+**Claude Studio (`eosglyph/agy-claude-studio`)** 的首个正式版本，基于上游 `0DNANCY/agy-claude-style v2.1.0` 独立演进：
 
-- **原生 Antigravity 插件与右侧 Studio 辅助栏**：新增 `plugin.json`、`mcp_config.json`、`plugin/mcp-host.js`、`lifecycle.js`、`watcher-core.js` 及 `sidecars/studio/`，支持 0 后台残留托管、PID 复用安全校验与旧版 `agy-claude-style` 配置自动迁移。
-- **Gemini 4 元素周期表模型选择器**：新增 `periodic-core.js`，在模型选择区提供元素周期表样式快选卡片。
-- **外观增强与思考强度重构**：新增毛玻璃效果开关（`glassEffect`）、60fps 平滑思考强度滑块，并移除梁武锋立绘模块及 `perf-assets`。
-- **深度协同与新版适配**：与 `antigravity-usage-monitor` 底栏分流及冷启动 Shadow DOM 竞态修复无缝协同，适配 Antigravity 2.33.1 界面（含 `v2.1.0` Swarm 5 语言侧栏与 `<2KB` 轻量热更新）。
+### 原生插件托管与右侧「Claude Studio」面板
+- **原生插件托管**：接入 Antigravity 原生插件体系，随宿主启动和退出，不留后台孤儿进程；首次启用时自动迁移旧版 `agy-claude-style` 的个人配置。
+- **右侧控制面板**：右侧辅助栏新增「Claude Studio」面板，主题配色、毛玻璃、元素周期表、思考强度滑块、5 语言切换和用量监控协同都可以在这里直接调整并即时生效。
+
+### Gemini 4 元素周期表模型选择器
+- **直观卡片快选**：在输入框模型选择旁加入元素周期表样式的快选卡片，支持分类筛选、即时搜索以及切换模型和思考档位。
+- **模型同步提示词**：支持生成最新的 AI Studio 模型同步提示词，方便保持模型列表与官方一致。
+
+### 外观微调与 60fps 思考强度滑块
+- **独立毛玻璃开关**：新增毛玻璃效果开关，让浮窗边框、看图悬浮胶囊和输入框视觉上更有层次。
+- **重写思考强度滑块**：提供 Codex 星云与 Claude 点阵两种 60fps 滑块样式，兼容 Antigravity 2.33.1 模型标签，并移除了旧版立绘滑块以精简体积。
+
+### 搭档插件协同与上游 2.1.0 特性整合
+- **与 `antigravity-usage-monitor` 协同**：支持底栏进度环分流、冷启动稳定渲染、切换会话后自动常驻右侧栏，以及翻译免打扰保护（MIT 与 GPLv3 保持各自独立）。
+- **整合上游 2.1.0 改进**：包含 Swarm 蜂群侧栏（`/swarm`）完整 5 语言本地化，以及长对话虚拟列表和思考阶段的轮次统计对齐修复。
+
+**Full Changelog**: https://github.com/eosglyph/agy-claude-studio/commits/v2.1.0
 
 ---
 

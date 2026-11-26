@@ -116,35 +116,44 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
       font-size: 13.5px;
       line-height: 1.5;
+      overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
     .studio-shell {
-      padding: 16px 20px 28px;
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 14px 16px 28px;
       min-height: 100vh;
     }
 
-    /* Claude Minimalist Flat Header + Underline 3-Tab Bar */
+    /* Claude Minimalist Flat Header + Full-Width 3-Column Tab Bar */
     .header-card {
       background: transparent;
       border: none;
       border-bottom: 1px solid var(--divider-col);
       border-radius: 0;
-      padding: 0;
+      padding: 0 0 12px;
       margin-bottom: 6px;
       box-shadow: none;
     }
     .header-top {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 8px 10px;
+      margin-bottom: 12px;
     }
     .header-right {
       display: inline-flex;
       align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-start;
       gap: 6px;
-      flex-shrink: 0;
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 100%;
     }
     button.upgrade-pill {
       display: inline-flex;
@@ -193,7 +202,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      flex: 1;
+      flex: 1 1 120px;
       min-width: 0;
     }
     .brand-badge {
@@ -243,6 +252,9 @@
       background: var(--control-bg);
       color: var(--muted-fg);
       white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
       flex-shrink: 0;
       font-variant-numeric: tabular-nums;
       transition: background 150ms ease, color 150ms ease;
@@ -261,34 +273,32 @@
     }
     .dot.ok { background: var(--ok); }
 
-    /* Minimalist Underline 3-Tab Switcher (Chat | Tools | Settings) */
+    /* Segmented Full-Width 3-Column Tab Switcher (Chat | Tools | Settings) */
     .tab-bar {
-      display: flex;
-      align-items: center;
-      gap: 22px;
-      padding: 0;
-      border-radius: 0;
-      background: transparent;
-      border: none;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      padding: 3px;
+      border-radius: 9px;
+      background: var(--control-bg);
+      border: 1px solid var(--border-col);
     }
     button.tab-btn {
-      width: auto;
-      min-height: 32px;
-      padding: 4px 2px 10px;
-      margin-bottom: -1px;
-      border-radius: 0;
-      border: none;
-      border-bottom: 2px solid transparent;
+      width: 100%;
+      min-height: 29px;
+      padding: 4px 8px;
+      border-radius: 7px;
+      border: 1px solid transparent;
       background: transparent;
       color: var(--muted-fg);
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 500;
       gap: 6px;
       box-shadow: none;
-      transition: color 140ms ease, border-color 140ms ease;
+      transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
     }
     button.tab-btn:hover {
-      background: transparent;
+      background: var(--control-hover);
       border-color: transparent;
       color: var(--fg);
     }
@@ -296,12 +306,11 @@
       transform: none;
     }
     button.tab-btn.is-active {
-      background: transparent;
-      border-color: transparent;
-      border-bottom-color: var(--fg);
+      background: var(--tab-active-bg);
+      border-color: var(--border-col);
       color: var(--fg);
       font-weight: 600;
-      box-shadow: none;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
     }
     .tab-panel[hidden] {
       display: none !important;
@@ -324,7 +333,7 @@
     }
     .actions-secondary {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
     button {
@@ -441,7 +450,8 @@
     }
     .ov-notify-dur-select {
       height: 27px;
-      max-width: 152px;
+      flex: 1 1 128px;
+      max-width: 180px;
       min-width: 0;
       padding: 0 24px 0 8px;
       border-radius: 7px;
@@ -455,8 +465,9 @@
     .ov-notify-actions {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 6px;
-      margin-left: auto;
+      max-width: 100%;
     }
 
     button.section-head {
@@ -517,7 +528,8 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      flex-shrink: 0;
+      min-width: 0;
+      flex-shrink: 1;
     }
     .section-badge {
       font-size: 12px;
@@ -528,7 +540,7 @@
       padding: 0;
       border-radius: 999px;
       white-space: nowrap;
-      max-width: 175px;
+      max-width: min(175px, 44vw);
       overflow: hidden;
       text-overflow: ellipsis;
       font-variant-numeric: tabular-nums;
@@ -685,7 +697,8 @@
       padding: 4px 25px 4px 8px;
       font-size: 12px;
       font-weight: 450;
-      width: 136px;
+      width: clamp(112px, 42%, 144px);
+      max-width: 100%;
       flex-shrink: 0;
       cursor: pointer;
       transition: border-color 140ms ease, background-color 140ms ease;
@@ -771,6 +784,7 @@
     }
     .notify-footer {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
@@ -778,6 +792,8 @@
       border-top: 1px solid var(--divider-col);
     }
     .notify-dirty-hint {
+      flex: 1 1 90px;
+      min-width: 0;
       font-size: 11px;
       color: var(--warn);
       font-weight: 500;
@@ -789,9 +805,10 @@
     }
     .notify-footer-btns {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 7px;
-      flex-shrink: 0;
+      max-width: 100%;
     }
 
     /* Modern Pill Toggle Switch */
@@ -870,9 +887,10 @@
     }
     .update-item-row {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 8px 12px;
       padding: 12px 0;
     }
     .update-item-row + .update-item-row {
@@ -883,15 +901,15 @@
       flex-direction: column;
       gap: 2px;
       min-width: 0;
-      flex: 1;
+      flex: 1 1 165px;
     }
     .update-row-action {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: flex-start;
       gap: 6px;
-      flex-shrink: 0;
+      max-width: 100%;
     }
     .update-meta-k {
       font-size: 11px;
@@ -963,6 +981,109 @@
       height: 12.5px;
       flex-shrink: 0;
       opacity: 0.8;
+    }
+    .i18n-packs-box {
+      margin: 6px 0 10px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--divider-col);
+      background: var(--control-bg);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .i18n-packs-head {
+      font-size: 11px;
+      color: var(--muted-fg);
+      line-height: 1.35;
+    }
+    .i18n-pack-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px 8px;
+      padding: 6px 8px;
+      border-radius: 7px;
+      background: var(--bg);
+      border: 1px solid var(--divider-col);
+    }
+    .i18n-pack-info {
+      min-width: 0;
+      flex: 1 1 155px;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .i18n-pack-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 550;
+      color: var(--fg);
+      flex-wrap: wrap;
+    }
+    .i18n-pack-tag {
+      font-size: 10px;
+      font-weight: 550;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--control-bg);
+      color: var(--muted-fg);
+      border: 1px solid var(--divider-col);
+    }
+    .i18n-pack-tag.is-cloud {
+      color: #2563eb;
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.25);
+    }
+    .i18n-pack-tag.is-missing {
+      color: var(--brand-accent);
+      background: rgba(217, 119, 87, 0.1);
+      border-color: rgba(217, 119, 87, 0.28);
+    }
+    .i18n-pack-meta {
+      font-size: 10.5px;
+      color: var(--muted-fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .i18n-pack-btns {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+    }
+    button.i18n-pack-btn {
+      width: auto;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border-col);
+      background: transparent;
+      color: var(--fg);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    button.i18n-pack-btn:hover:not(:disabled) {
+      background: var(--control-bg);
+    }
+    button.i18n-pack-btn.primary {
+      background: var(--brand-accent);
+      border-color: var(--brand-accent);
+      color: #ffffff;
+    }
+    button.i18n-pack-btn.primary:hover:not(:disabled) {
+      background: var(--brand-accent-hover);
+      border-color: var(--brand-accent-hover);
+    }
+    button.i18n-pack-btn:disabled {
+      opacity: 0.55;
+      cursor: wait;
     }
     button.ghost-reset {
       width: auto;
@@ -1162,13 +1283,14 @@
     }
     .script-top {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px 8px;
     }
     .script-title-wrap {
       min-width: 0;
-      flex: 1;
+      flex: 1 1 140px;
     }
     .script-name {
       font-size: 12.5px;
@@ -1190,9 +1312,10 @@
     .script-status-err { color: #d65745; font-weight: 550; }
     .script-btns {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 4px;
-      flex-shrink: 0;
+      max-width: 100%;
     }
     button.script-mini-btn {
       width: auto;
@@ -1324,7 +1447,8 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 180px;
+      max-width: min(180px, 55%);
+      min-width: 0;
     }
     button.cd-icon-btn {
       width: 24px;
@@ -1395,7 +1519,7 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 11px;
       white-space: nowrap;
-      max-width: 118px;
+      max-width: min(118px, 38%);
       overflow: hidden;
       text-overflow: ellipsis;
       flex-shrink: 0;
@@ -1643,9 +1767,10 @@
     }
     .cd-live-top {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 6px;
+      gap: 4px 6px;
       min-width: 0;
     }
     .cd-live-left {
@@ -1653,7 +1778,7 @@
       align-items: center;
       gap: 7px;
       min-width: 0;
-      flex: 1;
+      flex: 1 1 135px;
     }
     .cd-live-title {
       font-size: 12.5px;
@@ -1861,6 +1986,40 @@
       min-width: 34px;
       text-align: right;
     }
+
+    /* Responsive layout rules for narrow & stretched sidecar widths */
+    @media (max-width: 400px) {
+      .brand-sub .meta-detail,
+      .status-pill .status-detail {
+        display: none;
+      }
+    }
+    @media (max-width: 340px) {
+      .studio-shell {
+        padding: 12px 12px 24px;
+      }
+      .row:has(> select) {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 7px;
+      }
+      .row:has(> select) > select {
+        width: 100%;
+      }
+      .cd-ctx-row {
+        grid-template-columns: minmax(0, 1fr) auto 42px;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .script-form-row2 {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 290px) {
+      .actions-secondary {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1994,7 +2153,6 @@
         <button class="primary" id="btn-reinject"></button>
         <div class="actions-secondary">
           <button id="btn-remove"></button>
-          <button id="btn-open-um" disabled></button>
           <button id="btn-refresh"></button>
         </div>
       </div>
@@ -2219,6 +2377,22 @@
         </div>
         <div class="update-item-row">
           <div class="update-meta-block">
+            <div class="update-meta-k" id="i18n-pack-meta-k">翻译词库</div>
+            <div class="update-meta-v" id="i18n-pack-meta-v">…</div>
+            <div class="update-meta-sub" id="i18n-pack-meta-sub">…</div>
+          </div>
+          <div class="update-row-action">
+            <button type="button" class="update-pill-btn" id="btn-sync-i18n-pack">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+              <span id="btn-sync-i18n-pack-lbl"></span>
+            </button>
+            <button type="button" class="update-pill-btn" id="btn-reset-i18n-pack" style="display:none">
+              <span id="btn-reset-i18n-pack-lbl"></span>
+            </button>
+          </div>
+        </div>
+        <div class="update-item-row">
+          <div class="update-meta-block">
             <div class="update-meta-k" id="compat-meta-k">翻译保护名单</div>
             <div class="update-meta-v" id="compat-meta-v">…</div>
             <div class="update-meta-sub" id="compat-meta-sub">…</div>
@@ -2394,6 +2568,13 @@
         btnCheckUpdate: '检查更新',
         btnSelfUpdate: '一键更新',
         btnSyncCompat: '同步名单',
+        btnSyncI18nPack: '更新词库',
+        btnResetI18nPack: '恢复内置',
+        i18nPackSynced: (lang, d, r) => `已更新 ${lang} 云端词库（${d} 词条 · ${r} 规则）`,
+        i18nPackBundledFallback: (lang, d) => `云端词库尚未发布，已使用内置 ${lang} 离线词库（${d} 词条）`,
+        i18nPackSyncFail: (e) => `词库更新失败：${e}`,
+        i18nPackResetOk: '已恢复内置离线词库并实时生效',
+        i18nPackNativeEn: '当前为英文原生界面，无需下载翻译词库',
         btnOpenRelease: '查看发布页 →',
         updateAvailableTitle: (v) => `发现新版本 v${v}`,
         updateUpToDate: (v) => `当前已是最新版本 (v${v})`,
@@ -2493,6 +2674,7 @@
           periodicSelector: ['Gemini 4 元素周期表', '在模型名旁添加四角星按钮，点击打开元素周期表选模型'],
           orchestratorSwitch: ['协作模式快捷开关', '在底栏模型名旁添加独立开关，一键在标准模型与协作模式（Orchestrator）间切换'],
           fileLinkContextMenu: ['聊天文件右键菜单', '在对话中的本地文件链接上右键，可打开文件、在文件夹中显示或复制完整路径'],
+          geminiLoader: ['加载动效', 'Gemini发现了新玩具'],
           compactPreset: [
             '/compact 预设文案',
             '点击 /compact 快捷按钮后自动填入的压缩要求（不会自动发送，可先改再回车）',
@@ -2559,6 +2741,13 @@
         btnCheckUpdate: '檢查更新',
         btnSelfUpdate: '一鍵更新',
         btnSyncCompat: '同步名單',
+        btnSyncI18nPack: '更新詞庫',
+        btnResetI18nPack: '恢復內建',
+        i18nPackSynced: (lang, d, r) => `已更新 ${lang} 雲端詞庫（${d} 詞條 · ${r} 規則）`,
+        i18nPackBundledFallback: (lang, d) => `雲端詞庫尚未發佈，已使用內建 ${lang} 離線詞庫（${d} 詞條）`,
+        i18nPackSyncFail: (e) => `詞庫更新失敗：${e}`,
+        i18nPackResetOk: '已恢復內建離線詞庫並即時生效',
+        i18nPackNativeEn: '目前為英文原生介面，無需下載翻譯詞庫',
         btnOpenRelease: '查看發佈頁 →',
         updateAvailableTitle: (v) => `發現新版本 v${v}`,
         updateUpToDate: (v) => `目前已是最新版本 (v${v})`,
@@ -2658,6 +2847,7 @@
           periodicSelector: ['Gemini 4 元素週期表', '在模型名旁加入四角星按鈕，點擊開啟元素週期表選模型'],
           orchestratorSwitch: ['協作模式快捷開關', '在底列模型名旁加入獨立開關，一鍵切換標準模型與協作模式（Orchestrator）'],
           fileLinkContextMenu: ['對話檔案右鍵選單', '在對話中的本機檔案連結按右鍵，可開啟檔案、在資料夾中顯示或複製完整路徑'],
+          geminiLoader: ['載入動效', 'Gemini 發現了新玩具'],
           compactPreset: [
             '/compact 預設文案',
             '點擊 /compact 快捷按鈕後自動填入的壓縮要求（不會自動送出，可先微調再按 Enter）',
@@ -2724,6 +2914,13 @@
         btnCheckUpdate: '檢查更新',
         btnSelfUpdate: '一鍵更新',
         btnSyncCompat: '同步名單',
+        btnSyncI18nPack: '更新詞庫',
+        btnResetI18nPack: '用返內置',
+        i18nPackSynced: (lang, d, r) => `已更新 ${lang} 雲端詞庫（${d} 詞條 · ${r} 規則）`,
+        i18nPackBundledFallback: (lang, d) => `雲端詞庫仲未發佈，已用返內置 ${lang} 離線詞庫（${d} 詞條）`,
+        i18nPackSyncFail: (e) => `詞庫更新失敗：${e}`,
+        i18nPackResetOk: '已恢復內置離線詞庫並即刻生效',
+        i18nPackNativeEn: '而家係英文原版介面，唔使下載翻譯詞庫',
         btnOpenRelease: '去發佈頁 →',
         updateAvailableTitle: (v) => `搵到新版本 v${v}`,
         updateUpToDate: (v) => `已經係最新版本 (v${v})`,
@@ -2823,6 +3020,7 @@
           periodicSelector: ['Gemini 4 元素週期表', '喺模型名隔離加粒四角星，撳開元素週期表揀模型'],
           orchestratorSwitch: ['協作模式快捷開關', '喺底欄模型名隔離加粒獨立開關，一鍵切換標準模型同協作模式（Orchestrator）'],
           fileLinkContextMenu: ['對話檔案右鍵選單', '喺對話入面嘅本機檔案連結撳右鍵，可以打開檔案、喺資料夾顯示或者複製完整路徑'],
+          geminiLoader: ['載入動效', 'Gemini 發現咗新玩具'],
           compactPreset: [
             '/compact 預設文案',
             '撳 /compact 快捷掣之後自動填入嘅壓縮要求（唔會自動送出，可以改完再按 Enter）',
@@ -2889,6 +3087,13 @@
         btnCheckUpdate: 'Check Updates',
         btnSelfUpdate: 'Update Now',
         btnSyncCompat: 'Sync Protect List',
+        btnSyncI18nPack: 'Update Pack',
+        btnResetI18nPack: 'Use Built-in',
+        i18nPackSynced: (lang, d, r) => `Updated ${lang} cloud pack (${d} entries · ${r} rules)`,
+        i18nPackBundledFallback: (lang, d) => `Cloud pack not published yet; using built-in ${lang} pack (${d} entries)`,
+        i18nPackSyncFail: (e) => `Translation pack update failed: ${e}`,
+        i18nPackResetOk: 'Reverted to built-in offline translation pack',
+        i18nPackNativeEn: 'English uses native UI strings; no pack needed',
         btnOpenRelease: 'View Release →',
         updateAvailableTitle: (v) => `New version v${v} available`,
         updateUpToDate: (v) => `Already up to date (v${v})`,
@@ -2988,6 +3193,7 @@
           periodicSelector: ['Gemini 4 Periodic Table', 'Add a sparkle button beside model name to pick from the Periodic Table'],
           orchestratorSwitch: ['Orchestrator Quick Switch', 'Add a compact switch beside the model selector to toggle Orchestrator mode in one click'],
           fileLinkContextMenu: ['Chat File Link Context Menu', 'Right-click local file links in chat to open the file, show it in its folder, or copy its full path'],
+          geminiLoader: ['Loading Animation', 'Gemini found a new toy'],
           compactPreset: [
             '/compact Preset Prompt',
             'Optional compaction directive pre-filled after clicking /compact (never auto-sends)',
@@ -3054,6 +3260,13 @@
         btnCheckUpdate: '更新確認',
         btnSelfUpdate: '今すぐ更新',
         btnSyncCompat: '保護リスト同期',
+        btnSyncI18nPack: '辞書を更新',
+        btnResetI18nPack: '内蔵に戻す',
+        i18nPackSynced: (lang, d, r) => `${lang} クラウド辞書を更新 (${d} 語 · ${r} ルール)`,
+        i18nPackBundledFallback: (lang, d) => `クラウド版未公開のため内蔵 ${lang} 辞書を使用中 (${d} 語)`,
+        i18nPackSyncFail: (e) => `辞書の更新失敗：${e}`,
+        i18nPackResetOk: '内蔵オフライン辞書に戻しました',
+        i18nPackNativeEn: '英語はネイティブ UI のため辞書は不要です',
         btnOpenRelease: 'リリースページ →',
         updateAvailableTitle: (v) => `新バージョン v${v} あり`,
         updateUpToDate: (v) => `最新バージョンです (v${v})`,
@@ -3153,6 +3366,7 @@
           periodicSelector: ['Gemini 4 元素周期表', 'モデル名横に星ボタンを追加し、周期表からモデルを選択'],
           orchestratorSwitch: ['Orchestrator クイック切替', 'モデル名横にスイッチを追加し、通常モデルと Orchestrator をワンクリック切替'],
           fileLinkContextMenu: ['チャット内ファイル右クリックメニュー', '会話内のローカルファイルリンクを右クリックして、ファイルを開く・フォルダに表示・パスをコピー'],
+          geminiLoader: ['読み込みアニメ', 'Gemini が新しいおもちゃを見つけた'],
           compactPreset: [
             '/compact プリセット指示',
             '/compact ボタン押下後に自動入力する圧縮指示（自動送信はせず、確認後に Enter）',
@@ -3279,7 +3493,7 @@
         id: 'layout',
         iconKey: 'layout',
         titleKey: 'grpLayout',
-        keys: ['glassEffect', 'sidebarRestyle', 'sidebarCompact', 'composerRestyle', 'placeholderStyle', 'logoInk'],
+        keys: ['glassEffect', 'sidebarRestyle', 'sidebarCompact', 'composerRestyle', 'placeholderStyle', 'logoInk', 'geminiLoader'],
       },
       {
         id: 'advanced',
@@ -4059,6 +4273,47 @@
         badgeEl.classList.toggle('is-compat', Boolean(lastUpdateCheck?.hasUpdate));
       }
 
+      const packK = document.getElementById('i18n-pack-meta-k');
+      const packV = document.getElementById('i18n-pack-meta-v');
+      const packSub = document.getElementById('i18n-pack-meta-sub');
+      const packSyncBtn = document.getElementById('btn-sync-i18n-pack');
+      const packSyncLbl = document.getElementById('btn-sync-i18n-pack-lbl');
+      const packResetBtn = document.getElementById('btn-reset-i18n-pack');
+      const packResetLbl = document.getElementById('btn-reset-i18n-pack-lbl');
+      const pInfo = lastStatus?.i18nPack || {};
+      if (packK) {
+        packK.textContent = lang === 'zh-CN' ? '翻译词库' : (lang === 'zh-TW' || lang === 'yue') ? '翻譯詞庫' : lang === 'ja' ? '翻訳辞書' : 'Translation Pack';
+      }
+      if (packV) {
+        if (pInfo.supported === false || lang === 'en') {
+          packV.textContent = isZh ? 'English (原生)' : lang === 'ja' ? 'English (標準)' : 'English (Native)';
+        } else {
+          const dCnt = Number(pInfo.dictCount || 0);
+          const rCnt = Number(pInfo.ruleCount || 0);
+          packV.textContent = isZh
+            ? `${pInfo.lang || lang} · ${dCnt} 词条 · ${rCnt} 规则`
+            : lang === 'ja'
+            ? `${pInfo.lang || lang} · ${dCnt} 語 · ${rCnt} ルール`
+            : `${pInfo.lang || lang} · ${dCnt} entries · ${rCnt} rules`;
+        }
+      }
+      if (packSub) {
+        if (pInfo.supported === false || lang === 'en') {
+          packSub.textContent = t.i18nPackNativeEn;
+        } else {
+          const srcTxt = pInfo.hasCloudOverride
+            ? (isZh ? '云端词库' : lang === 'ja' ? 'クラウド辞書' : 'Cloud synced')
+            : (isZh ? '内置离线兜底' : lang === 'ja' ? '内蔵オフライン辞書' : 'Built-in offline pack');
+          const verTag = pInfo.agyVersion ? `AGY v${pInfo.agyVersion}` : '';
+          const ts = formatCompatDate(pInfo.updatedAt);
+          packSub.textContent = [srcTxt, verTag, ts].filter(Boolean).join(' · ');
+        }
+      }
+      if (packSyncLbl) packSyncLbl.textContent = t.btnSyncI18nPack;
+      if (packSyncBtn) packSyncBtn.disabled = pInfo.supported === false || lang === 'en';
+      if (packResetLbl) packResetLbl.textContent = t.btnResetI18nPack;
+      if (packResetBtn) packResetBtn.style.display = pInfo.hasCloudOverride ? '' : 'none';
+
       const compatK = document.getElementById('compat-meta-k');
       const compatV = document.getElementById('compat-meta-v');
       const compatSub = document.getElementById('compat-meta-sub');
@@ -4145,14 +4400,6 @@
       document.getElementById('btn-remove').textContent = t.btnRemove;
       document.getElementById('btn-reset').textContent = t.btnReset;
       document.getElementById('btn-refresh').textContent = t.btnRefresh;
-      const openUmBtn = document.getElementById('btn-open-um');
-      if (openUmBtn) {
-        const umReady = Boolean(lastStatus?.integrations?.usageMonitorInstalled);
-        openUmBtn.textContent = t.btnOpenUm;
-        openUmBtn.disabled = !umReady;
-        openUmBtn.style.cursor = umReady ? '' : 'not-allowed';
-        openUmBtn.title = umReady ? '' : t.umNotInstalled;
-      }
       document.getElementById('btn-relaunch').textContent = t.btnRelaunch;
       document.getElementById('cdp-banner-title').textContent = t.cdpTitle;
       const isMacSigned = lastStatus?.launcher?.reason === 'macos_app_bundle_signed';
@@ -4166,12 +4413,38 @@
         const txt = document.getElementById('status-text');
         const meta = document.getElementById('meta-line');
         const hasCdp = Boolean(st.cdp && st.cdp.port && st.cdp.pageCount > 0);
+        const winCount = Number(st.cdp?.windowCount) > 0 ? st.cdp.windowCount : st.cdp?.pageCount;
         dot.classList.toggle('ok', hasCdp);
         pill.classList.toggle('is-ok', hasCdp);
-        txt.textContent = hasCdp
-          ? t.connected(st.cdp.port, st.cdp.pageCount)
-          : st.watcher?.alive ? t.waitingPort : t.disconnected;
-        meta.textContent = `v${st.version || '2.2.1'} · ${st.watcher?.alive ? t.watcherOn(st.watcher.pid) : t.watcherOff}`;
+        if (hasCdp) {
+          const fullConnected = t.connected(st.cdp.port, winCount);
+          const sepIdx = fullConnected.indexOf(' · ');
+          if (sepIdx > 0) {
+            txt.textContent = '';
+            const primarySpan = document.createElement('span');
+            primarySpan.textContent = fullConnected.slice(0, sepIdx);
+            const detailSpan = document.createElement('span');
+            detailSpan.className = 'status-detail';
+            detailSpan.textContent = fullConnected.slice(sepIdx);
+            txt.append(primarySpan, detailSpan);
+          } else {
+            txt.textContent = fullConnected;
+          }
+          pill.title = fullConnected;
+        } else {
+          txt.textContent = st.watcher?.alive ? t.waitingPort : t.disconnected;
+          pill.title = txt.textContent;
+        }
+        const verStr = `v${st.version || '2.2.1'}`;
+        const watcherStr = st.watcher?.alive ? t.watcherOn(st.watcher.pid) : t.watcherOff;
+        meta.textContent = '';
+        const verSpan = document.createElement('span');
+        verSpan.textContent = verStr;
+        const metaDetailSpan = document.createElement('span');
+        metaDetailSpan.className = 'meta-detail';
+        metaDetailSpan.textContent = ` · ${watcherStr}`;
+        meta.append(verSpan, metaDetailSpan);
+        meta.title = `${verStr} · ${watcherStr}`;
         const showBanner = Boolean(st.cdp?.needsCdpRestart);
         document.getElementById('cdp-banner').classList.toggle('show', showBanner);
         if (metaBanner) {
@@ -4253,6 +4526,7 @@
           Boolean(cfg.composerRestyle),
           cfg.placeholderStyle !== 'host',
           cfg.logoInk !== 'foreground',
+          cfg.geminiLoader !== false,
         ];
         const on = flags.filter(Boolean).length;
         return { text: t.activeRatioBadge(on, flags.length), cls: '' };
@@ -4277,11 +4551,33 @@
       return { text: t.countBadge(0), cls: '' };
     }
 
-    function renderForm(cfg) {
+    let lastFormRenderKey = '';
+    let compactDraftDirty = false;
+
+    function buildFormRenderKey(cfg) {
+      const packs = Array.isArray(lastStatus?.i18nPack?.packs) ? lastStatus.i18nPack.packs : null;
+      return JSON.stringify({
+        cfg: cfg || {},
+        umAvailable: isUsageMonitorAvailable(),
+        packs,
+      });
+    }
+
+    function renderForm(cfg, { force = false } = {}) {
       const t = getT();
       const umAvailable = isUsageMonitorAvailable();
       const statsOn = isUsageStatsOn(cfg);
       const container = document.getElementById('sections');
+      const nextKey = buildFormRenderKey(cfg);
+      if (!force && container.childElementCount > 0) {
+        if (nextKey === lastFormRenderKey) return;
+        const activeCompactInput = container.querySelector('.compact-preset-input');
+        if (activeCompactInput && (document.activeElement === activeCompactInput || compactDraftDirty)) {
+          return;
+        }
+      }
+      lastFormRenderKey = nextKey;
+      compactDraftDirty = false;
       container.innerHTML = '';
       for (const group of GROUP_DEFS) {
         const isCollapsed = collapsedGroups.has(group.id);
@@ -4348,7 +4644,7 @@
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked =
-              key === 'glassEffect' || key === 'orchestratorSwitch' || key === 'pluginPageTranslate' || key === 'fileLinkContextMenu'
+              key === 'glassEffect' || key === 'orchestratorSwitch' || key === 'pluginPageTranslate' || key === 'fileLinkContextMenu' || key === 'geminiLoader'
                 ? cfg[key] !== false
                 : key === 'mascot'
                 ? cfg[key] === 'crab'
@@ -4375,11 +4671,17 @@
               const opt = document.createElement('option');
               opt.value = val;
               const isMissingUmOpt = key === 'pinRightPane' && val === 'usage-monitor' && !umAvailable;
-              opt.textContent = isMissingUmOpt
-                ? `${text} (${currentConfig.language === 'en' ? 'Not Installed' : currentConfig.language === 'ja' ? '未導入' : '未安装'})`
-                : text;
-              if (isMissingUmOpt && currentVal !== val) {
-                opt.disabled = true;
+              const langPacks = Array.isArray(lastStatus?.i18nPack?.packs) ? lastStatus.i18nPack.packs : [];
+              const langPackMeta = key === 'language' ? langPacks.find((p) => p.lang === val) : null;
+              const isMissingLangPack = Boolean(key === 'language' && val !== 'en' && langPackMeta && !langPackMeta.installed);
+              if (isMissingUmOpt) {
+                opt.textContent = `${text} (${currentConfig.language === 'en' ? 'Not Installed' : currentConfig.language === 'ja' ? '未導入' : '未安装'})`;
+                if (currentVal !== val) opt.disabled = true;
+              } else if (isMissingLangPack) {
+                opt.textContent = `${text} (${currentConfig.language === 'en' ? 'Download Below' : currentConfig.language === 'ja' ? '未ダウンロード' : '未下载'})`;
+                if (currentVal !== val) opt.disabled = true;
+              } else {
+                opt.textContent = text;
               }
               if (currentVal === val) opt.selected = true;
               sel.appendChild(opt);
@@ -4388,6 +4690,91 @@
             row.appendChild(sel);
           }
           body.appendChild(row);
+
+          if (key === 'language' && Array.isArray(lastStatus?.i18nPack?.packs) && lastStatus.i18nPack.packs.length) {
+            const uiLang = currentConfig.language || 'zh-CN';
+            const isEnUi = uiLang === 'en';
+            const isJaUi = uiLang === 'ja';
+            const isTradUi = uiLang === 'zh-TW' || uiLang === 'yue';
+            const box = document.createElement('div');
+            box.className = 'i18n-packs-box';
+            const head = document.createElement('div');
+            head.className = 'i18n-packs-head';
+            head.textContent = isEnUi
+              ? 'Language Packs (Simplified/Traditional Chinese & English built-in; others download on demand from GitHub)'
+              : isJaUi
+              ? '言語パック（簡体/繁体中国語・英語は内蔵、その他は GitHub からオンデマンド取得）'
+              : isTradUi
+              ? '多語種詞庫（預設內建繁簡中 + 英文，其他語言按需從 GitHub 下載）'
+              : '多语种词库（默认内置繁简中 + 英文，其他语种按需从 GitHub 手动下载）';
+            box.appendChild(head);
+
+            for (const pack of lastStatus.i18nPack.packs) {
+              const pRow = document.createElement('div');
+              pRow.className = 'i18n-pack-row';
+              const info = document.createElement('div');
+              info.className = 'i18n-pack-info';
+
+              const titleLine = document.createElement('div');
+              titleLine.className = 'i18n-pack-title';
+              titleLine.appendChild(document.createTextNode(`${pack.label} (${pack.lang})`));
+
+              const tag = document.createElement('span');
+              tag.className = 'i18n-pack-tag';
+              if (pack.hasCloudOverride) {
+                tag.classList.add('is-cloud');
+                tag.textContent = pack.bundled
+                  ? (isEnUi ? 'Cloud Updated' : isJaUi ? 'クラウド更新済' : isTradUi ? '雲端已更新' : '云端已更新')
+                  : (isEnUi ? 'Downloaded' : isJaUi ? '導入済' : isTradUi ? '已下載' : '已下载');
+              } else if (pack.bundled) {
+                tag.textContent = isEnUi ? 'Built-in' : isJaUi ? '内蔵' : isTradUi ? '內建' : '内置';
+              } else {
+                tag.classList.add('is-missing');
+                tag.textContent = isEnUi ? 'Not Downloaded' : isJaUi ? '未導入' : isTradUi ? '未下載' : '未下载';
+              }
+              titleLine.appendChild(tag);
+
+              const metaLine = document.createElement('div');
+              metaLine.className = 'i18n-pack-meta';
+              const sizeKb = pack.bytes ? `${Math.max(1, Math.round(pack.bytes / 1024))} KB` : '';
+              const cntStr = pack.dictCount
+                ? (isEnUi ? `${pack.dictCount} entries` : isJaUi ? `${pack.dictCount} 語` : isTradUi ? `${pack.dictCount} 詞條` : `${pack.dictCount} 词条`)
+                : '';
+              const agyStr = pack.agyVersion ? `AGY v${pack.agyVersion}` : '';
+              metaLine.textContent = [cntStr, agyStr, sizeKb].filter(Boolean).join(' · ');
+
+              info.appendChild(titleLine);
+              info.appendChild(metaLine);
+
+              const btns = document.createElement('div');
+              btns.className = 'i18n-pack-btns';
+
+              const syncBtn = document.createElement('button');
+              syncBtn.type = 'button';
+              syncBtn.className = 'i18n-pack-btn' + (pack.installed ? '' : ' primary');
+              syncBtn.textContent = pack.installed
+                ? (isEnUi ? 'Update' : isJaUi ? '更新' : '更新')
+                : (isEnUi ? 'Download' : isJaUi ? 'ダウンロード' : isTradUi ? '下載' : '下载');
+              syncBtn.addEventListener('click', () => triggerSyncI18nPack(pack.lang, syncBtn));
+              btns.appendChild(syncBtn);
+
+              if (pack.hasCloudOverride) {
+                const delBtn = document.createElement('button');
+                delBtn.type = 'button';
+                delBtn.className = 'i18n-pack-btn';
+                delBtn.textContent = pack.bundled
+                  ? (isEnUi ? 'Reset' : isJaUi ? '戻す' : isTradUi ? '恢復內建' : '恢复内置')
+                  : (isEnUi ? 'Remove' : isJaUi ? '削除' : isTradUi ? '刪除' : '删除');
+                delBtn.addEventListener('click', () => triggerResetI18nPack(pack.lang, delBtn));
+                btns.appendChild(delBtn);
+              }
+
+              pRow.appendChild(info);
+              pRow.appendChild(btns);
+              box.appendChild(pRow);
+            }
+            body.appendChild(box);
+          }
 
           if (key === 'compactPreset') {
             const presetMode = cfg.compactPreset || 'clean';
@@ -4423,6 +4810,7 @@
                 saveMany({ compactPreset: 'custom', compactCustomText: nextText }, 'compactPreset');
               };
               ta.addEventListener('input', () => {
+                compactDraftDirty = ta.value.trim() !== initialText.trim();
                 saveBtn.disabled = ta.value.trim() === initialText.trim() && presetMode === 'custom';
               });
               ta.addEventListener('keydown', (ev) => {
@@ -4454,7 +4842,7 @@
         const data = await res.json();
         if (data.config) currentConfig = data.config;
         renderStaticChrome();
-        renderForm(currentConfig);
+        renderForm(currentConfig, { force: true });
         const t = getT();
         showToast(data.ok ? t.savedToast(toastKey) : t.invalidToast(toastKey));
       } catch (err) {
@@ -4470,7 +4858,7 @@
         const data = await res.json();
         if (data.config) currentConfig = data.config;
         renderStaticChrome();
-        renderForm(currentConfig);
+        renderForm(currentConfig, { force: true });
         const t = getT();
         showToast(data.ok ? t.savedToast(key) : t.invalidToast(key));
       } catch (err) {
@@ -4512,8 +4900,6 @@
         showToast(t.actionFail(t[labelKey], err.message));
       } finally {
         btns.forEach((b) => (b.disabled = false));
-        const openUmBtn = document.getElementById('btn-open-um');
-        if (openUmBtn) openUmBtn.disabled = !Boolean(lastStatus?.integrations?.usageMonitorInstalled);
       }
     }
 
@@ -4544,23 +4930,6 @@
       try {
         window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => syncHostThemeAttr());
       } catch {}
-    }
-
-    async function triggerOpenUsageMonitor() {
-      const btn = document.getElementById('btn-open-um');
-      if (btn) btn.disabled = true;
-      try {
-        const res = await apiFetch('/api/open-usage-monitor', {});
-        const data = await res.json();
-        const t = getT();
-        if (!res.ok || !data?.ok) {
-          showToast(t.openUmNotFound);
-        }
-      } catch (err) {
-        showToast(getT().actionFail(getT().btnOpenUm, err.message));
-      } finally {
-        if (btn) btn.disabled = false;
-      }
     }
 
     async function checkUpdateSilently() {
@@ -4649,6 +5018,51 @@
         isUpgradingNow = false;
         if (btn) btn.disabled = false;
         renderHeaderUpgradePill();
+      }
+    }
+
+    async function triggerSyncI18nPack(targetLang, triggerBtn) {
+      const langToSync = typeof targetLang === 'string' && targetLang ? targetLang : (currentConfig?.language || 'zh-CN');
+      const btn = triggerBtn || document.getElementById('btn-sync-i18n-pack');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await apiFetch('/api/i18n-pack/sync', { lang: langToSync });
+        const data = await res.json();
+        const t = getT();
+        if (!res.ok || !data?.ok) {
+          throw new Error(data?.error || 'Error');
+        }
+        if (data.skippedNative) {
+          showToast(t.i18nPackNativeEn);
+        } else if (data.fallbackToBundled && typeof t.i18nPackBundledFallback === 'function') {
+          showToast(t.i18nPackBundledFallback(data.lang || langToSync, data.dictCount || 0));
+        } else {
+          showToast(t.i18nPackSynced(data.lang || langToSync, data.dictCount || 0, data.ruleCount || 0));
+        }
+        await refreshStatus();
+      } catch (err) {
+        showToast(getT().i18nPackSyncFail(err.message));
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function triggerResetI18nPack(targetLang, triggerBtn) {
+      const langToReset = typeof targetLang === 'string' && targetLang ? targetLang : (currentConfig?.language || 'zh-CN');
+      const btn = triggerBtn || document.getElementById('btn-reset-i18n-pack');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await apiFetch('/api/i18n-pack/reset', { lang: langToReset });
+        const data = await res.json();
+        if (!res.ok || !data?.ok) {
+          throw new Error(data?.error || 'Error');
+        }
+        showToast(getT().i18nPackResetOk);
+        await refreshStatus();
+      } catch (err) {
+        showToast(getT().i18nPackSyncFail(err.message));
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
 
@@ -4762,10 +5176,11 @@
     });
 
     document.getElementById('btn-relaunch').addEventListener('click', triggerRelaunch);
-    document.getElementById('btn-open-um').addEventListener('click', triggerOpenUsageMonitor);
     document.getElementById('btn-check-update').addEventListener('click', triggerCheckUpdate);
     document.getElementById('btn-self-update').addEventListener('click', triggerSelfUpdate);
     document.getElementById('btn-sync-compat').addEventListener('click', triggerSyncCompat);
+    document.getElementById('btn-sync-i18n-pack').addEventListener('click', () => triggerSyncI18nPack());
+    document.getElementById('btn-reset-i18n-pack').addEventListener('click', () => triggerResetI18nPack());
     document.getElementById('btn-reinject').addEventListener('click', () => postAction('/api/reinject', 'btnReinject'));
     document.getElementById('btn-remove').addEventListener('click', () => postAction('/api/remove', 'btnRemove'));
     document.getElementById('btn-reset').addEventListener('click', () => postAction('/api/reset', 'btnReset'));
@@ -4808,7 +5223,9 @@
           btnSave: 'Save Script',
           btnCancel: 'Cancel',
           btnCopy: 'Copy',
-          btnHide: 'Hide',
+          btnShowInChat: 'Wide',
+          btnHide: 'Collapse',
+          btnExpand: 'Expand',
           lblName: 'Name',
           lblPath: 'Script Path',
           lblCmd: 'Runner Command (optional, auto by ext)',
@@ -4853,7 +5270,9 @@
           btnSave: '保存',
           btnCancel: 'キャンセル',
           btnCopy: 'コピー',
-          btnHide: '閉じる',
+          btnShowInChat: 'ワイド',
+          btnHide: '折りたたむ',
+          btnExpand: '展開',
           lblName: 'スクリプト名',
           lblPath: 'スクリプトパス',
           lblCmd: '起動コマンド（任意・拡張子自動判定）',
@@ -4902,7 +5321,9 @@
         btnSave: isTrad ? '儲存腳本' : '保存脚本',
         btnCancel: isTrad ? '取消' : '取消',
         btnCopy: isTrad ? '複製' : '复制',
+        btnShowInChat: isTrad ? '寬螢幕' : '宽屏',
         btnHide: isTrad ? '收起' : '收起',
+        btnExpand: isTrad ? '展開' : '展开',
         lblName: isTrad ? '腳本名稱' : '脚本名称',
         lblPath: isTrad ? '腳本路徑' : '脚本路径',
         lblCmd: isTrad ? '啟動命令（選填，留空自動辨識）' : '启动命令（可选，留空自动识别）',
@@ -5353,6 +5774,13 @@
           outStat.textContent = runOut.ok ? c.statusOk(runOut.durationMs || 0) : c.statusErr(runOut.exitCode);
           const outBtns = document.createElement('div');
           outBtns.className = 'script-btns';
+          const showChatBtn = document.createElement('button');
+          showChatBtn.type = 'button';
+          showChatBtn.className = 'script-mini-btn';
+          showChatBtn.textContent = c.btnShowInChat;
+          showChatBtn.addEventListener('click', () => {
+            void showScriptOutputInChatView(sc.name, runOut);
+          });
           const copyBtn = document.createElement('button');
           copyBtn.type = 'button';
           copyBtn.className = 'script-mini-btn';
@@ -5366,21 +5794,24 @@
           const hideBtn = document.createElement('button');
           hideBtn.type = 'button';
           hideBtn.className = 'script-mini-btn';
-          hideBtn.textContent = c.btnHide;
+          hideBtn.textContent = runOut.collapsed ? c.btnExpand : c.btnHide;
           hideBtn.addEventListener('click', () => {
-            scriptRunOutputs.delete(sc.id);
+            runOut.collapsed = !runOut.collapsed;
             renderScriptsCard();
           });
+          outBtns.appendChild(showChatBtn);
           outBtns.appendChild(copyBtn);
           outBtns.appendChild(hideBtn);
           outHead.appendChild(outStat);
           outHead.appendChild(outBtns);
 
-          const pre = document.createElement('pre');
-          pre.className = 'script-output-pre';
-          pre.textContent = runOut.combined || '(empty output)';
           outBox.appendChild(outHead);
-          outBox.appendChild(pre);
+          if (!runOut.collapsed) {
+            const pre = document.createElement('pre');
+            pre.className = 'script-output-pre';
+            pre.textContent = runOut.combined || '(empty output)';
+            outBox.appendChild(pre);
+          }
           card.appendChild(outBox);
         }
 
@@ -5449,10 +5880,29 @@
       } catch {}
     }
 
+    async function showScriptOutputInChatView(name, runOut) {
+      if (!runOut) return;
+      try {
+        await apiFetch('/api/scripts/show-in-chat', {
+          body: JSON.stringify({
+            name: String(name || 'Script Output'),
+            ok: Boolean(runOut.ok),
+            exitCode: runOut.exitCode ?? 0,
+            durationMs: runOut.durationMs ?? 0,
+            combined: runOut.combined || '',
+          }),
+        });
+      } catch {
+        // Sidecar fallback output remains visible even if host chat card is unavailable
+      }
+    }
+
     async function triggerRunScript(id) {
       if (scriptRunningIds.has(id)) return;
+      const scMeta = customScripts.find((item) => item.id === id);
       scriptRunningIds.add(id);
       renderScriptsCard();
+      let finalRunOut = null;
       try {
         const res = await apiFetch('/api/scripts/run', {
           body: JSON.stringify({ id }),
@@ -5462,23 +5912,28 @@
           .filter(Boolean)
           .join('\n')
           .trim() || data?.message || data?.error || '';
-        scriptRunOutputs.set(id, {
+        finalRunOut = {
           ok: Boolean(data?.ok),
           exitCode: data?.exitCode ?? -1,
           durationMs: data?.durationMs ?? 0,
           combined,
-        });
+        };
+        scriptRunOutputs.set(id, finalRunOut);
         await loadScripts();
       } catch (err) {
-        scriptRunOutputs.set(id, {
+        finalRunOut = {
           ok: false,
           exitCode: -1,
           durationMs: 0,
           combined: err?.message || String(err),
-        });
+        };
+        scriptRunOutputs.set(id, finalRunOut);
       } finally {
         scriptRunningIds.delete(id);
         renderScriptsCard();
+        if (finalRunOut) {
+          void showScriptOutputInChatView(scMeta?.name || id, finalRunOut);
+        }
       }
     }
 
@@ -5902,18 +6357,36 @@
       }
     }
 
+    let inspectorReqSeq = 0;
+    let inspectorInFlight = null;
+
     async function loadConversationInspector() {
+      const reqConvoId = activeConversationId;
+      if (inspectorInFlight && inspectorInFlight.convoId === reqConvoId) {
+        return inspectorInFlight.promise;
+      }
+      const reqSeq = ++inspectorReqSeq;
+      const run = (async () => {
+        try {
+          const res = await apiFetch('/api/conversation-inspector', {
+            body: JSON.stringify({ conversationId: reqConvoId }),
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (reqSeq !== inspectorReqSeq || reqConvoId !== activeConversationId) return;
+          if (data?.ok) {
+            inspectorState = data;
+            renderConversationInspector();
+          }
+        } catch {}
+      })();
+      const entry = { convoId: reqConvoId, promise: run };
+      inspectorInFlight = entry;
       try {
-        const res = await apiFetch('/api/conversation-inspector', {
-          body: JSON.stringify({ conversationId: activeConversationId }),
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data?.ok) {
-          inspectorState = data;
-          renderConversationInspector();
-        }
-      } catch {}
+        await run;
+      } finally {
+        if (inspectorInFlight === entry) inspectorInFlight = null;
+      }
     }
 
     document.getElementById('btn-inspector-refresh')?.addEventListener('click', () => {

@@ -95,9 +95,23 @@
     if (typeof cfg.usageMonitorCompat === 'boolean') return !cfg.usageMonitorCompat;
     return true;
   }
+  let activeI18nPackOverride = null;
+  function resolveActiveLocaleBundle(targetLang) {
+    if (
+      activeI18nPackOverride &&
+      typeof activeI18nPackOverride === 'object' &&
+      activeI18nPackOverride.lang === targetLang
+    ) {
+      return activeI18nPackOverride;
+    }
+    return i18nLocales && typeof i18nLocales.resolveLocaleBundle === 'function'
+      ? i18nLocales.resolveLocaleBundle(targetLang)
+      : null;
+  }
+
   const domTranslator =
     i18nCore && i18nLocales && typeof i18nCore.createDomTranslator === 'function'
-      ? i18nCore.createDomTranslator(i18nLocales.resolveLocaleBundle)
+      ? i18nCore.createDomTranslator(resolveActiveLocaleBundle)
       : null;
   if (domTranslator && typeof window !== 'undefined') {
     window.__agCsI18n = domTranslator;
@@ -341,6 +355,7 @@
 
   let lastThemeKey = '';
   let lastAppliedLang = '';
+  let lastAppliedI18nPackHash = '';
 
   function refreshOpenContextPopover() {
     if (!openPopover || !openPopover.isConnected) return;
@@ -454,24 +469,32 @@
   function applyRootAttrs() {
     const html = document.documentElement;
     if (!html) return;
+    const setHtmlAttr = (name, val) => {
+      if (html.getAttribute(name) !== val) html.setAttribute(name, val);
+    };
+    const removeHtmlAttr = (name) => {
+      const has = typeof html.hasAttribute === 'function' ? html.hasAttribute(name) : html.getAttribute(name) !== null;
+      if (has) html.removeAttribute(name);
+    };
     applyPeriodicOverride(cfg.periodicOverride || null);
     const palette = getEffectivePalette();
     const lang = getLang();
     const dark = isDarkTheme();
-    html.setAttribute('data-ag-cs-style', '1');
-    html.setAttribute('data-ag-cs-palette', palette);
-    html.setAttribute('data-ag-cs-glass', cfg.glassEffect === false ? 'off' : 'on');
-    html.setAttribute('data-ag-cs-home', cfg.homeLayout === 'classic' ? 'classic' : cfg.homeLayout === 'off' ? 'off' : 'studio');
-    html.setAttribute('data-ag-cs-composer', cfg.composerRestyle === false ? 'off' : 'on');
-    html.setAttribute('data-ag-cs-logo-ink', cfg.logoInk === 'foreground' ? 'foreground' : 'accent');
-    html.setAttribute('data-ag-cs-sidebar', cfg.sidebarRestyle === false ? 'off' : 'on');
-    html.setAttribute('data-ag-cs-sidebar-compact', cfg.sidebarCompact === true ? 'on' : 'off');
-    html.removeAttribute('data-ag-cs-hud-compact');
-    html.setAttribute('data-ag-cs-effort-accent', cfg.effortAccent === false ? 'off' : 'on');
-    html.setAttribute('data-ag-cs-lang', lang);
+    setHtmlAttr('data-ag-cs-style', '1');
+    setHtmlAttr('data-ag-cs-palette', palette);
+    setHtmlAttr('data-ag-cs-glass', cfg.glassEffect === false ? 'off' : 'on');
+    setHtmlAttr('data-ag-cs-home', cfg.homeLayout === 'classic' ? 'classic' : cfg.homeLayout === 'off' ? 'off' : 'studio');
+    setHtmlAttr('data-ag-cs-composer', cfg.composerRestyle === false ? 'off' : 'on');
+    setHtmlAttr('data-ag-cs-logo-ink', cfg.logoInk === 'foreground' ? 'foreground' : 'accent');
+    setHtmlAttr('data-ag-cs-gemini-loader', cfg.geminiLoader === false ? 'off' : 'on');
+    setHtmlAttr('data-ag-cs-sidebar', cfg.sidebarRestyle === false ? 'off' : 'on');
+    setHtmlAttr('data-ag-cs-sidebar-compact', cfg.sidebarCompact === true ? 'on' : 'off');
+    removeHtmlAttr('data-ag-cs-hud-compact');
+    setHtmlAttr('data-ag-cs-effort-accent', cfg.effortAccent === false ? 'off' : 'on');
+    setHtmlAttr('data-ag-cs-lang', lang);
     const isCjk = i18nCore && typeof i18nCore.isCjkLanguage === 'function' ? i18nCore.isCjkLanguage(lang) : isZh();
-    if (isCjk) html.setAttribute('data-ag-cs-cjk', '1');
-    else html.removeAttribute('data-ag-cs-cjk');
+    if (isCjk) setHtmlAttr('data-ag-cs-cjk', '1');
+    else removeHtmlAttr('data-ag-cs-cjk');
 
     cleanupLegacyAuroraArtifacts();
 
@@ -483,16 +506,23 @@
       domTranslator.setExtraOptOut(mergedOptOut, document);
     }
 
+    activeI18nPackOverride =
+      cfg.i18nPackOverride && typeof cfg.i18nPackOverride === 'object' && typeof cfg.i18nPackOverride.lang === 'string'
+        ? cfg.i18nPackOverride
+        : null;
+    const nextPackHash = typeof cfg.i18nPackHash === 'string' ? cfg.i18nPackHash : '';
     const prevLang = lastAppliedLang;
-    if (lang !== prevLang) {
+    const prevPackHash = lastAppliedI18nPackHash;
+    if (lang !== prevLang || nextPackHash !== prevPackHash) {
       lastAppliedLang = lang;
+      lastAppliedI18nPackHash = nextPackHash;
       if (typeof window !== 'undefined' && window.__agI18n && typeof window.__agI18n.revert === 'function') {
         try {
           window.__agI18n.revert();
         } catch {}
       }
       if (domTranslator && typeof domTranslator.setLanguage === 'function') {
-        domTranslator.setLanguage(lang, document);
+        domTranslator.setLanguage(lang, document, nextPackHash !== prevPackHash);
       }
       if (prevLang !== '') {
         refreshOpenUiForLanguage();
@@ -1825,8 +1855,15 @@
   function getDraftInfo(card) {
     const scope = card || document.querySelector('[data-testid="agent-input-box"]') || document;
     const ed = scope.querySelector ? scope.querySelector('[contenteditable="true"]') : null;
-    const raw = ed ? String(ed.innerText ?? ed.textContent ?? '').trim() : '';
-    if (!raw || typeof usageCore.estimateTextTokens !== 'function') {
+    if (!ed || typeof usageCore.estimateTextTokens !== 'function') {
+      return { tokens: 0, chars: 0, cjk: 0, words: 0, codeSymbols: 0 };
+    }
+    const textContentRaw = String(ed.textContent || '');
+    if (!textContentRaw.trim()) {
+      return { tokens: 0, chars: 0, cjk: 0, words: 0, codeSymbols: 0 };
+    }
+    const raw = String(ed.innerText ?? textContentRaw).trim();
+    if (!raw) {
       return { tokens: 0, chars: 0, cjk: 0, words: 0, codeSymbols: 0 };
     }
     return usageCore.estimateTextTokens(raw);
@@ -3810,21 +3847,32 @@
     });
   }
 
-  function syncSurroundHud(card, footer, data) {
+  function hasAnySurroundHudEnabled() {
+    return cfg.hudTopBar === true || cfg.hudBottomBar === true || cfg.hudRimProgress === true;
+  }
+
+  function syncSurroundHud(card, footer, data, precomputedTelemetry = null) {
     const inputBox = card?.closest?.('[data-testid="agent-input-box"]');
     const composerShell = card?.closest?.('#antigravity\\.agentSidePanelInputBox') || card?.parentElement;
     if (!inputBox || !card) return;
-    if (!isUsageStatsEnabled()) {
+    if (!isUsageStatsEnabled() || !hasAnySurroundHudEnabled()) {
       card
         .querySelectorAll('.ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip')
         .forEach((n) => n.remove());
-      if (composerShell) composerShell.removeAttribute('data-ag-cs-rim');
+      if (footer) {
+        const legacyChip = footer.querySelector('.ag-cs-hud-footer-chip');
+        if (legacyChip) legacyChip.remove();
+      }
+      if (composerShell && composerShell.hasAttribute('data-ag-cs-rim')) {
+        composerShell.removeAttribute('data-ag-cs-rim');
+        composerShell.style.removeProperty('--ag-cs-rim-color');
+      }
       return;
     }
     const d = data || createEmptyConvoData('', getKnownMaxContextForCard(card, data));
     const lang = getLang();
     const ui = uiText(lang);
-    const { ring, draftEst, activeQuota } = getRingTelemetryForCard(card, d);
+    const { ring, draftEst, activeQuota } = precomputedTelemetry || getRingTelemetryForCard(card, d);
     const totalW = ring.maxTokens || 256000;
     const pctOf = (v) => Math.max(0, Math.min(100, ((Number(v) || 0) / totalW) * 100)).toFixed(2);
     const chatMsgs =
@@ -6036,6 +6084,7 @@
   let caretTypingTimer = null;
   let caretRaf = 0;
   let pendingCaretTyping = false;
+  let anySmoothCaretVisible = false;
   const emptyCaretProbeCache = new WeakMap();
   const caretPrevState = new WeakMap();
 
@@ -6049,6 +6098,7 @@
       caretRaf = 0;
     }
     pendingCaretTyping = false;
+    anySmoothCaretVisible = false;
     document.querySelectorAll('.ag-cs-smooth-caret').forEach((n) => n.remove());
     document.querySelectorAll('[data-ag-cs-smooth-caret]').forEach((n) => n.removeAttribute('data-ag-cs-smooth-caret'));
     document.querySelectorAll('[data-ag-cs-caret-host]').forEach((n) => n.removeAttribute('data-ag-cs-caret-host'));
@@ -6174,11 +6224,14 @@
 
     const editors = Array.from(document.querySelectorAll('[data-testid="agent-input-box"] [contenteditable="true"]'));
     const activeEl = document.activeElement;
+    let visibleCount = 0;
 
     for (const ed of editors) {
       const host = ed.parentElement;
       if (!host) continue;
-      host.setAttribute('data-ag-cs-caret-host', '1');
+      if (host.getAttribute('data-ag-cs-caret-host') !== '1') {
+        host.setAttribute('data-ag-cs-caret-host', '1');
+      }
       let caret = host.querySelector('.ag-cs-smooth-caret');
       if (!caret) {
         caret = document.createElement('div');
@@ -6189,10 +6242,24 @@
       }
 
       const isFocused = activeEl === ed || (activeEl && ed.contains && ed.contains(activeEl));
+      if (!isFocused) {
+        if (caret.getAttribute('data-ag-cs-caret-visible') !== null) {
+          caret.removeAttribute('data-ag-cs-caret-visible');
+        }
+        if (ed.getAttribute('data-ag-cs-smooth-caret') !== null) {
+          ed.removeAttribute('data-ag-cs-smooth-caret');
+        }
+        continue;
+      }
+
       const measured = measureEditorCaretBox(ed);
       if (!measured || !measured.collapsed) {
-        caret.removeAttribute('data-ag-cs-caret-visible');
-        ed.removeAttribute('data-ag-cs-smooth-caret');
+        if (caret.getAttribute('data-ag-cs-caret-visible') !== null) {
+          caret.removeAttribute('data-ag-cs-caret-visible');
+        }
+        if (ed.getAttribute('data-ag-cs-smooth-caret') !== null) {
+          ed.removeAttribute('data-ag-cs-smooth-caret');
+        }
         continue;
       }
 
@@ -6206,38 +6273,40 @@
       const prev = caretPrevState.get(caret);
       const clearedToEmpty = Boolean(prev && prev.empty === false && isNowEmpty);
 
-      if ((isFocused && !wasVisible) || clearedToEmpty) {
+      if (!wasVisible || clearedToEmpty) {
         caret.style.transition = 'none';
         caret.style.transform = `translate3d(${x}px, ${y}px, 0)`;
         caret.style.height = `${h}px`;
         void caret.offsetWidth;
         caret.style.transition = '';
-      } else {
+      } else if (!prev || prev.x !== x || prev.y !== y || prev.h !== h) {
         caret.style.transform = `translate3d(${x}px, ${y}px, 0)`;
         caret.style.height = `${h}px`;
       }
       caretPrevState.set(caret, { x, y, h, empty: isNowEmpty });
 
-      if (isFocused) {
+      if (caret.getAttribute('data-ag-cs-caret-visible') !== '1') {
         caret.setAttribute('data-ag-cs-caret-visible', '1');
+      }
+      if (ed.getAttribute('data-ag-cs-smooth-caret') !== '1') {
         ed.setAttribute('data-ag-cs-smooth-caret', '1');
-        if (isTypingEvent) {
-          caret.setAttribute('data-ag-cs-caret-typing', '1');
-          if (caretTypingTimer) clearTimeout(caretTypingTimer);
-          caretTypingTimer = setTimeout(() => {
-            caretTypingTimer = null;
-            if (caret.isConnected) caret.removeAttribute('data-ag-cs-caret-typing');
-          }, 420);
-        } else if (prev && (prev.x !== x || prev.y !== y) && typeof caret.getAnimations === 'function') {
-          for (const anim of caret.getAnimations()) {
-            if (anim && anim.animationName === 'ag-cs-caret-blink') anim.currentTime = 0;
-          }
+      }
+      visibleCount += 1;
+
+      if (isTypingEvent) {
+        caret.setAttribute('data-ag-cs-caret-typing', '1');
+        if (caretTypingTimer) clearTimeout(caretTypingTimer);
+        caretTypingTimer = setTimeout(() => {
+          caretTypingTimer = null;
+          if (caret.isConnected) caret.removeAttribute('data-ag-cs-caret-typing');
+        }, 420);
+      } else if (prev && (prev.x !== x || prev.y !== y) && typeof caret.getAnimations === 'function') {
+        for (const anim of caret.getAnimations()) {
+          if (anim && anim.animationName === 'ag-cs-caret-blink') anim.currentTime = 0;
         }
-      } else {
-        caret.removeAttribute('data-ag-cs-caret-visible');
-        ed.removeAttribute('data-ag-cs-smooth-caret');
       }
     }
+    anySmoothCaretVisible = visibleCount > 0;
   }
 
   function queueSmoothCaret(isTyping = false, immediate = false) {
@@ -6497,6 +6566,33 @@
     }
   }
 
+  function commitComposerHud(card, footer, data, { isPrimary = false, turnBadgeData = undefined } = {}) {
+    const d = data || createEmptyConvoData('', getKnownMaxContextForCard(card, data));
+    const needInlineStats = cfg.inlineStats !== false;
+    const needSurroundHud = hasAnySurroundHudEnabled();
+    const sharedTelemetry =
+      isUsageStatsEnabled() && (needInlineStats || needSurroundHud)
+        ? getRingTelemetryForCard(card, d)
+        : null;
+    updateFooterWidgets(card, footer, d, sharedTelemetry);
+    syncSurroundHud(card, footer, d, sharedTelemetry);
+    if (isPrimary && turnBadgeData !== undefined) {
+      syncTurnBadges(turnBadgeData);
+    }
+  }
+
+  function isCardStillInCascade(card, expectedCascadeId) {
+    if (!card || !card.isConnected) return false;
+    if (!expectedCascadeId) return true;
+    if (card.closest && card.closest('.agy-home') && !card.closest('[data-testid="conversation-view"]')) {
+      return false;
+    }
+    const liveInputBox = card.closest ? card.closest('[data-testid="agent-input-box"]') : null;
+    const currentCascadeId = resolveCascadeId(liveInputBox);
+    if (!currentCascadeId) return false;
+    return sameCascadeId(currentCascadeId, expectedCascadeId);
+  }
+
   function syncComposers() {
     const cards = Array.from(document.querySelectorAll('[data-testid="agent-input-box"] .surface-composer-card'));
     const lang = getLang();
@@ -6609,7 +6705,7 @@
           if (card === primaryCard) activeInfoForCrab = cachedForCrab;
           if (inConvo && cascadeId && card === primaryCard) {
             fetchActiveConvo(cascadeId, false, card).then((fresh) => {
-              if (!destroyed && fresh && card.isConnected) {
+              if (!destroyed && fresh && fresh !== cachedForCrab && isCardStillInCascade(card, cascadeId)) {
                 syncCrab(primaryCard, fresh);
               }
             });
@@ -6618,29 +6714,31 @@
         continue;
       }
 
+      const isPrimary = card === primaryCard;
       const cached = inConvo && cascadeId ? activeTrajCache.get(cascadeId)?.data || null : null;
       const baseData = cached || createEmptyConvoData(cascadeId, getKnownMaxContextForCard(card, null));
-      if (card === primaryCard) activeInfoForCrab = cached;
+      if (isPrimary) activeInfoForCrab = cached;
+
+      commitComposerHud(card, footer, baseData, { isPrimary, turnBadgeData: cached });
 
       if (inConvo && cascadeId) {
         fetchActiveConvo(cascadeId, false, card).then((fresh) => {
-          if (!destroyed && fresh && card.isConnected) {
-            updateFooterWidgets(card, footer, fresh);
-            syncSurroundHud(card, footer, fresh);
-            if (card === primaryCard) {
+          if (destroyed || !fresh || !isCardStillInCascade(card, cascadeId)) return;
+          if (fresh !== cached) {
+            commitComposerHud(card, footer, fresh, { isPrimary, turnBadgeData: fresh });
+            if (isPrimary) {
               syncCrab(primaryCard, fresh);
-              syncTurnBadges(fresh);
             }
-            if (
-              openPopover &&
-              openPopover.isConnected &&
-              openPopoverCascadeId === cascadeId &&
-              openPopover._agCsRenderedData !== fresh
-            ) {
-              renderContextPopoverContent(openPopover, fresh, cascadeId);
-              if (openPopoverAnchor && openPopoverAnchor.isConnected) {
-                positionPopoverAboveAnchor(openPopover, openPopoverAnchor);
-              }
+          }
+          if (
+            openPopover &&
+            openPopover.isConnected &&
+            openPopoverCascadeId === cascadeId &&
+            openPopover._agCsRenderedData !== fresh
+          ) {
+            renderContextPopoverContent(openPopover, fresh, cascadeId);
+            if (openPopoverAnchor && openPopoverAnchor.isConnected) {
+              positionPopoverAboveAnchor(openPopover, openPopoverAnchor);
             }
           }
         });
@@ -6654,17 +6752,13 @@
         const qProm = fetchQuotaData(false);
         if (needQuotaRefresh && qProm && typeof qProm.then === 'function') {
           qProm.then((q) => {
-            if (!destroyed && q && card.isConnected) {
+            if (!destroyed && q && isCardStillInCascade(card, cascadeId)) {
               const latest = resolveCardConvoData(card, baseData);
-              updateFooterWidgets(card, footer, latest);
-              syncSurroundHud(card, footer, latest);
+              commitComposerHud(card, footer, latest);
             }
           });
         }
       }
-      updateFooterWidgets(card, footer, baseData);
-      syncSurroundHud(card, footer, baseData);
-      if (card === primaryCard) syncTurnBadges(cached);
     }
 
     cleanupUsageMonitorFooterSplit();
@@ -6672,7 +6766,7 @@
     syncSmoothCaret(false);
   }
 
-  function updateFooterWidgets(card, footer, data) {
+  function updateFooterWidgets(card, footer, data, precomputedTelemetry = null) {
     const d = data || createEmptyConvoData('', getKnownMaxContextForCard(card, data));
     card._agCsLastData = d;
     if (cfg.inlineStats === false) {
@@ -6685,7 +6779,7 @@
     let ringBtn = footer.querySelector('.ag-cs-context-ring');
 
     // Bottom-right circular ring displays REMAINING capacity percentage (usageCore.computeRingTelemetry)
-    const { ring, draftEst } = getRingTelemetryForCard(card, d);
+    const { ring, draftEst } = precomputedTelemetry || getRingTelemetryForCard(card, d);
 
     const turnsTxt = `${d.calls} ${ui.callsShortUnit || 'calls'} ${d.steps} ${ui.stepsUnit || 'steps'}`;
     const speedVal = Number(d.displaySpeed || d.lastSpeed || 0);
@@ -6794,10 +6888,13 @@
 
   const PAGE_TRANSLATE_BTN_CLS = 'ag-cs-page-translate-btn';
   const PAGE_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/single';
+  const PAGE_TRANSLATE_FALLBACK_URL = 'https://api.mymemory.translated.net/get';
   const PAGE_TRANSLATE_MAX_ENCODED_LEN = 1500;
   const PAGE_TRANSLATE_MAX_BATCH_ITEMS = 25;
-  const PAGE_TRANSLATE_TIMEOUT_MS = 12000;
+  const PAGE_TRANSLATE_MYMEMORY_MAX_LEN = 450;
+  const PAGE_TRANSLATE_TIMEOUT_MS = 20000;
   const PAGE_TRANSLATE_CACHE_LIMIT = 2000;
+  let googleTranslateCooldownUntil = 0;
   const PAGE_TRANSLATE_SKIP_TAGS = new Set([
     'CODE',
     'PRE',
@@ -7098,13 +7195,92 @@
     )}`;
     const res = await fetch(url, { method: 'GET', signal });
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+      if (res.status === 429 || res.status === 403) {
+        googleTranslateCooldownUntil = Date.now() + 10 * 60 * 1000;
+      }
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
     }
     const data = await res.json();
     if (!Array.isArray(data) || !Array.isArray(data[0])) {
       throw new Error('invalid_translate_payload');
     }
     return data[0].map((seg) => (Array.isArray(seg) && typeof seg[0] === 'string' ? seg[0] : '')).join('');
+  }
+
+  async function fetchMyMemoryTranslateText(text, targetLang, signal) {
+    if (typeof fetch !== 'function') {
+      throw new Error('fetch_unavailable');
+    }
+    const tl = targetLang === 'zh-TW' ? 'zh-TW' : targetLang === 'ja' ? 'ja' : 'zh-CN';
+    const url = `${PAGE_TRANSLATE_FALLBACK_URL}?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent('en|' + tl)}`;
+    const res = await fetch(url, { method: 'GET', signal });
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    const data = await res.json();
+    const out = data?.responseData?.translatedText;
+    if (
+      data?.quotaFinished === true ||
+      typeof out !== 'string' ||
+      !out.trim() ||
+      /^MYMEMORY WARNING:/i.test(out) ||
+      /^QUERY LENGTH LIMIT EXCEEDED/i.test(out)
+    ) {
+      throw new Error('fallback_translate_failed');
+    }
+    return out;
+  }
+
+  async function translateBatchViaMyMemory(batch, targetLang, signal) {
+    // MyMemory caps q at ~500 raw chars; split into small chunks and run with bounded concurrency.
+    const chunks = [];
+    let cur = [];
+    let curLen = 0;
+    for (const item of batch) {
+      const trimmed = item.length > PAGE_TRANSLATE_MYMEMORY_MAX_LEN ? item.slice(0, PAGE_TRANSLATE_MYMEMORY_MAX_LEN) : item;
+      const addLen = trimmed.length + (cur.length > 0 ? 1 : 0);
+      if (cur.length > 0 && curLen + addLen > PAGE_TRANSLATE_MYMEMORY_MAX_LEN) {
+        chunks.push(cur);
+        cur = [];
+        curLen = 0;
+      }
+      cur.push({ orig: item, q: trimmed });
+      curLen += trimmed.length + (cur.length > 1 ? 1 : 0);
+    }
+    if (cur.length > 0) chunks.push(cur);
+
+    let nextIdx = 0;
+    const workerCount = Math.min(3, chunks.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (nextIdx < chunks.length) {
+        if (signal?.aborted) throw new Error('aborted');
+        const chunk = chunks[nextIdx++];
+        if (chunk.length === 1) {
+          const translated = await fetchMyMemoryTranslateText(chunk[0].q, targetLang, signal);
+          setPageTranslateCache(`${targetLang}\0${chunk[0].orig}`, translated);
+          continue;
+        }
+        const joined = chunk.map((c) => c.q).join('\n');
+        const translatedBlock = await fetchMyMemoryTranslateText(joined, targetLang, signal);
+        const lines = translatedBlock.split('\n');
+        if (lines.length === chunk.length) {
+          for (let i = 0; i < chunk.length; i++) {
+            setPageTranslateCache(`${targetLang}\0${chunk[i].orig}`, lines[i]);
+          }
+        } else {
+          for (const entry of chunk) {
+            if (signal?.aborted) throw new Error('aborted');
+            const single = await fetchMyMemoryTranslateText(entry.q, targetLang, signal);
+            setPageTranslateCache(`${targetLang}\0${entry.orig}`, single);
+          }
+        }
+      }
+    });
+    await Promise.all(workers);
   }
 
   async function translateTextsInBatches(uniqueTexts, targetLang, signal) {
@@ -7128,24 +7304,35 @@
 
     for (const batch of batches) {
       if (signal?.aborted) throw new Error('aborted');
-      if (batch.length === 1) {
-        const translated = await fetchGoogleTranslateText(batch[0], targetLang, signal);
-        setPageTranslateCache(`${targetLang}\0${batch[0]}`, translated);
+      const useFallbackDirect = Date.now() < googleTranslateCooldownUntil;
+      if (useFallbackDirect) {
+        await translateBatchViaMyMemory(batch, targetLang, signal);
         continue;
       }
-      const joined = batch.join('\n');
-      const translatedBlock = await fetchGoogleTranslateText(joined, targetLang, signal);
-      const lines = translatedBlock.split('\n');
-      if (lines.length === batch.length) {
-        for (let i = 0; i < batch.length; i++) {
-          setPageTranslateCache(`${targetLang}\0${batch[i]}`, lines[i]);
+      try {
+        if (batch.length === 1) {
+          const translated = await fetchGoogleTranslateText(batch[0], targetLang, signal);
+          setPageTranslateCache(`${targetLang}\0${batch[0]}`, translated);
+          continue;
         }
-      } else {
-        for (const item of batch) {
-          if (signal?.aborted) throw new Error('aborted');
-          const single = await fetchGoogleTranslateText(item, targetLang, signal);
-          setPageTranslateCache(`${targetLang}\0${item}`, single);
+        const joined = batch.join('\n');
+        const translatedBlock = await fetchGoogleTranslateText(joined, targetLang, signal);
+        const lines = translatedBlock.split('\n');
+        if (lines.length === batch.length) {
+          for (let i = 0; i < batch.length; i++) {
+            setPageTranslateCache(`${targetLang}\0${batch[i]}`, lines[i]);
+          }
+        } else {
+          for (const item of batch) {
+            if (signal?.aborted) throw new Error('aborted');
+            const single = await fetchGoogleTranslateText(item, targetLang, signal);
+            setPageTranslateCache(`${targetLang}\0${item}`, single);
+          }
         }
+      } catch (err) {
+        if (signal?.aborted || err?.message === 'aborted') throw err;
+        // Fall back to MyMemory when Google Translate rate-limits (HTTP 429) or fails.
+        await translateBatchViaMyMemory(batch, targetLang, signal);
       }
     }
   }
@@ -7196,13 +7383,6 @@
     const lang = getLang();
     const s = getPageTranslateStrings(lang);
     const status = pageTranslateState.status;
-    btn.classList.toggle('is-loading', status === 'loading');
-    btn.classList.toggle('is-translated', status === 'translated');
-    btn.classList.toggle('is-error', status === 'error');
-    btn.disabled = status === 'loading';
-    btn.setAttribute('aria-busy', status === 'loading' ? 'true' : 'false');
-    btn.setAttribute('aria-pressed', status === 'translated' ? 'true' : 'false');
-
     const label =
       status === 'loading'
         ? s.loading
@@ -7211,7 +7391,18 @@
         : status === 'error'
         ? pageTranslateState.errorMsg || s.error
         : s.translate;
-    btn.title = status === 'translated' ? s.tipOriginal : s.tipTranslate;
+    const title = status === 'translated' ? s.tipOriginal : s.tipTranslate;
+    const renderKey = `${status}|${lang}|${label}|${title}`;
+    if (btn.getAttribute('data-ag-cs-pt-key') === renderKey) return;
+    btn.setAttribute('data-ag-cs-pt-key', renderKey);
+
+    btn.classList.toggle('is-loading', status === 'loading');
+    btn.classList.toggle('is-translated', status === 'translated');
+    btn.classList.toggle('is-error', status === 'error');
+    btn.disabled = status === 'loading';
+    btn.setAttribute('aria-busy', status === 'loading' ? 'true' : 'false');
+    btn.setAttribute('aria-pressed', status === 'translated' ? 'true' : 'false');
+    btn.title = title;
 
     const iconSvg =
       status === 'loading'
@@ -7664,10 +7855,10 @@
       send(JSON.stringify({ action: 'fileLinkAction', mode, uri: info.uri, requestId }));
     };
     menu.appendChild(makeItem(openLabel,
-      '<path d="M14 2h-8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6z"/><path d="M14 2v4h4"/>',
+      '<path d="M9.5 2.25H4.25A1.25 1.25 0 0 0 3 3.5v9a1.25 1.25 0 0 0 1.25 1.25h7.5A1.25 1.25 0 0 0 13 12.5V5.75L9.5 2.25z"/><path d="M9.5 2.25v3.5H13"/>',
       () => requestFileAction('open')));
     menu.appendChild(makeItem(revealLabel,
-      '<path d="M3 6h5l2 2h7a2 2 0 0 1 2 2v7H3z"/><path d="m10 13 2-2 2 2"/>',
+      '<path d="M2.25 4.25A1.25 1.25 0 0 1 3.5 3h2.8a1.25 1.25 0 0 1 .95.44l.9 1.06a1.25 1.25 0 0 0 .95.44h3.4a1.25 1.25 0 0 1 1.25 1.25v5.56A1.25 1.25 0 0 1 12.5 13H3.5a1.25 1.25 0 0 1-1.25-1.25V4.25z"/>',
       () => requestFileAction('reveal')));
 
     menu.appendChild(
@@ -7717,7 +7908,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, #' +
+        '.ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-studio-css, #ag-claude-style-css'
       )
@@ -7809,7 +8000,9 @@
         stepCrab();
       }
     }
-    queueSmoothCaret(false);
+    if (anySmoothCaretVisible || (ev?.target?.closest && ev.target.closest('[data-testid="agent-input-box"]'))) {
+      queueSmoothCaret(false);
+    }
   }
 
   function onDocMouseDown(ev) {
@@ -7957,10 +8150,46 @@
     }
   }
 
+  function getFocusedComposerEditor() {
+    const activeEl = document.activeElement;
+    if (!activeEl || !activeEl.closest) return null;
+    const ed = activeEl.closest('[data-testid="agent-input-box"] [contenteditable="true"]');
+    return ed || null;
+  }
+
   function onDocCaretEvent(ev) {
     const type = ev?.type || '';
     const isTyping = type === 'input' || type === 'keyup' || type === 'compositionupdate' || type === 'compositionend';
     const immediate = type === 'focusin' || type === 'mouseup' || type === 'transitionend';
+    const activeEd = getFocusedComposerEditor();
+
+    if (type === 'scroll') {
+      if (!activeEd) {
+        if (anySmoothCaretVisible) queueSmoothCaret(false, false);
+        return;
+      }
+      const target = ev?.target;
+      const affectsEditor =
+        target === document ||
+        target === document.documentElement ||
+        target === document.body ||
+        target === activeEd ||
+        (target && typeof target.contains === 'function' && target.contains(activeEd)) ||
+        (typeof activeEd.contains === 'function' && activeEd.contains(target));
+      if (!affectsEditor) return;
+      queueSmoothCaret(false, false);
+      return;
+    }
+
+    if (type === 'selectionchange' || type === 'keyup' || type === 'mouseup') {
+      if (!activeEd && !anySmoothCaretVisible) return;
+    }
+
+    if (type === 'focusin') {
+      const targetInInput = Boolean(ev?.target?.closest && ev.target.closest('[data-testid="agent-input-box"]'));
+      if (!activeEd && !targetInInput && !anySmoothCaretVisible) return;
+    }
+
     queueSmoothCaret(isTyping, immediate);
     if (type === 'input') {
       if (ev?.target?.closest && ev.target.closest('[data-testid="agent-input-box"]')) {
@@ -8016,9 +8245,20 @@
 
   let charDataThrottleTimer = null;
   const observer = new MutationObserver((mutations) => {
-    if (mutations.length === 0 || mutations.every(isIgnorableMutation)) return;
-    const onlyCharData = mutations.every((m) => isIgnorableMutation(m) || m.type === 'characterData');
-    if (onlyCharData) {
+    if (mutations.length === 0) return;
+    let hasRelevant = false;
+    let hasNonCharData = false;
+    for (let i = 0; i < mutations.length; i += 1) {
+      const m = mutations[i];
+      if (isIgnorableMutation(m)) continue;
+      hasRelevant = true;
+      if (m.type !== 'characterData') {
+        hasNonCharData = true;
+        break;
+      }
+    }
+    if (!hasRelevant) return;
+    if (!hasNonCharData) {
       if (!charDataThrottleTimer) {
         charDataThrottleTimer = setTimeout(() => {
           charDataThrottleTimer = null;
@@ -8147,6 +8387,255 @@
     }
   }
 
+  // ── In-Chat Local Script Output Card (0-Token, Never Triggers AI Turn) ──
+  let scriptChatCardEl = null;
+  let scriptChatResizeHandler = null;
+  let scriptChatKeyHandler = null;
+
+  function closeScriptOutputCard() {
+    if (scriptChatResizeHandler) {
+      window.removeEventListener('resize', scriptChatResizeHandler);
+      scriptChatResizeHandler = null;
+    }
+    if (scriptChatKeyHandler) {
+      document.removeEventListener('keydown', scriptChatKeyHandler, true);
+      scriptChatKeyHandler = null;
+    }
+    if (scriptChatCardEl) {
+      try {
+        scriptChatCardEl.remove();
+      } catch {}
+      scriptChatCardEl = null;
+    }
+  }
+
+  function positionScriptOutputCard() {
+    if (!scriptChatCardEl || !scriptChatCardEl.isConnected) return;
+    const vw = window.innerWidth || 1024;
+    const vh = window.innerHeight || 768;
+    const ib = document.querySelector('[data-testid="agent-input-box"]');
+    const conv = document.querySelector('[data-testid="conversation-view"]');
+    const ibRect = ib && typeof ib.getBoundingClientRect === 'function' ? ib.getBoundingClientRect() : null;
+    const convRect = conv && typeof conv.getBoundingClientRect === 'function' ? conv.getBoundingClientRect() : null;
+
+    let left;
+    let width;
+    let bottom;
+    let maxHeight;
+
+    if (ibRect && ibRect.width > 220 && ibRect.top > 140) {
+      width = Math.min(Math.max(ibRect.width, 420), vw - 32);
+      left = Math.max(16, Math.min(vw - width - 16, ibRect.left + (ibRect.width - width) / 2));
+      bottom = Math.max(16, vh - ibRect.top + 12);
+      maxHeight = Math.max(180, Math.min(Math.round(vh * 0.56), Math.round(ibRect.top - 84)));
+    } else if (convRect && convRect.width > 260) {
+      width = Math.min(760, convRect.width - 32);
+      left = Math.max(16, Math.min(vw - width - 16, convRect.left + (convRect.width - width) / 2));
+      bottom = 24;
+      maxHeight = Math.max(200, Math.round(vh * 0.6));
+    } else {
+      width = Math.min(740, vw - 32);
+      left = Math.max(16, Math.round((vw - width) / 2));
+      bottom = 24;
+      maxHeight = Math.max(200, Math.round(vh * 0.6));
+    }
+
+    scriptChatCardEl.style.left = Math.round(left) + 'px';
+    scriptChatCardEl.style.width = Math.round(width) + 'px';
+    scriptChatCardEl.style.bottom = Math.round(bottom) + 'px';
+    scriptChatCardEl.style.maxHeight = Math.round(maxHeight) + 'px';
+  }
+
+  function appendInlineRichText(parent, text) {
+    const tokenRe = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+    let last = 0;
+    let m;
+    while ((m = tokenRe.exec(text)) !== null) {
+      if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const tok = m[0];
+      if (tok.startsWith('**') && tok.endsWith('**')) {
+        const strong = document.createElement('strong');
+        strong.textContent = tok.slice(2, -2);
+        parent.appendChild(strong);
+      } else if (tok.startsWith('`') && tok.endsWith('`')) {
+        const code = document.createElement('code');
+        code.className = 'ag-cs-script-md-code';
+        code.textContent = tok.slice(1, -1);
+        parent.appendChild(code);
+      }
+      last = m.index + tok.length;
+    }
+    if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  function renderScriptOutputBody(container, payload) {
+    const combined = String(payload?.combined || '').trim();
+    const stderrIdx = combined.indexOf('[stderr]\n');
+    const mainText = stderrIdx >= 0 ? combined.slice(0, stderrIdx).trim() : combined;
+    const stderrText = stderrIdx >= 0 ? combined.slice(stderrIdx + '[stderr]\n'.length).trim() : '';
+
+    if (mainText) {
+      const lines = mainText.split(/\r?\n/);
+      let curList = null;
+      const flushList = () => {
+        if (curList) {
+          container.appendChild(curList);
+          curList = null;
+        }
+      };
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        if (!line.trim()) {
+          flushList();
+          continue;
+        }
+        const hMatch = line.match(/^#{1,4}\s+(.+)$/);
+        if (hMatch) {
+          flushList();
+          const h = document.createElement('div');
+          h.className = 'ag-cs-script-md-h';
+          appendInlineRichText(h, hMatch[1].trim());
+          container.appendChild(h);
+          continue;
+        }
+        const liMatch = line.match(/^\s*[-*•]\s+(.+)$/);
+        if (liMatch) {
+          if (!curList) {
+            curList = document.createElement('ul');
+            curList.className = 'ag-cs-script-md-list';
+          }
+          const li = document.createElement('li');
+          appendInlineRichText(li, liMatch[1]);
+          curList.appendChild(li);
+          continue;
+        }
+        if (curList && /^\s{2,}/.test(rawLine) && curList.lastElementChild) {
+          curList.lastElementChild.appendChild(document.createElement('br'));
+          appendInlineRichText(curList.lastElementChild, line.trim());
+          continue;
+        }
+        flushList();
+        const p = document.createElement('p');
+        p.className = 'ag-cs-script-md-p';
+        appendInlineRichText(p, line);
+        container.appendChild(p);
+      }
+      flushList();
+    }
+
+    if (stderrText) {
+      const pre = document.createElement('pre');
+      pre.className = 'ag-cs-script-md-stderr';
+      pre.textContent = stderrText;
+      container.appendChild(pre);
+    }
+
+    if (!mainText && !stderrText) {
+      const empty = document.createElement('p');
+      empty.className = 'ag-cs-script-md-p';
+      empty.textContent = '(empty output)';
+      container.appendChild(empty);
+    }
+  }
+
+  function showScriptOutputInChat(payload) {
+    if (destroyed || !document.body) return { ok: false, status: 'not_ready' };
+    closeScriptOutputCard();
+
+    const lang = getLang();
+    const isEn = lang === 'en';
+    const isJa = lang === 'ja';
+    const isTrad = lang === 'zh-TW' || lang === 'yue';
+    const copyLabel = isEn ? 'Copy' : isJa ? 'コピー' : isTrad ? '複製' : '复制';
+    const copiedLabel = isEn ? 'Copied' : isJa ? 'コピー済み' : isTrad ? '已複製' : '已复制';
+    const collapseLabel = isEn ? 'Collapse' : isJa ? '折りたたむ' : '收起';
+    const expandLabel = isEn ? 'Expand' : isJa ? '展開' : isTrad ? '展開' : '展开';
+
+    const ok = Boolean(payload?.ok);
+    const durMs = Number(payload?.durationMs || 0);
+    const exitCode = payload?.exitCode ?? (ok ? 0 : 1);
+    const statusText = ok
+      ? (isEn ? `OK · ${(durMs / 1000).toFixed(1)}s` : isJa ? `成功 · ${(durMs / 1000).toFixed(1)}s` : `成功 · ${(durMs / 1000).toFixed(1)}s`)
+      : (isEn ? `Exit ${exitCode}` : isJa ? `終了 ${exitCode}` : isTrad ? `失敗 (${exitCode})` : `失败 (${exitCode})`);
+
+    const card = document.createElement('div');
+    card.className = 'ag-cs-script-chat-card';
+    card.setAttribute('data-ag-no-i18n', '1');
+    card.setAttribute('role', 'region');
+    card.setAttribute('aria-label', String(payload?.name || 'Script Output'));
+
+    const head = document.createElement('div');
+    head.className = 'ag-cs-script-chat-head';
+
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'ag-cs-script-chat-title-wrap';
+    const dot = document.createElement('span');
+    dot.className = 'ag-cs-script-chat-dot' + (ok ? '' : ' is-err');
+    const nameEl = document.createElement('span');
+    nameEl.className = 'ag-cs-script-chat-name';
+    nameEl.textContent = String(payload?.name || 'Script Output');
+    const meta = document.createElement('span');
+    meta.className = 'ag-cs-script-chat-meta' + (ok ? '' : ' is-err');
+    meta.textContent = statusText;
+    titleWrap.append(dot, nameEl, meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'ag-cs-script-chat-actions';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'ag-cs-script-chat-btn';
+    copyBtn.textContent = copyLabel;
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(String(payload?.combined || ''));
+        copyBtn.textContent = copiedLabel;
+        setTimeout(() => {
+          if (copyBtn.isConnected) copyBtn.textContent = copyLabel;
+        }, 1400);
+      } catch {}
+    });
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'ag-cs-script-chat-btn';
+    toggleBtn.textContent = collapseLabel;
+    toggleBtn.addEventListener('click', () => {
+      const nextCollapsed = !card.classList.contains('is-collapsed');
+      card.classList.toggle('is-collapsed', nextCollapsed);
+      toggleBtn.textContent = nextCollapsed ? expandLabel : collapseLabel;
+      positionScriptOutputCard();
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'ag-cs-script-chat-btn is-close';
+    closeBtn.textContent = '×';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', closeScriptOutputCard);
+
+    actions.append(copyBtn, toggleBtn, closeBtn);
+    head.append(titleWrap, actions);
+
+    const body = document.createElement('div');
+    body.className = 'ag-cs-script-chat-body';
+    renderScriptOutputBody(body, payload);
+
+    card.append(head, body);
+    document.body.appendChild(card);
+    scriptChatCardEl = card;
+    positionScriptOutputCard();
+
+    scriptChatResizeHandler = () => positionScriptOutputCard();
+    window.addEventListener('resize', scriptChatResizeHandler);
+    scriptChatKeyHandler = (ev) => {
+      if (ev.key === 'Escape') closeScriptOutputCard();
+    };
+    document.addEventListener('keydown', scriptChatKeyHandler, true);
+
+    return { ok: true };
+  }
+
   window.__agClaudeStudio = {
     version: VERSION,
     codeHash: CODE_HASH,
@@ -8218,6 +8707,12 @@
     openRightSidecarPane(target, opts) {
       return openRightSidecarPane(target, opts);
     },
+    showScriptOutputInChat(payload) {
+      return showScriptOutputInChat(payload);
+    },
+    closeScriptOutputCard() {
+      closeScriptOutputCard();
+    },
     getState() {
       return {
         cfg: { ...cfg },
@@ -8241,6 +8736,7 @@
         closeEffortPopover,
         closeFileLinkMenu,
         clearFileLinkToast,
+        closeScriptOutputCard,
         teardownSmoothCarets,
         clearTurnBadges,
         unmountRipple,
@@ -8288,7 +8784,7 @@
       document.getElementById(PERIODIC_DYNAMIC_STYLE_ID)?.remove();
       document
         .querySelectorAll(
-          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, #' +
+          '.ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
             SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());
@@ -8301,6 +8797,7 @@
           'data-ag-cs-home',
           'data-ag-cs-composer',
           'data-ag-cs-logo-ink',
+          'data-ag-cs-gemini-loader',
           'data-ag-cs-sidebar',
           'data-ag-cs-sidebar-compact',
           'data-ag-cs-hud-compact',

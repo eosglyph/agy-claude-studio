@@ -7,6 +7,7 @@
   "composerRestyle": true,
   "mascot": "crab",
   "logoInk": "accent",
+  "geminiLoader": true,
   "pinRightPane": "studio",
   "usageStatsEnabled": true,
   "inlineStats": true,

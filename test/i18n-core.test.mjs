@@ -1,10 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const i18nCore = require('../i18n-core.js');
 const i18nLocales = require('../i18n-locales.js');
+const i18nSync = require('../i18n-sync.js');
 const sidecarCore = require('../sidecar-core.js');
 
 function createMiniDom() {
@@ -578,5 +583,238 @@ test('Antigravity Settings sentence-case notifications, sounds, overages, and dy
   } finally {
     globalThis.NodeFilter = prevNF;
     globalThis.MutationObserver = prevMO;
+  }
+});
+
+test('multi-word case-insensitive fallback fixes v2.35.2 sentence-case settings, quota limits, and mid-turn model switch tooltip', () => {
+  const { doc, html, body, makeEl, NodeFilter, MutationObserver } = createMiniDom();
+  const prevNF = globalThis.NodeFilter;
+  const prevMO = globalThis.MutationObserver;
+  globalThis.NodeFilter = NodeFilter;
+  globalThis.MutationObserver = MutationObserver;
+  try {
+    const items = [
+      'Prevent sleep',
+      'Keep in menu bar',
+      'Notification settings',
+      'Conversation width',
+      'Screen reader mode',
+      'Open links in',
+      'Download location',
+      'Browsing history',
+      'Browser actuation rules',
+      'You have hit your weekly limit, it refreshes in 5 days, 16 hours. If on a supported paid plan, you can use AI credits in the interim or upgrade to a higher tier.',
+      'You have hit your weekly limit, the 5-hour limit does not currently apply. Your weekly limit will fully refresh in 5 days, 16 hours.',
+      '2/4 steps',
+      '1/1 steps · 2 skipped',
+    ].map((t) => makeEl('div', { text: t }));
+    const modelBtn = makeEl('button', {
+      attrs: {
+        'aria-label': 'Select model, current: Gemini 4 Neon High. Applies to /btw and messages sent after this turn',
+      },
+      text: 'Gemini 4 Neon High',
+    });
+    const planBadge = makeEl('button', {
+      attrs: { 'aria-label': 'Plan, 1 of 3 steps done' },
+      text: '2/4 steps',
+    });
+    body.append(...items, modelBtn, planBadge);
+
+    const translator = i18nCore.createDomTranslator(i18nLocales.resolveLocaleBundle);
+    translator.setLanguage('zh-CN', doc);
+    assert.equal(items[0].textContent, '防止休眠');
+    assert.equal(items[1].textContent, '常驻托盘');
+    assert.equal(items[2].textContent, '通知设置');
+    assert.equal(items[3].textContent, '对话宽度');
+    assert.equal(items[4].textContent, '屏幕阅读器模式');
+    assert.equal(items[5].textContent, '链接打开方式');
+    assert.equal(items[6].textContent, '下载位置');
+    assert.equal(items[7].textContent, '浏览历史');
+    assert.equal(items[8].textContent, '浏览器操作规则');
+    assert.equal(
+      items[9].textContent,
+      '本周额度已用尽，将于 5天16小时后重置。如使用受支持的付费套餐，期间可使用 AI 额度或升级至更高套餐。'
+    );
+    assert.equal(
+      items[10].textContent,
+      '本周额度已用尽，当前不适用 5 小时额度限制。本周额度将于 5天16小时后完全重置。'
+    );
+    assert.equal(items[11].textContent, '2/4 步');
+    assert.equal(items[12].textContent, '1/1 步 · 跳过 2');
+    assert.equal(
+      modelBtn.getAttribute('aria-label'),
+      '选择模型，当前：Gemini 4 Neon High（将应用于 /btw 及本轮之后发送的消息）'
+    );
+    assert.equal(planBadge.getAttribute('aria-label'), '计划：已完成 1 / 3 步');
+
+    translator.setLanguage('ja', doc);
+    assert.equal(items[0].textContent, 'スリープを防止');
+    assert.equal(items[6].textContent, '保存先フォルダ');
+    assert.equal(
+      items[10].textContent,
+      '週間上限に達しているため、現在5時間上限は適用されません。週間上限は 5日16時間後に完全にリセットされます。'
+    );
+
+    translator.setLanguage('en', doc);
+    assert.equal(html.getAttribute('lang'), 'en');
+    assert.equal(items[6].textContent, 'Download location');
+    assert.equal(items[9].textContent, 'You have hit your weekly limit, it refreshes in 5 days, 16 hours. If on a supported paid plan, you can use AI credits in the interim or upgrade to a higher tier.');
+    translator.destroy();
+  } finally {
+    globalThis.NodeFilter = prevNF;
+    globalThis.MutationObserver = prevMO;
+  }
+});
+
+test('i18n-sync validates, syncs, checksums, falls back to bundled offline packs, and hot-reloads in i18n-core', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-i18n-sync-'));
+  try {
+    // 1. Only zh-CN & zh-TW are bundled offline; yue & ja require on-demand download!
+    for (const lang of i18nSync.BUNDLED_PACK_LANGS) {
+      const bundled = i18nSync.readLocalePack(lang, dataDir);
+      assert.ok(bundled, `bundled pack exists for ${lang}`);
+      assert.equal(bundled.source, 'bundled');
+      assert.ok(bundled.dictCount >= 2000);
+      assert.ok(bundled.ruleCount >= 100);
+    }
+    for (const lang of i18nSync.ON_DEMAND_PACK_LANGS) {
+      assert.equal(i18nSync.readLocalePack(lang, dataDir), null, `${lang} must not load before download`);
+      const st = i18nSync.getLocalePackStatus(lang, dataDir);
+      assert.equal(st.bundled, false);
+      assert.equal(st.installed, false);
+      assert.equal(st.source, 'not_installed');
+      assert.ok(st.dictCount >= 2000, `${lang} manifest advertises dictCount for download UI`);
+    }
+    const catalogStatus = i18nSync.listLocalePacksStatus('zh-CN', dataDir);
+    assert.deepEqual(
+      catalogStatus.map((p) => [p.lang, p.bundled, p.installed]),
+      [
+        ['zh-CN', true, true],
+        ['zh-TW', true, true],
+        ['yue', false, false],
+        ['ja', false, false],
+      ]
+    );
+
+    // 2. Schema validation rejects invalid regexes & malformed payloads
+    assert.equal(i18nSync.validateLocalePack(null, 'zh-CN'), null);
+    assert.equal(i18nSync.validateLocalePack({ lang: 'zh-CN', dict: {}, rules: [], timeRules: [], units: {} }, 'zh-CN'), null);
+    assert.equal(
+      i18nSync.validateLocalePack(
+        {
+          lang: 'zh-CN',
+          dict: { Hello: '你好' },
+          rules: [['([unclosed', '', '$1']],
+          timeRules: [],
+          units: { s: '秒' },
+        },
+        'zh-CN'
+      ),
+      null
+    );
+
+    // 3. Cloud sync with SHA-256 verification saves override & takes priority over bundled baseline
+    const cloudPack = {
+      schemaVersion: 1,
+      lang: 'zh-CN',
+      agyVersion: '2.36.0',
+      updatedAt: '2026-12-01',
+      cjkLatinSpacing: true,
+      units: { s: '秒', m: '分钟', h: '小时', d: '天', day: '天', hour: '小时', joiner: '' },
+      dict: {
+        'Prevent sleep': '防止电脑休眠（云端新版）',
+        'Future Setting': '云端新词条',
+      },
+      rules: [['^Cloud count: (\\d+)$', '', '云端计数：$1']],
+      timeRules: [['^(\\d+)s$', '', '$1秒']],
+      sentences: [],
+    };
+    const packText = JSON.stringify(cloudPack);
+    const packSha = crypto.createHash('sha256').update(packText, 'utf8').digest('hex');
+    const mockManifest = {
+      schemaVersion: 1,
+      agyVersion: '2.36.0',
+      updatedAt: '2026-12-01',
+      locales: { 'zh-CN': { file: 'zh-CN.json', sha256: packSha } },
+    };
+    const mockFetch = async (url) => {
+      if (url.endsWith('/manifest.json')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(mockManifest) };
+      }
+      if (url.endsWith('/zh-CN.json')) {
+        return { ok: true, status: 200, text: async () => packText };
+      }
+      return { ok: false, status: 404, text: async () => 'not found' };
+    };
+
+    const syncRes = await i18nSync.syncLocalePack({
+      lang: 'zh-CN',
+      pluginDataDir: dataDir,
+      fetchFn: mockFetch,
+    });
+    assert.equal(syncRes.ok, true);
+    assert.equal(syncRes.source, 'cloud');
+    assert.equal(syncRes.agyVersion, '2.36.0');
+    assert.equal(syncRes.dictCount, 2);
+
+    const statusCloud = i18nSync.getLocalePackStatus('zh-CN', dataDir);
+    assert.equal(statusCloud.source, 'cloud');
+    assert.equal(statusCloud.hasCloudOverride, true);
+    assert.deepEqual(statusCloud.cachedLangs, ['zh-CN']);
+
+    // Checksum mismatch is rejected cleanly
+    const badFetch = async (url) => {
+      if (url.endsWith('/manifest.json')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(mockManifest) };
+      }
+      return { ok: true, status: 200, text: async () => packText.replace('云端新词条', '被篡改') };
+    };
+    await assert.rejects(
+      i18nSync.syncLocalePack({ lang: 'zh-CN', pluginDataDir: dataDir, fetchFn: badFetch }),
+      /Checksum mismatch/
+    );
+
+    // 4. i18n-core forceReload hot-swaps active DOM from built-in -> cloud pack -> built-in cleanly
+    const { doc, body, makeEl, NodeFilter, MutationObserver } = createMiniDom();
+    const prevNF = globalThis.NodeFilter;
+    const prevMO = globalThis.MutationObserver;
+    globalThis.NodeFilter = NodeFilter;
+    globalThis.MutationObserver = MutationObserver;
+    try {
+      const el1 = makeEl('div', { text: 'Prevent sleep' });
+      const el2 = makeEl('div', { text: 'Future Setting' });
+      const el3 = makeEl('div', { text: 'Cloud count: 42' });
+      body.append(el1, el2, el3);
+
+      let overridePack = null;
+      const translator = i18nCore.createDomTranslator((lang) => {
+        if (overridePack && overridePack.lang === lang) return overridePack;
+        return i18nLocales.resolveLocaleBundle(lang);
+      });
+      translator.setLanguage('zh-CN', doc);
+      assert.equal(el1.textContent, '防止休眠');
+      assert.equal(el2.textContent, 'Future Setting');
+
+      overridePack = i18nSync.readCloudLocalePackOverride('zh-CN', dataDir).pack;
+      translator.setLanguage('zh-CN', doc, true);
+      assert.equal(el1.textContent, '防止电脑休眠（云端新版）');
+      assert.equal(el2.textContent, '云端新词条');
+      assert.equal(el3.textContent, '云端计数：42');
+
+      // Reset reverts cleanly to bundled baseline
+      const resetRes = i18nSync.resetLocalePack({ lang: 'zh-CN', pluginDataDir: dataDir });
+      assert.deepEqual(resetRes.removed, ['zh-CN']);
+      assert.equal(i18nSync.getLocalePackStatus('zh-CN', dataDir).source, 'bundled');
+      overridePack = null;
+      translator.setLanguage('zh-CN', doc, true);
+      assert.equal(el1.textContent, '防止休眠');
+      assert.equal(el2.textContent, 'Future Setting');
+      translator.destroy();
+    } finally {
+      globalThis.NodeFilter = prevNF;
+      globalThis.MutationObserver = prevMO;
+    }
+  } finally {
+    fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });

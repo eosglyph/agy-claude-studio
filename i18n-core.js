@@ -211,8 +211,11 @@
     let activeDoc = null;
     let activeLang = 'en';
     let bundle = null;
+    let ciDict = null;
     let compiledRules = [];
     let compiledTimeRules = [];
+    let allZone2Rules = [];
+    let regexCache = new Map();
     let sentenceMap = new Map();
     let fragmentSet = new Set();
     let origHtmlLang = null;
@@ -221,33 +224,66 @@
 
     function clearBundleState() {
       bundle = null;
+      ciDict = null;
       compiledRules = [];
       compiledTimeRules = [];
+      allZone2Rules = [];
+      regexCache.clear();
       sentenceMap = new Map();
       fragmentSet = new Set();
     }
 
     function compileBundle(nextBundle) {
       bundle = nextBundle;
+      regexCache.clear();
+      ciDict = Object.create(null);
+      if (nextBundle && nextBundle.dict) {
+        for (const key in nextBundle.dict) {
+          if (!hasOwn.call(nextBundle.dict, key) || key.indexOf(' ') < 0) continue;
+          const lower = key.toLowerCase();
+          if (!hasOwn.call(ciDict, lower)) {
+            ciDict[lower] = nextBundle.dict[key];
+          } else if (ciDict[lower] !== nextBundle.dict[key]) {
+            ciDict[lower] = null;
+          }
+        }
+      }
       const baseRules = nextBundle.rules || [];
       const extra = resolveExtraRules ? resolveExtraRules(nextBundle.lang) || [] : [];
-      compiledRules = baseRules.concat(extra).map(([src, flags, to]) => ({
-        re: new RegExp(src, flags),
-        to,
-      }));
-      compiledTimeRules = (nextBundle.timeRules || []).map(([src, flags, to]) => ({
-        re: new RegExp(src, flags),
-        to,
-      }));
+      compiledRules = [];
+      for (const item of baseRules.concat(extra)) {
+        if (!Array.isArray(item) || item.length < 3) continue;
+        try {
+          compiledRules.push({ re: new RegExp(item[0], item[1]), to: item[2] });
+        } catch {}
+      }
+      compiledTimeRules = [];
+      for (const item of nextBundle.timeRules || []) {
+        if (!Array.isArray(item) || item.length < 3) continue;
+        try {
+          compiledTimeRules.push({ re: new RegExp(item[0], item[1]), to: item[2] });
+        } catch {}
+      }
+      allZone2Rules = compiledRules.concat(compiledTimeRules);
       sentenceMap = new Map((nextBundle.sentences || []).map(([text, parts]) => [text, parts]));
       fragmentSet = new Set((nextBundle.sentences || []).flatMap(([, parts]) => Object.keys(parts)));
     }
 
+    function lookupRaw(text) {
+      if (!bundle || !bundle.dict) return null;
+      if (hasOwn.call(bundle.dict, text)) return bundle.dict[text];
+      if (ciDict && text.indexOf(' ') >= 0) {
+        const lower = text.toLowerCase();
+        if (hasOwn.call(ciDict, lower) && ciDict[lower] != null) return ciDict[lower];
+      }
+      return null;
+    }
+
     function lookup(text, el) {
-      if (!bundle || !bundle.dict || !hasOwn.call(bundle.dict, text)) return null;
-      const v = bundle.dict[text];
+      const v = lookupRaw(text);
+      if (v == null) return null;
       if (typeof v === 'string') return v;
-      if (!v || typeof v !== 'object') return null;
+      if (typeof v !== 'object') return null;
       for (const sel in v) {
         if (sel !== '*' && closestSel(el, sel)) return v[sel];
       }
@@ -257,11 +293,15 @@
     function applyRule(rule, m, el) {
       let failed = false;
       let composed = false;
+      let contextDependent = false;
       const out = rule.to.replace(/\$([DT]?)(\d)/g, (_, kind, idx) => {
         const g = m[+idx] ?? '';
         if (kind === 'T') {
           composed = true;
-          const v = lookup(g, el) ?? lookup(g.charAt(0).toUpperCase() + g.slice(1), el);
+          const cap = g.charAt(0).toUpperCase() + g.slice(1);
+          const raw = lookupRaw(g) ?? lookupRaw(cap);
+          if (raw && typeof raw === 'object') contextDependent = true;
+          const v = lookup(g, el) ?? lookup(cap, el);
           if (v == null) failed = true;
           return v ?? g;
         }
@@ -270,11 +310,12 @@
         if (v == null) failed = true;
         return v ?? g;
       });
-      if (failed) return null;
-      if (composed && bundle?.cjkLatinSpacing !== false) {
-        return out.replace(CJK_LATIN, (_, a, b, c, d) => (a ? a + ' ' + b : c + ' ' + d));
-      }
-      return out;
+      if (failed) return { value: null, contextDependent };
+      const finalOut =
+        composed && bundle?.cjkLatinSpacing !== false
+          ? out.replace(CJK_LATIN, (_, a, b, c, d) => (a ? a + ' ' + b : c + ' ' + d))
+          : out;
+      return { value: finalOut, contextDependent };
     }
 
     function originalText(el) {
@@ -307,13 +348,30 @@
         const d = lookup(text, el);
         if (d != null) return d;
       }
-      const list = zone === 2 ? compiledRules.concat(compiledTimeRules) : compiledTimeRules;
-      for (const rule of list) {
+      const cacheKey = (zone === 2 ? '2:' : '1:') + text;
+      if (regexCache.has(cacheKey)) {
+        return regexCache.get(cacheKey);
+      }
+      const list = zone === 2 ? allZone2Rules : compiledTimeRules;
+      let sawContextDep = false;
+      for (let i = 0; i < list.length; i += 1) {
+        const rule = list[i];
         const m = text.match(rule.re);
         if (m) {
           const applied = applyRule(rule, m, el);
-          if (applied != null) return applied;
+          if (applied.contextDependent) sawContextDep = true;
+          if (applied.value != null) {
+            if (!sawContextDep) {
+              if (regexCache.size >= 1024) regexCache.clear();
+              regexCache.set(cacheKey, applied.value);
+            }
+            return applied.value;
+          }
         }
+      }
+      if (!sawContextDep) {
+        if (regexCache.size >= 1024) regexCache.clear();
+        regexCache.set(cacheKey, null);
       }
       return null;
     }
@@ -543,7 +601,7 @@
       activeLang = 'en';
     }
 
-    function setLanguage(lang, doc) {
+    function setLanguage(lang, doc, forceReload = false) {
       const targetDoc = doc || activeDoc || (typeof document !== 'undefined' ? document : null);
       activeDoc = targetDoc;
       const norm = normalizeLanguage(lang);
@@ -552,7 +610,7 @@
         origHtmlLang = html.getAttribute('lang');
         htmlLangCaptured = true;
       }
-      if (norm === activeLang && (norm === 'en' || (bundle && observer))) {
+      if (!forceReload && norm === activeLang && (norm === 'en' || (bundle && observer))) {
         return norm;
       }
 
@@ -584,11 +642,31 @@
       const MO = typeof MutationObserver === 'function' ? MutationObserver : targetDoc.defaultView?.MutationObserver;
       if (typeof MO === 'function') {
         observer = new MO((records) => {
-          for (const r of records) {
-            if (r.type === 'characterData') doText(r.target);
-            else if (r.type === 'attributes') doAttrs(r.target, r.attributeName);
-            else if (r.addedNodes) {
-              for (const n of r.addedNodes) walk(n);
+          const added = new Set();
+          for (let i = 0; i < records.length; i += 1) {
+            const r = records[i];
+            if (r.type === 'characterData') {
+              if (r.target && r.target.isConnected !== false) doText(r.target);
+            } else if (r.type === 'attributes') {
+              if (r.target && r.target.isConnected !== false) doAttrs(r.target, r.attributeName);
+            } else if (r.addedNodes && r.addedNodes.length) {
+              for (let j = 0; j < r.addedNodes.length; j += 1) {
+                const n = r.addedNodes[j];
+                if (n && n.isConnected !== false) added.add(n);
+              }
+            }
+          }
+          if (added.size > 0) {
+            for (const n of added) {
+              // Skip if an ancestor is already queued in this batch.
+              let covered = false;
+              for (let p = n.parentElement; p; p = p.parentElement) {
+                if (added.has(p)) {
+                  covered = true;
+                  break;
+                }
+              }
+              if (!covered) walk(n);
             }
           }
           if (++sincePrune > 500) {

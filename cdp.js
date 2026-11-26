@@ -7,7 +7,7 @@ const { execFileSync, spawn } = require('child_process');
 
 const STYLE_ID = 'ag-claude-studio-css';
 const LEGACY_STYLE_ID = 'ag-claude-style-css';
-const PLUGIN_VERSION = '2.2.1';
+const PLUGIN_VERSION = '2.2.3';
 const SETTING_BINDING = '__agClaudeStudioSetting';
 const STARTUP_GRACE_SECONDS = 90;
 const IS_MAC = process.platform === 'darwin';
@@ -129,6 +129,7 @@ const DEFAULT_CONFIG = {
   orchestratorSwitch: true,
   pluginPageTranslate: true,
   fileLinkContextMenu: true,
+  geminiLoader: true,
   i18nIgnoreSelectors: [],
   autoRelaunchWithCdp: true,
   exitOnHostClose: false,
@@ -164,6 +165,7 @@ const CONFIG_VALIDATORS = {
   orchestratorSwitch: 'boolean',
   pluginPageTranslate: 'boolean',
   fileLinkContextMenu: 'boolean',
+  geminiLoader: 'boolean',
   autoRelaunchWithCdp: 'boolean',
   exitOnHostClose: 'boolean',
 };
@@ -343,6 +345,15 @@ function readPeriodicOverride(pluginDataDir = PLUGIN_DATA_DIR || STATE_DIR) {
   try {
     const periodicSync = require('./periodic-sync.js');
     return periodicSync.readPeriodicOverride(pluginDataDir);
+  } catch {
+    return null;
+  }
+}
+
+function readCloudLocalePackOverride(lang, pluginDataDir = PLUGIN_DATA_DIR || STATE_DIR) {
+  try {
+    const i18nSync = require('./i18n-sync.js');
+    return i18nSync.readCloudLocalePackOverride(lang, pluginDataDir);
   } catch {
     return null;
   }
@@ -786,9 +797,14 @@ function buildInjectExpression(customConfig) {
             (() => {
               const extraOptOut = resolveExtraI18nOptOutSelectors(config);
               const periodicOverride = readPeriodicOverride();
+              const cloudPack = readCloudLocalePackOverride(config.language);
               const out = { ...config, binding: SETTING_BINDING, codeHash };
               if (extraOptOut.length) out.i18nOptOutSelectors = extraOptOut;
               if (periodicOverride) out.periodicOverride = periodicOverride;
+              if (cloudPack && cloudPack.pack) {
+                out.i18nPackOverride = cloudPack.pack;
+                out.i18nPackHash = cloudPack.hash || '';
+              }
               return out;
             })()
           )};
@@ -835,9 +851,17 @@ function buildConfigScriptExpression(customConfig, expectedCodeHash) {
   const expectedHash = expectedCodeHash || '';
   const extraOptOut = resolveExtraI18nOptOutSelectors(config);
   const periodicOverride = readPeriodicOverride();
+  const cloudPack = readCloudLocalePackOverride(config.language);
   const payload = { ...config, binding: SETTING_BINDING, codeHash: expectedHash };
   if (extraOptOut.length) payload.i18nOptOutSelectors = extraOptOut;
   if (periodicOverride) payload.periodicOverride = periodicOverride;
+  if (cloudPack && cloudPack.pack) {
+    payload.i18nPackOverride = cloudPack.pack;
+    payload.i18nPackHash = cloudPack.hash || '';
+  } else {
+    payload.i18nPackOverride = null;
+    payload.i18nPackHash = '';
+  }
   return `(() => {
     const nextCfg = ${JSON.stringify(payload)};
     globalThis.__agCsOverrideConfig = nextCfg;
@@ -1792,19 +1816,240 @@ function prepareLocalFileAction({ mode, target, platform = process.platform, fsA
   return { ok: true, mode, bin: mac ? '/usr/bin/open' : 'xdg-open', args, options: { detached: true, stdio: 'ignore' } };
 }
 
+const WINDOWS_FILE_ACTION_MAIN_CS = [
+  'using System;',
+  'namespace AgyClaudeStudio {',
+  '  internal static class WindowsFileActionRunner {',
+  '    [STAThread]',
+  '    private static int Main() {',
+  '      string uri = Environment.GetEnvironmentVariable("AGY_FILE_URI");',
+  '      string mode = Environment.GetEnvironmentVariable("AGY_FILE_MODE");',
+  '      return WindowsFileAction.Run(uri, mode) ? 0 : 1;',
+  '    }',
+  '  }',
+  '}',
+].join('\n');
+
+let windowsFileActionBuildPromise = null;
+
+function findWindowsCscExe() {
+  const winDir = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows';
+  const candidates = [
+    path.win32.join(winDir, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe'),
+    path.win32.join(winDir, 'Microsoft.NET', 'Framework', 'v4.0.30319', 'csc.exe'),
+  ];
+  for (const cand of candidates) {
+    if (fs.existsSync(cand)) return cand;
+  }
+  return null;
+}
+
+function getWindowsFileActionCacheInfo(cacheDir = path.join(STATE_DIR, 'cache')) {
+  const helperSrcPath = path.join(__dirname, 'scripts', 'WindowsFileAction.cs');
+  if (!fs.existsSync(helperSrcPath)) return null;
+  const src = fs.readFileSync(helperSrcPath, 'utf8');
+  const hash = computeHash(src + '\n' + WINDOWS_FILE_ACTION_MAIN_CS);
+  return {
+    helperSrcPath,
+    cacheDir,
+    exePath: path.join(cacheDir, `agy-file-action-${hash}.exe`),
+  };
+}
+
+function ensureWindowsFileActionExeAsync(cacheDir = path.join(STATE_DIR, 'cache')) {
+  if (process.platform !== 'win32') return Promise.resolve(null);
+  const info = getWindowsFileActionCacheInfo(cacheDir);
+  if (!info) return Promise.resolve(null);
+  if (fs.existsSync(info.exePath)) return Promise.resolve(info.exePath);
+  if (windowsFileActionBuildPromise) return windowsFileActionBuildPromise;
+
+  const csc = findWindowsCscExe();
+  if (!csc) return Promise.resolve(null);
+
+  windowsFileActionBuildPromise = new Promise((resolve) => {
+    let stubPath = '';
+    let tmpExe = '';
+    try {
+      fs.mkdirSync(info.cacheDir, { recursive: true });
+      const suffix = `${process.pid}-${Date.now()}`;
+      stubPath = path.join(info.cacheDir, `.file-action-main-${suffix}.cs`);
+      tmpExe = path.join(info.cacheDir, `.file-action-${suffix}.exe`);
+      fs.writeFileSync(stubPath, WINDOWS_FILE_ACTION_MAIN_CS, 'utf8');
+      const child = spawn(
+        csc,
+        [
+          '/nologo',
+          '/utf8output',
+          '/codepage:65001',
+          '/target:winexe',
+          '/optimize+',
+          `/out:${tmpExe}`,
+          '/r:System.dll',
+          '/r:System.Core.dll',
+          info.helperSrcPath,
+          stubPath,
+        ],
+        { windowsHide: true, stdio: 'ignore' }
+      );
+      const cleanupTemp = () => {
+        try { if (stubPath && fs.existsSync(stubPath)) fs.unlinkSync(stubPath); } catch {}
+        try { if (tmpExe && fs.existsSync(tmpExe)) fs.unlinkSync(tmpExe); } catch {}
+      };
+      child.once('error', () => {
+        cleanupTemp();
+        resolve(null);
+      });
+      child.once('exit', (code) => {
+        try { if (stubPath && fs.existsSync(stubPath)) fs.unlinkSync(stubPath); } catch {}
+        if (code === 0 && fs.existsSync(tmpExe)) {
+          try {
+            if (!fs.existsSync(info.exePath)) {
+              fs.renameSync(tmpExe, info.exePath);
+            } else {
+              fs.unlinkSync(tmpExe);
+            }
+            // Remove older stale cached helpers cleanly.
+            for (const entry of fs.readdirSync(info.cacheDir)) {
+              if (/^agy-file-action-.*\.exe$/i.test(entry)) {
+                const full = path.join(info.cacheDir, entry);
+                if (full !== info.exePath) {
+                  try { fs.unlinkSync(full); } catch {}
+                }
+              }
+            }
+            resolve(fs.existsSync(info.exePath) ? info.exePath : null);
+            return;
+          } catch {}
+        }
+        cleanupTemp();
+        resolve(null);
+      });
+    } catch {
+      resolve(null);
+    }
+  }).finally(() => {
+    windowsFileActionBuildPromise = null;
+  });
+
+  return windowsFileActionBuildPromise;
+}
+
+function buildWindowsExplorerRevealCommand(rawInput, { fsApi = fs, env = process.env } = {}) {
+  const resolved = resolveLocalFileUri(rawInput, 'win32');
+  if (!resolved) return null;
+  // explorer.exe /select, splits arguments on literal commas; fall back to SHOpenFolderAndSelectItems for paths with ','.
+  if (resolved.includes(',') || /[:\x00-\x1f\x7f"<>|?*]/.test(resolved.slice(2))) return null;
+  const root = resolved.slice(0, 3);
+  if (!/^[a-zA-Z]:\\$/.test(root)) return null;
+  const parts = resolved.slice(3).split('\\').filter(Boolean);
+  if (parts.length === 0) return null;
+  let current = root.toUpperCase();
+  try {
+    if (!fsApi.lstatSync(current)) return null;
+    for (const part of parts) {
+      if (
+        part === '.' ||
+        part === '..' ||
+        part.endsWith('.') ||
+        part.endsWith(' ') ||
+        /^(con|prn|aux|nul|com[1-9\u00b9\u00b2\u00b3]|lpt[1-9\u00b9\u00b2\u00b3])(?:\.|$)/i.test(part)
+      ) {
+        return null;
+      }
+      current = path.win32.join(current, part);
+      const lst = fsApi.lstatSync(current);
+      if (typeof lst.isSymbolicLink === 'function' && lst.isSymbolicLink()) return null;
+    }
+  } catch {
+    return null;
+  }
+  const winDir = env.WINDIR || env.SystemRoot || 'C:\\Windows';
+  const bin = path.win32.join(winDir, 'explorer.exe');
+  return {
+    bin,
+    args: [`/select,"${current}"`],
+    resolved: current,
+    options: { windowsVerbatimArguments: true, detached: true, stdio: 'ignore' },
+  };
+}
+
 function openLocalFileActionAsync(options = {}) {
   const prepared = prepareLocalFileAction(options);
   if (!prepared.ok) return Promise.resolve(prepared);
   const spawnFn = options.spawnFn || spawn;
-  return new Promise((resolve) => {
-    let child;
-    try { child = spawnFn(prepared.bin, prepared.args, prepared.options); }
-    catch (error) { resolve({ ok: false, mode: prepared.mode, reason: 'spawn-failed', error: error.message }); return; }
-    let settled = false;
-    const finish = (ok, reason) => { if (!settled) { settled = true; clearTimeout(timer); resolve({ ok, mode: prepared.mode, reason }); } };
-    const timer = setTimeout(() => { child.unref(); finish(false, 'launcher-timeout'); }, 10000);
-    child.once('error', () => finish(false, 'spawn-failed'));
-    child.once('exit', code => finish(code === 0, code === 0 ? undefined : 'launcher-error'));
+  const platform = options.platform || process.platform;
+  const useFastWinHelper = platform === 'win32' && !options.spawnFn;
+
+  const launch = (bin, args, spawnOpts) =>
+    new Promise((resolve) => {
+      let child;
+      try { child = spawnFn(bin, args, spawnOpts); }
+      catch (error) { resolve({ ok: false, mode: prepared.mode, reason: 'spawn-failed', error: error.message }); return; }
+      let settled = false;
+      const finish = (ok, reason) => { if (!settled) { settled = true; clearTimeout(timer); resolve({ ok, mode: prepared.mode, reason }); } };
+      const timer = setTimeout(() => { child.unref(); finish(false, 'launcher-timeout'); }, 10000);
+      child.once('error', () => finish(false, 'spawn-failed'));
+      child.once('exit', code => finish(code === 0, code === 0 ? undefined : 'launcher-error'));
+    });
+
+  if (!useFastWinHelper) {
+    return launch(prepared.bin, prepared.args, prepared.options);
+  }
+
+  // Fast, native Windows reveal via explorer.exe /select,"<path>" (no DWM flicker, no helper compile).
+  // Paths containing ',' fall through to the cached native SHOpenFolderAndSelectItems helper below.
+  if (prepared.mode === 'reveal') {
+    const explorerCmd = buildWindowsExplorerRevealCommand(options.target, { fsApi: options.fsApi || fs });
+    if (explorerCmd) {
+      return new Promise((resolve) => {
+        let child;
+        try {
+          child = spawnFn(explorerCmd.bin, explorerCmd.args, explorerCmd.options);
+        } catch {
+          resolve(null);
+          return;
+        }
+        let settled = false;
+        const finish = (res) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(res);
+        };
+        const timer = setTimeout(() => {
+          try { child.unref(); } catch {}
+          finish({ ok: true, mode: 'reveal' });
+        }, 1500);
+        child.once('error', () => finish(null));
+        child.once('spawn', () => {
+          try { child.unref(); } catch {}
+          finish({ ok: true, mode: 'reveal' });
+        });
+      }).then((res) => {
+        if (res && res.ok) return res;
+        return ensureWindowsFileActionExeAsync(options.cacheDir).then((cachedExe) => {
+          if (cachedExe && fs.existsSync(cachedExe)) {
+            return launch(cachedExe, [], {
+              windowsHide: true,
+              stdio: 'ignore',
+              env: prepared.options.env,
+            });
+          }
+          return launch(prepared.bin, prepared.args, prepared.options);
+        });
+      });
+    }
+  }
+
+  return ensureWindowsFileActionExeAsync(options.cacheDir).then((cachedExe) => {
+    if (cachedExe && fs.existsSync(cachedExe)) {
+      return launch(cachedExe, [], {
+        windowsHide: true,
+        stdio: 'ignore',
+        env: prepared.options.env,
+      });
+    }
+    return launch(prepared.bin, prepared.args, prepared.options);
   });
 }
 
@@ -1869,7 +2114,9 @@ module.exports = {
   SAFE_OPEN_FILE_EXTS,
   resolveLocalFileUri,
   prepareLocalFileAction,
+  buildWindowsExplorerRevealCommand,
   openLocalFileActionAsync,
+  ensureWindowsFileActionExeAsync,
   CdpSession,
   readCss,
   readRuntimeBundle,

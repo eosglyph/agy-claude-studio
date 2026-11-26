@@ -500,7 +500,7 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   assert.equal(studioHtml.includes('hudFooterChip'), false, 'Studio UI removes deprecated hudFooterChip toggle');
   assert.equal(studioHtml.includes('hudCompact'), false, 'Studio UI removes deprecated hudCompact toggle');
   assert.equal(studioHtml.includes('超过 1 分钟（推荐）'), false, 'Studio UI removes recommended-time label from notify duration options');
-  assert.ok(studioHtml.includes('btn-open-um') && studioHtml.includes('/api/open-usage-monitor'), 'Studio UI includes one-click jump button to Usage Monitor pane');
+  assert.equal(studioHtml.includes('btn-open-um'), false, 'Studio UI removes redundant Usage Monitor button from narrow header');
   assert.ok(studioHtml.includes('黑曜石'), 'Studio UI labels obsidian palette as 黑曜石');
   assert.ok(studioHtml.includes('glassEffect'), 'Studio UI includes standalone glassEffect toggle');
   assert.ok(studioHtml.includes('periodicSelector'), 'Studio UI includes periodicSelector toggle');

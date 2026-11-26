@@ -7,7 +7,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -31,14 +31,35 @@ function runExe(exePath, args, timeoutMs = 20000, extraEnv = null) {
   });
 }
 
-function isPidAlive(pid) {
-  if (!pid || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+function findCsc() {
+  const winDir = process.env.WINDIR || 'C:\\Windows';
+  const candidates = [
+    path.join(winDir, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe'),
+    path.join(winDir, 'Microsoft.NET', 'Framework', 'v4.0.30319', 'csc.exe'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
   }
+  throw new Error('csc.exe (.NET Framework 4.x) not found');
+}
+
+function readLnkMetadata(lnkPath) {
+  const powershell = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const script = [
+    '$sh = New-Object -ComObject WScript.Shell',
+    '$s = $sh.CreateShortcut($env:AGY_LNK_PATH)',
+    '@{ targetPath = $s.TargetPath; arguments = $s.Arguments; workingDirectory = $s.WorkingDirectory; iconLocation = $s.IconLocation } | ConvertTo-Json -Compress',
+  ].join('\n');
+  const out = execFileSync(
+    powershell,
+    ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    {
+      encoding: 'utf8',
+      windowsHide: true,
+      env: { ...process.env, AGY_LNK_PATH: lnkPath },
+    }
+  );
+  return JSON.parse(out.trim());
 }
 
 function listCsFiles(dir) {
@@ -55,7 +76,12 @@ function listCsFiles(dir) {
 }
 
 import { createManifest, getArtifactNames, normalizeVersion } from '../scripts/build-common.mjs';
-import { VALIDATORS, buildInstaller } from '../scripts/build-installer.mjs';
+import {
+  VALIDATORS,
+  collectPluginPayloadFiles,
+  buildPluginZip,
+  buildInstaller,
+} from '../scripts/build-installer.mjs';
 
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
@@ -209,7 +235,6 @@ function createMockCdpServer() {
           return;
         }
         if (opcode === 0x9) {
-          // Ping -> Pong
           const pong = Buffer.alloc(2 + payload.length);
           pong[0] = 0x8a;
           pong[1] = payload.length;
@@ -292,7 +317,7 @@ test('installer manifest validators match inject.js and cdp.js defaults', () => 
   assert.equal(cdp.validateConfigSetting('__unknown_key__', true), false);
 });
 
-test('unified artifact naming and version parity stay consistent across package, runtime, and installers', () => {
+test('unified artifact naming, native plugin payload, and version parity stay consistent', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8'));
   const csClient = fs.readFileSync(path.join(ROOT_DIR, 'installer', 'common', 'CdpClient.cs'), 'utf8');
   const csSetup = fs.readFileSync(path.join(ROOT_DIR, 'installer', 'setup', 'Program.cs'), 'utf8');
@@ -309,13 +334,37 @@ test('unified artifact naming and version parity stay consistent across package,
   assert.deepEqual(getArtifactNames('v2.1.0'), {
     version: '2.1.0',
     windowsInstaller: 'Claude-Studio-v2.1.0-Windows-x64.exe',
+    pluginZip: 'Claude-Studio-v2.1.0-plugin.zip',
     macosDmg: 'Claude-Studio-v2.1.0-macOS-universal.dmg',
     macosApp: 'Claude Studio.app',
   });
   assert.equal(createManifest('v2.1.0').version, '2.1.0');
+
+  const payload = collectPluginPayloadFiles(pkg.version);
+  const names = new Set(payload.entries.map((e) => e.name));
+  assert.ok(names.has('plugin.json'));
+  assert.ok(names.has('mcp_config.json'));
+  assert.ok(names.has('hooks.json'));
+  assert.ok(names.has('sidecars/studio/main.mjs'));
+  assert.ok(names.has('sidecars/studio/index.html'));
+  assert.ok(names.has('skills/studio-doctor/SKILL.md'));
+  assert.ok(names.has('skills/studio-setup/SKILL.md'));
+  assert.ok(names.has('skills/studio-notify/SKILL.md'));
+  assert.ok(names.has('skills/studio-translation-protect/SKILL.md'));
+  assert.ok(names.has('scripts/notify-stop.mjs'));
+  assert.ok(names.has('scripts/fetch-agy-changelog.mjs'));
+  assert.ok(names.has('i18n-sync.js'));
+  assert.ok(names.has('locales/manifest.json'));
+  assert.ok(names.has('locales/zh-CN.json'));
+  assert.ok(names.has('locales/zh-TW.json'));
+  assert.equal(names.has('locales/yue.json'), false, 'On-demand yue pack must not be bundled into plugin release');
+  assert.equal(names.has('locales/ja.json'), false, 'On-demand ja pack must not be bundled into plugin release');
+  assert.ok(names.has('assets/agy-gemini-clawd.ico'));
+  assert.ok(names.has('manifest.json'));
+  assert.equal(names.has('agy-claude-studio-watcher.exe'), false, 'Native plugin payload must not bundle standalone watcher exe');
 });
 
-test('Windows C# sources define managed launch contract and stay strictly C# 5 compatible', () => {
+test('Windows C# sources define native plugin installer contract and stay strictly C# 5 compatible', () => {
   const csClient = fs.readFileSync(path.join(ROOT_DIR, 'installer', 'common', 'CdpClient.cs'), 'utf8');
   const csWatcher = fs.readFileSync(path.join(ROOT_DIR, 'installer', 'watcher', 'Program.cs'), 'utf8');
   const csSetup = fs.readFileSync(path.join(ROOT_DIR, 'installer', 'setup', 'Program.cs'), 'utf8');
@@ -323,6 +372,8 @@ test('Windows C# sources define managed launch contract and stay strictly C# 5 c
   assert.match(csClient, /public\s+const\s+int\s+DefaultStartupGraceSeconds\s*=\s*90\s*;/);
   assert.match(csClient, /EnsureAntigravityWithCdpAsync/);
   assert.match(csClient, /ActivateAntigravityWindow/);
+  assert.ok(csClient.includes('FindAntigravityFromUninstallRegistry'), 'CdpClient.cs must probe Windows Uninstall registry');
+  assert.ok(csClient.includes('FindAntigravityFromShortcuts'), 'CdpClient.cs must probe Start Menu / Desktop shortcuts');
   assert.ok(csClient.includes('"--managed"'), 'CdpClient.cs must treat --managed equivalently to --watch');
   assert.ok(csClient.includes('BuildConfigScriptExpression'));
   assert.ok(csClient.includes('ReadBundleAndCssHashes'));
@@ -343,12 +394,15 @@ test('Windows C# sources define managed launch contract and stay strictly C# 5 c
   assert.equal(csWatcher.includes('"autoRelaunchWithCdp", false'), false);
   assert.equal(csWatcher.includes('System.Windows.Forms'), false, 'watcher/Program.cs must not reference System.Windows.Forms');
 
-  assert.match(csSetup, /TargetPath[\s\S]*?watcherExe/);
-  assert.match(csSetup, /--launch --relaunch --exit-on-host-close --dir/);
-  assert.match(csSetup, /AGY_CS_TEST_SYSTEM_ROOT/);
+  assert.match(csSetup, /TargetPath[\s\S]*?antigravityExe/);
+  assert.ok(csSetup.includes('--remote-debugging-port=0'), 'Direct shortcut must launch Antigravity with --remote-debugging-port=0');
+  assert.ok(csSetup.includes('agy-gemini-clawd.ico'), 'Installer must use Gemini x Clawd icon for shortcuts');
+  assert.ok(csSetup.includes('AGY_CS_TEST_SYSTEM_ROOT'));
   assert.ok(csSetup.includes('AGYClaudeStudioStop_'));
+  assert.ok(csSetup.includes('AGYClaudeStyleStop_'));
   assert.ok(csSetup.includes('WatcherPidStatus.Owned'));
   assert.ok(csSetup.includes('-LiteralPath'));
+  assert.ok(csSetup.includes('SetHostPluginEnabled'));
 
   const csFiles = listCsFiles(path.join(ROOT_DIR, 'installer'));
   assert.ok(csFiles.length >= 4, 'found installer C# source files');
@@ -364,352 +418,250 @@ test('Windows C# sources define managed launch contract and stay strictly C# 5 c
 });
 
 test(
-  'Windows managed mode, daemon mode switching, startup grace, and uninstall E2E',
-  { skip: process.platform !== 'win32' ? 'Windows-only managed mode E2E test' : false },
+  'Windows 1-click native plugin installer cleans legacy 2.1/2.2 installs, migrates config, creates Gemini-icon shortcut, enables plugin, and cleanly uninstalls',
+  { skip: process.platform !== 'win32' ? 'Windows-only native plugin installer E2E test' : false },
   async () => {
-    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-managed-e2e-'));
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-native-exe-e2e-'));
     const testSysRoot = path.join(workDir, 'sysroot');
     const installerExe = path.join(workDir, 'installer.exe');
-    const installDir = path.join(workDir, 'installed');
+    const pluginZip = path.join(workDir, 'plugin.zip');
 
-    const outManagedNoCdp = path.join(workDir, 'managed-nocdp.json');
-    const outStatus1 = path.join(workDir, 'status1.json');
-    const outManagedCdp = path.join(workDir, 'managed-cdp.json');
-    const outDaemon = path.join(workDir, 'daemon.json');
-    const outBackToManaged = path.join(workDir, 'back-managed.json');
-    const outPreUninstallDaemon = path.join(workDir, 'pre-uninstall-daemon.json');
+    const userProfile = path.join(testSysRoot, 'UserProfile');
+    const localAppData = path.join(testSysRoot, 'LocalAppData');
+    const startupDir = path.join(testSysRoot, 'Startup');
+    const startMenuDir = path.join(testSysRoot, 'StartMenu');
+    const desktopDir = path.join(testSysRoot, 'Desktop');
+
+    const pluginDir = path.join(userProfile, '.gemini', 'config', 'plugins', 'agy-claude-studio');
+    const pluginDataDir = path.join(userProfile, '.gemini', 'antigravity', 'plugin_data', 'agy-claude-studio');
+    const hostConfigPath = path.join(userProfile, '.gemini', 'config', 'config.json');
+    const uninstallerExe = path.join(localAppData, 'agy-claude-studio-setup', 'agy-claude-studio-installer.exe');
+
+    const mockAgDir = path.join(workDir, 'CustomAntigravity');
+    const mockAgExe = path.join(mockAgDir, 'Antigravity.exe');
+    fs.mkdirSync(mockAgDir, { recursive: true });
+    fs.writeFileSync(mockAgExe, 'MZ-mock-antigravity', 'utf8');
+
+    // Seed all legacy 2.1.0 / 2.2.0 / 2.2.1 artifacts + user personal files that MUST survive!
+    const legacyStyleDir = path.join(localAppData, 'agy-claude-style');
+    const legacyStudioDir = path.join(localAppData, 'agy-claude-studio');
+    const legacyStylePluginDir = path.join(userProfile, '.gemini', 'config', 'plugins', 'agy-claude-style');
+    fs.mkdirSync(legacyStyleDir, { recursive: true });
+    fs.mkdirSync(legacyStudioDir, { recursive: true });
+    fs.mkdirSync(legacyStylePluginDir, { recursive: true });
+    fs.mkdirSync(startupDir, { recursive: true });
+    fs.mkdirSync(startMenuDir, { recursive: true });
+    fs.mkdirSync(desktopDir, { recursive: true });
+    fs.mkdirSync(pluginDataDir, { recursive: true });
+    fs.mkdirSync(path.join(pluginDir, 'scripts', 'ops'), { recursive: true });
+    fs.mkdirSync(path.dirname(hostConfigPath), { recursive: true });
+
+    fs.writeFileSync(path.join(legacyStyleDir, 'config.json'), JSON.stringify({ palette: 'host', language: 'en' }), 'utf8');
+    fs.writeFileSync(path.join(legacyStudioDir, 'config.json'), JSON.stringify({ palette: 'obsidian', language: 'zh-CN' }), 'utf8');
+    fs.writeFileSync(path.join(legacyStylePluginDir, 'plugin.json'), '{"name":"agy-claude-style"}', 'utf8');
+    fs.writeFileSync(path.join(startupDir, 'AGY-Claude-Style.lnk'), 'legacy-startup', 'utf8');
+    fs.writeFileSync(path.join(startupDir, 'Claude-Studio.lnk'), 'legacy-startup-2', 'utf8');
+    fs.writeFileSync(path.join(desktopDir, 'Antigravity (AGY Claude Style).lnk'), 'legacy-desk', 'utf8');
+    // User's personal Gemini.lnk must NEVER be touched!
+    const userGeminiLnk = path.join(desktopDir, 'Gemini.lnk');
+    fs.writeFileSync(userGeminiLnk, 'user-custom-gemini-shortcut', 'utf8');
+    // User's existing notify.json and custom ops script must NEVER be overwritten or deleted!
+    const userNotifyPath = path.join(pluginDataDir, 'notify.json');
+    fs.writeFileSync(userNotifyPath, JSON.stringify({ serverchan: { sendKey: 'KEEP_ME_SECRET' } }), 'utf8');
+    const customOpsScript = path.join(pluginDir, 'scripts', 'ops', 'custom-user-script.mjs');
+    fs.writeFileSync(customOpsScript, 'export const keep = true;\n', 'utf8');
+    const existingBundledOps = path.join(pluginDir, 'scripts', 'ops', 'check-agy-update.mjs');
+    fs.writeFileSync(existingBundledOps, '// user-customized-ops-file\n', 'utf8');
+
+    // Existing host config with another plugin + legacy agy-claude-style
+    fs.writeFileSync(
+      hostConfigPath,
+      JSON.stringify({
+        theme: 'warm',
+        plugins: {
+          'usage-monitor': { enabled: true },
+          'agy-claude-style': { enabled: true },
+        },
+      }, null, 2),
+      'utf8'
+    );
+
+    const outStatus = path.join(workDir, 'status.json');
+    const outInstall = path.join(workDir, 'install.json');
+    const outUpgrade = path.join(workDir, 'upgrade.json');
     const outUninstall = path.join(workDir, 'uninstall.json');
 
-    const startupLnk = path.join(testSysRoot, 'Startup', 'Claude-Studio.lnk');
-    const startMenuLnk = path.join(testSysRoot, 'StartMenu', 'Antigravity (Claude Studio).lnk');
-    const desktopLnk = path.join(testSysRoot, 'Desktop', 'Antigravity (Claude Studio).lnk');
-    const localLauncherLnk = path.join(installDir, 'Antigravity (Claude Studio).lnk');
-    const pidFile = path.join(installDir, '.watch.pid');
-    const modeFile = path.join(installDir, '.install-mode');
-
     const testEnv = {
-      AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: path.join(workDir, 'host.json'),
       AGY_CS_TEST_SYSTEM_ROOT: testSysRoot,
-      AGY_CS_NO_UI: '1',
-      AG_WATCH_POLL_MS: '300',
+      AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: hostConfigPath,
     };
 
-    const mockCdpA = createMockCdpServer();
-    const mockCdpB = createMockCdpServer();
+    const mockCdp = createMockCdpServer();
 
     try {
-      buildInstaller({ outputPath: installerExe });
+      const zipRes = buildPluginZip({ outputPath: pluginZip });
+      assert.ok(fs.existsSync(pluginZip));
+      assert.ok(zipRes.fileCount >= 30);
+
+      const buildRes = buildInstaller({ outputPath: installerExe });
       assert.ok(fs.existsSync(installerExe));
+      assert.ok(buildRes.sizeBytes > 150 * 1024);
+      assert.ok(buildRes.iconSource.endsWith('agy-gemini-clawd.ico'), 'Installer uses Gemini x Clawd icon');
 
-      // 1) Fresh --silent --mode=managed --desktop-shortcut with NO CDP (--cdp-port 1)
+      // 1) --status reports legacy installs and not yet installed
       await runExe(
         installerExe,
-        [
-          '--silent',
-          '--mode=managed',
-          '--desktop-shortcut',
-          '--no-kill-legacy',
-          '--install-dir',
-          installDir,
-          '--cdp-port',
-          '1',
-          '--out',
-          outManagedNoCdp,
-        ],
+        ['--status', '--antigravity-exe', mockAgExe, '--cdp-port', '1', '--out', outStatus],
+        15000,
+        testEnv
+      );
+      const st = JSON.parse(fs.readFileSync(outStatus, 'utf8'));
+      assert.equal(st.installed, false);
+      assert.equal(st.installType, 'native-plugin');
+      assert.equal(st.installDir, pluginDir);
+      assert.equal(st.antigravityExe, mockAgExe);
+      assert.equal(st.legacyInstalls.length, 3);
+
+      // 2) Run --silent --desktop-shortcut install (full 3-safeguard flow)
+      await runExe(
+        installerExe,
+        ['--silent', '--desktop-shortcut', '--antigravity-exe', mockAgExe, '--cdp-port', '1', '--out', outInstall],
         20000,
         testEnv
       );
-      const res1 = JSON.parse(fs.readFileSync(outManagedNoCdp, 'utf8'));
+      const res1 = JSON.parse(fs.readFileSync(outInstall, 'utf8'));
       assert.equal(res1.ok, true);
-      assert.equal(res1.runMode, 'managed');
-      assert.equal(res1.watcherStarted, false);
-      assert.equal(res1.startupShortcut, false);
-      assert.equal(fs.readFileSync(modeFile, 'utf8').trim(), 'managed');
-      assert.equal(fs.existsSync(pidFile), false);
-      assert.equal(fs.existsSync(startupLnk), false);
-      assert.equal(fs.existsSync(startMenuLnk), true);
-      assert.equal(fs.existsSync(desktopLnk), true);
-      assert.equal(fs.existsSync(localLauncherLnk), true);
+      assert.equal(res1.installType, 'native-plugin');
+      assert.equal(res1.installDir, pluginDir);
+      assert.equal(res1.hostPluginEnabled, true);
+      assert.equal(res1.preservedExistingConfig, true);
+      assert.equal(res1.migratedConfigFrom, path.join(legacyStudioDir, 'config.json'));
 
+      // Safeguard 1: Legacy installs cleaned, user configs & Gemini.lnk preserved!
+      assert.equal(fs.existsSync(legacyStyleDir), false, 'v2.1.0 standalone dir removed');
+      assert.equal(fs.existsSync(legacyStudioDir), false, 'v2.2.0/v2.2.1 standalone dir removed');
+      assert.equal(fs.existsSync(legacyStylePluginDir), false, 'legacy agy-claude-style plugin dir removed');
+      assert.equal(fs.existsSync(path.join(startupDir, 'AGY-Claude-Style.lnk')), false);
+      assert.equal(fs.existsSync(path.join(startupDir, 'Claude-Studio.lnk')), false);
+      assert.equal(fs.existsSync(path.join(desktopDir, 'Antigravity (AGY Claude Style).lnk')), false);
+      assert.equal(fs.readFileSync(userGeminiLnk, 'utf8'), 'user-custom-gemini-shortcut', 'User Gemini.lnk untouched');
+      assert.equal(JSON.parse(fs.readFileSync(path.join(pluginDataDir, 'config.json'), 'utf8')).palette, 'obsidian');
+      assert.equal(JSON.parse(fs.readFileSync(userNotifyPath, 'utf8')).serverchan.sendKey, 'KEEP_ME_SECRET');
+      assert.equal(fs.readFileSync(customOpsScript, 'utf8'), 'export const keep = true;\n');
+      assert.equal(fs.readFileSync(existingBundledOps, 'utf8'), '// user-customized-ops-file\n');
+
+      // Safeguard 2: Complete native plugin deployed & enabled in host config (without touching unrelated keys)
+      assert.ok(fs.existsSync(path.join(pluginDir, 'plugin.json')));
+      assert.ok(fs.existsSync(path.join(pluginDir, 'hooks.json')));
+      assert.ok(fs.existsSync(path.join(pluginDir, 'sidecars', 'studio', 'main.mjs')));
+      assert.ok(fs.existsSync(path.join(pluginDir, 'skills', 'studio-doctor', 'SKILL.md')));
+      assert.ok(fs.existsSync(path.join(pluginDir, 'assets', 'agy-gemini-clawd.ico')));
+      assert.equal(fs.existsSync(path.join(pluginDir, 'agy-claude-studio-watcher.exe')), false);
+      assert.ok(fs.existsSync(uninstallerExe), 'Uninstaller copied outside pluginDir');
+
+      const hostCfg = JSON.parse(fs.readFileSync(hostConfigPath, 'utf8'));
+      assert.equal(hostCfg.theme, 'warm');
+      assert.equal(hostCfg.plugins['usage-monitor'].enabled, true);
+      assert.equal(hostCfg.plugins['agy-claude-studio'].enabled, true);
+      assert.equal(hostCfg.plugins['agy-claude-style'].enabled, false);
+
+      // Safeguard 3: Verified direct .lnk shortcuts with Gemini x Clawd icon
+      const startMenuLnk = path.join(startMenuDir, 'Antigravity (Claude Studio).lnk');
+      const desktopLnk = path.join(desktopDir, 'Antigravity (Claude Studio).lnk');
+      assert.ok(fs.existsSync(startMenuLnk));
+      assert.ok(fs.existsSync(desktopLnk));
+
+      const expectedIcon = `${path.join(pluginDir, 'assets', 'agy-gemini-clawd.ico')},0`;
+      for (const lnk of [startMenuLnk, desktopLnk]) {
+        const meta = readLnkMetadata(lnk);
+        assert.equal(meta.targetPath.toLowerCase(), mockAgExe.toLowerCase());
+        assert.equal(meta.arguments, '--remote-debugging-port=0');
+        assert.equal(meta.workingDirectory.toLowerCase(), mockAgDir.toLowerCase());
+        assert.equal(meta.iconLocation.toLowerCase(), expectedIcon.toLowerCase());
+      }
+
+      // 3) Re-install / upgrade preserves existing plugin_data/config.json
+      fs.writeFileSync(path.join(pluginDataDir, 'config.json'), JSON.stringify({ palette: 'claude', language: 'ja' }), 'utf8');
       await runExe(
         installerExe,
-        ['--status', '--install-dir', installDir, '--cdp-port', '1', '--out', outStatus1],
-        10000,
-        testEnv
-      );
-      const st1 = JSON.parse(fs.readFileSync(outStatus1, 'utf8'));
-      assert.equal(st1.installed, true);
-      assert.equal(st1.installedMode, 'managed');
-      assert.equal(st1.runMode, 'managed');
-      assert.equal(st1.watcherStarted, false);
-      assert.equal(st1.startupShortcut, false);
-      assert.equal(st1.startMenuShortcut, true);
-      assert.equal(st1.desktopShortcut, true);
-      assert.equal(st1.launcherShortcut, true);
-
-      // 2) Managed install against running mock CDP server: injects and auto-exits on CDP close
-      const portA = await mockCdpA.start();
-      await runExe(
-        installerExe,
-        [
-          '--silent',
-          '--mode=managed',
-          '--no-kill-legacy',
-          '--install-dir',
-          installDir,
-          '--cdp-port',
-          String(portA),
-          '--out',
-          outManagedCdp,
-        ],
+        ['--silent', '--desktop-shortcut', '--antigravity-exe', mockAgExe, '--cdp-port', '1', '--out', outUpgrade],
         20000,
         testEnv
       );
-      const res2 = JSON.parse(fs.readFileSync(outManagedCdp, 'utf8'));
+      const res2 = JSON.parse(fs.readFileSync(outUpgrade, 'utf8'));
       assert.equal(res2.ok, true);
-      assert.equal(res2.runMode, 'managed');
-      assert.equal(res2.watcherStarted, true);
-      assert.equal(res2.cdpPort, portA);
-      assert.deepEqual(res2.injectedPages, ['Antigravity']);
-      assert.equal(fs.existsSync(pidFile), true);
-      const managedPid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-      assert.ok(isPidAlive(managedPid), 'managed watcher process is alive while mock CDP is up');
+      assert.equal(res2.preservedExistingConfig, true);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(pluginDataDir, 'config.json'), 'utf8')).language, 'ja');
 
-      await mockCdpA.close();
-      await waitFor(
-        () => (!fs.existsSync(pidFile) && !isPidAlive(managedPid) ? true : null),
-        10000,
-        100
-      );
-      assert.equal(fs.existsSync(pidFile), false);
-
-      // 3) Mode switch managed -> daemon against mock CDP: Startup shortcut created, watcher stays running
-      const portB = await mockCdpB.start();
+      // 4) --uninstall from copied uninstaller restores CDP pages, disables host plugin, removes pluginDir & shortcuts, preserves plugin_data!
+      const port = await mockCdp.start();
       await runExe(
-        installerExe,
-        [
-          '--silent',
-          '--mode=daemon',
-          '--no-kill-legacy',
-          '--install-dir',
-          installDir,
-          '--cdp-port',
-          String(portB),
-          '--out',
-          outDaemon,
-        ],
+        uninstallerExe,
+        ['--uninstall', '--silent', '--cdp-port', String(port), '--out', outUninstall],
         20000,
         testEnv
       );
-      const res3 = JSON.parse(fs.readFileSync(outDaemon, 'utf8'));
+      const res3 = JSON.parse(fs.readFileSync(outUninstall, 'utf8'));
       assert.equal(res3.ok, true);
-      assert.equal(res3.runMode, 'daemon');
-      assert.equal(res3.watcherStarted, true);
-      assert.equal(res3.startupShortcut, true);
-      assert.equal(fs.readFileSync(modeFile, 'utf8').trim(), 'daemon');
-      assert.equal(fs.existsSync(startupLnk), true);
-      assert.equal(fs.existsSync(pidFile), true);
-      const daemonPid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-      assert.ok(isPidAlive(daemonPid), 'daemon watcher process is alive');
-
-      await mockCdpB.close();
-      await new Promise((r) => setTimeout(r, 1500));
-      assert.ok(isPidAlive(daemonPid), 'daemon watcher stays alive after mock CDP closes');
-      assert.equal(fs.existsSync(pidFile), true);
-
-      // 4) Mode switch daemon -> managed with no CDP (--cdp-port 1): Startup shortcut DELETED, old daemon stopped
-      await runExe(
-        installerExe,
-        [
-          '--silent',
-          '--mode=managed',
-          '--no-kill-legacy',
-          '--install-dir',
-          installDir,
-          '--cdp-port',
-          '1',
-          '--out',
-          outBackToManaged,
-        ],
-        20000,
-        testEnv
-      );
-      const res4 = JSON.parse(fs.readFileSync(outBackToManaged, 'utf8'));
-      assert.equal(res4.ok, true);
-      assert.equal(res4.runMode, 'managed');
-      assert.equal(res4.watcherStarted, false);
-      assert.equal(res4.startupShortcut, false);
-      assert.equal(fs.readFileSync(modeFile, 'utf8').trim(), 'managed');
-      assert.equal(fs.existsSync(startupLnk), false);
-      assert.equal(isPidAlive(daemonPid), false);
-      assert.equal(fs.existsSync(pidFile), false);
-
-      // 5) Standalone watcher --watch --exit-on-host-close --startup-grace 1 --cdp-port 1 exits cleanly (code 0)
-      const watcherExe = path.join(installDir, 'agy-claude-studio-watcher.exe');
-      await runExe(
-        watcherExe,
-        ['--watch', '--exit-on-host-close', '--startup-grace', '1', '--cdp-port', '1', '--dir', installDir],
-        12000,
-        testEnv
-      );
-      assert.equal(fs.existsSync(pidFile), false);
-
-      // 6) --uninstall removes Startup, StartMenu, Desktop shortcuts and installDir
-      await runExe(
-        installerExe,
-        [
-          '--silent',
-          '--mode=daemon',
-          '--no-kill-legacy',
-          '--install-dir',
-          installDir,
-          '--cdp-port',
-          '1',
-          '--out',
-          outPreUninstallDaemon,
-        ],
-        20000,
-        testEnv
-      );
-      assert.equal(fs.existsSync(startupLnk), true);
-      assert.equal(fs.existsSync(startMenuLnk), true);
-      assert.equal(fs.existsSync(desktopLnk), true);
-
-      await runExe(
-        installerExe,
-        [
-          '--uninstall',
-          '--silent',
-          '--install-dir',
-          installDir,
-          '--cdp-port',
-          '1',
-          '--out',
-          outUninstall,
-        ],
-        20000,
-        testEnv
-      );
-      const res6 = JSON.parse(fs.readFileSync(outUninstall, 'utf8'));
-      assert.equal(res6.ok, true);
-      assert.equal(res6.startupShortcut, false);
-      assert.equal(fs.existsSync(startupLnk), false);
+      assert.equal(res3.selfDeleteScheduled, true);
+      assert.deepEqual(res3.injectedPages, ['Antigravity']);
+      assert.equal(mockCdp.getLastRemovedExpr(), cdp.REMOVE_EXPRESSION);
+      assert.equal(fs.existsSync(pluginDir), false);
       assert.equal(fs.existsSync(startMenuLnk), false);
       assert.equal(fs.existsSync(desktopLnk), false);
-      assert.equal(fs.existsSync(installDir), false);
+      assert.equal(fs.readFileSync(userGeminiLnk, 'utf8'), 'user-custom-gemini-shortcut', 'Uninstall keeps user Gemini.lnk');
+      assert.equal(JSON.parse(fs.readFileSync(hostConfigPath, 'utf8')).plugins['agy-claude-studio'].enabled, false);
+      assert.equal(JSON.parse(fs.readFileSync(userNotifyPath, 'utf8')).serverchan.sendKey, 'KEEP_ME_SECRET', 'Uninstall preserves plugin_data');
+
+      await waitFor(() => (!fs.existsSync(path.dirname(uninstallerExe)) ? true : null), 8000, 150);
     } finally {
-      try {
-        if (fs.existsSync(pidFile)) {
-          const pid = parseInt(fs.readFileSync(pidFile, 'utf8'), 10);
-          if (pid) process.kill(pid);
-        }
-      } catch {}
-      try { await mockCdpA.close(); } catch {}
-      try { await mockCdpB.close(); } catch {}
-      try {
-        fs.rmSync(workDir, { recursive: true, force: true });
-      } catch {}
+      try { await mockCdp.close(); } catch {}
+      try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
     }
   }
 );
 
 test(
-  'installer.exe builds cleanly and executes full install, CDP injection, setting sync, upgrade, and uninstall lifecycle',
-  { skip: process.platform !== 'win32' ? 'Windows-only installer.exe E2E test' : false },
+  'legacy C# watcher compiles cleanly and passes WindowsFileAction STA, HostEnabled fail-safe, and native toggle checks',
+  { skip: process.platform !== 'win32' ? 'Windows-only C# watcher regression test' : false },
   async () => {
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-e2e-'));
-  const installerExe = path.join(workDir, 'installer.exe');
-  const installDir = path.join(workDir, 'installed');
-  const outInstall = path.join(workDir, 'install.json');
-  const outUpgrade = path.join(workDir, 'upgrade.json');
-  const outUninstall = path.join(workDir, 'uninstall.json');
-  const outStatus = path.join(workDir, 'status.json');
-  const mockCdp = createMockCdpServer();
-  const file = path.join(workDir, 'host.json');
-  const testEnv = { AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: file, AGY_CS_TEST_SYSTEM_ROOT: path.join(workDir, 'sysroot'), AG_WATCH_POLL_MS: '200' };
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-watcher-reg-'));
+    const watcherDir = path.join(workDir, 'watcher-dir');
+    const watcherExe = path.join(watcherDir, 'agy-claude-studio-watcher.exe');
+    const hostCfgFile = path.join(workDir, 'host.json');
+    const mockCdp = createMockCdpServer();
 
-  try {
-    const buildRes = buildInstaller({ outputPath: installerExe });
-    assert.ok(fs.existsSync(installerExe));
-    assert.ok(buildRes.sizeBytes > 200 * 1024);
+    try {
+      fs.mkdirSync(watcherDir, { recursive: true });
+      fs.writeFileSync(path.join(watcherDir, 'manifest.json'), JSON.stringify(createManifest(cdp.PLUGIN_VERSION), null, 2), 'utf8');
+      fs.writeFileSync(path.join(watcherDir, 'style.css'), fs.readFileSync(path.join(ROOT_DIR, 'style.css')));
+      fs.writeFileSync(path.join(watcherDir, 'config.json'), fs.readFileSync(path.join(ROOT_DIR, 'config.example.json')));
+      for (const part of cdp.RUNTIME_PARTS) {
+        fs.writeFileSync(path.join(watcherDir, part), fs.readFileSync(path.join(ROOT_DIR, part)));
+      }
 
-    const port = await mockCdp.start();
+      const csc = findCsc();
+      execFileSync(csc, [
+        '/nologo',
+        '/utf8output',
+        '/codepage:65001',
+        '/target:winexe',
+        '/optimize+',
+        `/out:${watcherExe}`,
+        '/r:System.dll',
+        '/r:System.Core.dll',
+        '/r:System.Management.dll',
+        '/r:System.Net.Http.dll',
+        path.join(ROOT_DIR, 'installer', 'common', 'MiniJson.cs'),
+        path.join(ROOT_DIR, 'installer', 'common', 'CdpClient.cs'),
+        path.join(ROOT_DIR, 'scripts', 'WindowsFileAction.cs'),
+        path.join(ROOT_DIR, 'installer', 'watcher', 'Program.cs'),
+      ], { stdio: 'inherit' });
 
-    // 1. Check --status CLI
-    await runExe(
-      installerExe,
-      ['--status', '--install-dir', installDir, '--cdp-port', String(port), '--out', outStatus],
-      10000
-    );
-    const st = JSON.parse(fs.readFileSync(outStatus, 'utf8'));
-    assert.equal(st.installed, false);
-    assert.equal(st.cdpPort, port);
-
-    // 2. Run --silent install against mock CDP server
-    await runExe(
-      installerExe,
-      [
-        '--silent',
-        '--no-autostart',
-        '--no-kill-legacy',
-        '--install-dir',
-        installDir,
-        '--cdp-port',
-        String(port),
-        '--out',
-        outInstall,
-      ],
-      20000, testEnv
-    );
-
-    const installResult = JSON.parse(fs.readFileSync(outInstall, 'utf8'));
-    assert.equal(installResult.ok, true);
-    assert.equal(installResult.preservedExistingConfig, false);
-    assert.deepEqual(installResult.injectedPages, ['Antigravity']);
-    assert.ok(fs.existsSync(path.join(installDir, 'agy-claude-studio-watcher.exe')));
-    assert.ok(fs.existsSync(path.join(installDir, 'agy-claude-studio-installer.exe')));
-    assert.ok(fs.existsSync(path.join(installDir, 'manifest.json')));
-    assert.ok(fs.existsSync(path.join(installDir, '.watch.pid')));
-
-    const activeCfgPath = fs.existsSync(path.join(ROOT_DIR, 'config.json'))
-      ? path.join(ROOT_DIR, 'config.json')
-      : path.join(ROOT_DIR, 'config.example.json');
-    const expectedCfg = fs.readFileSync(activeCfgPath, 'utf8');
-    assert.equal(fs.readFileSync(path.join(installDir, 'config.json'), 'utf8'), expectedCfg);
-
-    // Verify exact CDP sequence & valid JS payload
-    const calls = mockCdp.getCalls();
-    assert.ok(calls.some((c) => c.method === 'Page.enable'));
-    assert.ok(calls.some((c) => c.method === 'Runtime.enable'));
-    assert.ok(
-      calls.some(
-        (c) =>
-          c.method === 'Runtime.addBinding' &&
-          c.params &&
-          c.params.name === cdp.SETTING_BINDING
-      )
-    );
-    assert.ok(calls.some((c) => c.method === 'Page.addScriptToEvaluateOnNewDocument'));
-    const injectedExpr = mockCdp.getLastInjectedExpr();
-    assert.ok(injectedExpr, 'injected expression was sent over CDP');
-    assert.doesNotThrow(() => new vm.Script(injectedExpr), 'C# injected JS compiles cleanly');
-
-    // Verify codeHash parity and active config values between Node cdp.js and C# watcher
-    const nodeExpr = cdp.buildInjectExpression();
-    const nodeHash = nodeExpr.match(/"codeHash":"([^"]+)"/)[1];
-    const csHash = injectedExpr.match(/"codeHash":"([^"]+)"/)[1];
-    assert.equal(csHash, nodeHash);
-    const expectedCfgObj = JSON.parse(expectedCfg);
-    assert.ok(injectedExpr.includes(`"palette":"${expectedCfgObj.palette}"`));
-    assert.ok(injectedExpr.includes(`"ringMode":"${expectedCfgObj.ringMode}"`));
-
-    // Verify watcher --once CLI mode works standalone against CDP
-    const watcherExe = path.join(installDir, 'agy-claude-studio-watcher.exe');
-    // Exercise the actual assembly from the installer payload; never open Explorer.
-    const probe = String.raw`
-      $ErrorActionPreference = 'Stop'
-      $assembly = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($env:AGY_TEST_WATCHER))
-      Add-Type -TypeDefinition @'
+      const probe = String.raw`
+        $ErrorActionPreference = 'Stop'
+        $assembly = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($env:AGY_TEST_WATCHER))
+        Add-Type -TypeDefinition @'
 using System;
 using System.Reflection;
 using System.Threading;
@@ -724,141 +676,59 @@ public static class RevealProbe {
     }
 }
 '@
-      [RevealProbe]::Check($assembly)
-      $flags = [Reflection.BindingFlags]'NonPublic,Static'
-      $enabled = $assembly.GetType('AgyClaudeStudio.Watcher.Program', $true).GetMethod('HostEnabled', $flags)
-      $fixture = $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG
-      foreach ($expected in @($true, $false)) {
-        $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG = $fixture
-        [IO.File]::WriteAllText($fixture, (@{plugins=@{'agy-claude-studio'=@{enabled=$expected}}} | ConvertTo-Json -Depth 4))
-        if ($enabled.Invoke($null, $null) -ne $expected) { throw 'valid decision failed' }
-        [IO.File]::WriteAllText($fixture, '{')
-        if ($enabled.Invoke($null, $null) -ne $expected) { throw 'partial write changed last decision' }
-        $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG = 'invalid"path'
-        if ($enabled.Invoke($null, $null) -ne $expected) { throw 'invalid config path changed last decision' }
+        [RevealProbe]::Check($assembly)
+        $flags = [Reflection.BindingFlags]'NonPublic,Static'
+        $enabled = $assembly.GetType('AgyClaudeStudio.Watcher.Program', $true).GetMethod('HostEnabled', $flags)
+        $fixture = $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG
+        foreach ($expected in @($true, $false)) {
+          $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG = $fixture
+          [IO.File]::WriteAllText($fixture, (@{plugins=@{'agy-claude-studio'=@{enabled=$expected}}} | ConvertTo-Json -Depth 4))
+          if ($enabled.Invoke($null, $null) -ne $expected) { throw 'valid decision failed' }
+          [IO.File]::WriteAllText($fixture, '{')
+          if ($enabled.Invoke($null, $null) -ne $expected) { throw 'partial write changed last decision' }
+          $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG = 'invalid"path'
+          if ($enabled.Invoke($null, $null) -ne $expected) { throw 'invalid config path changed last decision' }
+        }
+      `;
+      const powershell = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+      await runExe(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(probe, 'utf16le').toString('base64')], 15000, {
+        AGY_TEST_WATCHER: watcherExe,
+        AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: path.join(workDir, 'probe-config.json'),
+      });
+
+      const port = await mockCdp.start();
+      const onceOut = path.join(workDir, 'once.json');
+      const testEnv = { AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: hostCfgFile, AG_WATCH_POLL_MS: '200' };
+
+      const watcherChild = spawn(watcherExe, ['--watch', '--dir', watcherDir, '--cdp-port', String(port)], {
+        stdio: 'ignore',
+        windowsHide: true,
+        env: { ...process.env, ...testEnv },
+      });
+      try {
+        await waitFor(() => (mockCdp.getLastInjectedExpr() ? true : null), 8000, 100);
+        const injectedExpr = mockCdp.getLastInjectedExpr();
+        assert.doesNotThrow(() => new vm.Script(injectedExpr), 'C# injected JS compiles cleanly');
+        const nodeHash = cdp.buildInjectExpression().match(/"codeHash":"([^"]+)"/)[1];
+        const csHash = injectedExpr.match(/"codeHash":"([^"]+)"/)[1];
+        assert.equal(csHash, nodeHash);
+
+        await verifyNativeToggle({
+          file: hostCfgFile,
+          mock: mockCdp,
+          waitFor,
+          removeExpr: cdp.REMOVE_EXPRESSION,
+          once: async () => {
+            await runExe(watcherExe, ['--once', '--dir', watcherDir, '--cdp-port', String(port), '--out', onceOut], 10000, testEnv);
+            return JSON.parse(fs.readFileSync(onceOut, 'utf8'));
+          },
+        });
+      } finally {
+        try { watcherChild.kill(); } catch {}
       }
-    `;
-    const powershell = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    await runExe(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(probe, 'utf16le').toString('base64')], 15000, {
-      AGY_TEST_WATCHER: watcherExe, AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: path.join(workDir, 'probe-config.json'),
-    });
-    const onceOut = path.join(workDir, 'once.json');
-    await runExe(
-      watcherExe,
-      ['--once', '--dir', installDir, '--cdp-port', String(port), '--out', onceOut],
-      10000, testEnv
-    );
-    const onceResult = JSON.parse(fs.readFileSync(onceOut, 'utf8'));
-    assert.equal(onceResult.ok, true);
-    assert.deepEqual(onceResult.pages, ['Antigravity']);
-
-    // 3. Test Runtime.bindingCalled -> config.json update & hot-reload
-    const targetPalette = expectedCfgObj.palette === 'claude' ? 'obsidian' : 'claude';
-    const beforeCallCount = mockCdp.getCalls().length;
-    mockCdp.emitBindingCalled(cdp.SETTING_BINDING, { key: 'palette', value: 'hacker-invalid' });
-    mockCdp.emitBindingCalled(cdp.SETTING_BINDING, { key: 'palette', value: targetPalette });
-
-    const updatedCfg = await waitFor(() => {
-      const parsed = JSON.parse(fs.readFileSync(path.join(installDir, 'config.json'), 'utf8'));
-      return parsed.palette === targetPalette ? parsed : null;
-    });
-    assert.equal(updatedCfg.palette, targetPalette);
-
-    // Confirm hot-reload fired on watcher without re-sending ~1.4MB payload
-    await waitFor(() => {
-      const newer = mockCdp.getCalls().slice(beforeCallCount);
-      const hasRemove = newer.some((c) => c.method === 'Page.removeScriptToEvaluateOnNewDocument');
-      const hasAdd = newer.some((c) => c.method === 'Page.addScriptToEvaluateOnNewDocument');
-      return hasRemove && hasAdd ? true : null;
-    });
-    const reloadCalls = mockCdp.getCalls().slice(beforeCallCount);
-    const reloadAddCalls = reloadCalls.filter((c) => c.method === 'Page.addScriptToEvaluateOnNewDocument');
-    assert.ok(reloadAddCalls.length >= 1);
-    const maxReloadLen = Math.max(...reloadAddCalls.map((c) => (c.params?.source || '').length));
-    assert.ok(maxReloadLen < 2048, `Expected short config script (<2KB) on C# hot-reload, got ${maxReloadLen}`);
-
-    await verifyNativeToggle({ file, mock: mockCdp, waitFor, removeExpr: cdp.REMOVE_EXPRESSION, once: async () => {
-      await runExe(watcherExe, ['--once', '--dir', installDir, '--cdp-port', String(port), '--out', onceOut], 10000, testEnv);
-      return JSON.parse(fs.readFileSync(onceOut, 'utf8'));
-    } });
-
-    // Verify compiled C# watcher --remove refuses to kill a foreign PID stored in .watch.pid
-    const probeDir = path.join(workDir, 'foreign-pid-probe');
-    fs.mkdirSync(probeDir, { recursive: true });
-    const foreignProc = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    try {
-      await new Promise((r) => setTimeout(r, 150));
-      fs.writeFileSync(path.join(probeDir, '.watch.pid'), String(foreignProc.pid), 'utf8');
-      await runExe(watcherExe, ['--remove', '--dir', probeDir], 10000);
-      assert.equal(foreignProc.exitCode, null, 'C# watcher --remove must NOT terminate a foreign PID');
-      assert.equal(fs.existsSync(path.join(probeDir, '.watch.pid')), false, 'Stale foreign .watch.pid should be cleared');
     } finally {
-      try { foreignProc.kill('SIGKILL'); } catch {}
+      try { await mockCdp.close(); } catch {}
+      try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
     }
-
-    // 4. Test re-install / upgrade preserves existing user config.json
-    await runExe(
-      installerExe,
-      [
-        '--silent',
-        '--no-autostart',
-        '--no-kill-legacy',
-        '--install-dir',
-        installDir,
-        '--cdp-port',
-        String(port),
-        '--out',
-        outUpgrade,
-      ],
-      20000, testEnv
-    );
-    const upgradeResult = JSON.parse(fs.readFileSync(outUpgrade, 'utf8'));
-    assert.equal(upgradeResult.ok, true);
-    assert.equal(upgradeResult.preservedExistingConfig, true);
-    const cfgAfterUpgrade = JSON.parse(fs.readFileSync(path.join(installDir, 'config.json'), 'utf8'));
-    assert.equal(cfgAfterUpgrade.palette, targetPalette);
-
-    // 5. Test --uninstall from installed copy inside installDir (exercises self-delete & CDP cleanup)
-    const installedSelf = path.join(installDir, 'agy-claude-studio-installer.exe');
-    await runExe(
-      installedSelf,
-      [
-        '--uninstall',
-        '--silent',
-        '--no-autostart',
-        '--install-dir',
-        installDir,
-        '--cdp-port',
-        String(port),
-        '--out',
-        outUninstall,
-      ],
-      20000, testEnv
-    );
-
-    const uninstallResult = JSON.parse(fs.readFileSync(outUninstall, 'utf8'));
-    assert.equal(uninstallResult.ok, true);
-    assert.equal(uninstallResult.selfDeleteScheduled, true);
-    assert.deepEqual(uninstallResult.injectedPages, ['Antigravity']);
-    assert.equal(mockCdp.getLastRemovedExpr(), cdp.REMOVE_EXPRESSION);
-
-    await waitFor(() => (!fs.existsSync(installDir) ? true : null), 8000, 150);
-    assert.equal(fs.existsSync(installDir), false);
-  } finally {
-    // Best-effort cleanup of any lingering watcher in workDir
-    try {
-      const pidPath = path.join(installDir, '.watch.pid');
-      if (fs.existsSync(pidPath)) {
-        const pid = parseInt(fs.readFileSync(pidPath, 'utf8'), 10);
-        if (pid) process.kill(pid);
-      }
-    } catch {}
-    await mockCdp.close();
-    try {
-      fs.rmSync(workDir, { recursive: true, force: true });
-    } catch {}
   }
-});
+);

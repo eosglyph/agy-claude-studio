@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -75,13 +76,73 @@ async function fetchJson(url, headers = {}) {
   return { ok: res.ok, status: res.status, json, text };
 }
 
-async function fetchGithubMetrics(repo) {
+function resolveGithubToken() {
+  const envToken = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '').trim();
+  if (envToken) return envToken;
+  try {
+    const out = execFileSync('gh', ['auth', 'token'], {
+      encoding: 'utf8',
+      timeout: 2000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    return String(out || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+async function fetchGithubMetricsWebFallback(repo, prevGh) {
+  const pageRes = await fetch(`https://github.com/${repo}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+  });
+  if (!pageRes.ok) {
+    throw new Error(`GitHub Web HTTP ${pageRes.status}`);
+  }
+  const html = await pageRes.text();
+  const numFrom = (re, fallback = 0) => {
+    const m = html.match(re);
+    if (!m) return fallback;
+    const n = Number(String(m[1]).replace(/,/g, ''));
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const stars = numFrom(/"stargazerCount"\s*:\s*(\d+)/i, numFrom(/id="repo-stars-counter-star"[^>]*title="([\d,]+)"/i, prevGh?.stars ?? 0));
+  const forks = numFrom(/"forksCount"\s*:\s*(\d+)/i, numFrom(/id="repo-network-counter"[^>]*title="([\d,]+)"/i, prevGh?.forks ?? 0));
+  const watchers = numFrom(/"watcherCount"\s*:\s*(\d+)/i, prevGh?.watchers ?? 0);
+  const issues = numFrom(/"openIssuesCount"\s*:\s*(\d+)/i, numFrom(/id="issues-repo-tab-count"[^>]*title="([\d,]+)"/i, prevGh?.issues ?? 0));
+
+  let latestTag = prevGh?.latestTag || '';
+  try {
+    const relRes = await fetch(`https://github.com/${repo}/releases/latest`, {
+      redirect: 'manual',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    const loc = relRes.headers.get('location') || '';
+    const tagMatch = loc.match(/\/releases\/tag\/([^/?#]+)/);
+    if (tagMatch) latestTag = decodeURIComponent(tagMatch[1]);
+  } catch {}
+
+  return {
+    stars,
+    forks,
+    issues,
+    watchers,
+    latestTag,
+    releaseDownloads: Number(prevGh?.releaseDownloads || 0),
+    source: 'web-fallback',
+  };
+}
+
+async function fetchGithubMetrics(repo, prevGh = null) {
   const ghHeaders = { Accept: 'application/vnd.github+json' };
-  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '';
+  const token = resolveGithubToken();
   if (token) ghHeaders.Authorization = `Bearer ${token}`;
 
   const repoRes = await fetchJson(`https://api.github.com/repos/${repo}`, ghHeaders);
   if (!repoRes.ok || !repoRes.json) {
+    if (repoRes.status === 403 || repoRes.status === 429) {
+      return await fetchGithubMetricsWebFallback(repo, prevGh);
+    }
     throw new Error(`GitHub API HTTP ${repoRes.status}`);
   }
   const r = repoRes.json;
@@ -96,6 +157,9 @@ async function fetchGithubMetrics(repo) {
         releaseDownloads += Number(asset.download_count || 0);
       }
     }
+  } else if (prevGh) {
+    releaseDownloads = Number(prevGh.releaseDownloads || 0);
+    latestTag = prevGh.latestTag || '';
   }
 
   return {
@@ -105,6 +169,7 @@ async function fetchGithubMetrics(repo) {
     watchers: Number(r.subscribers_count ?? r.watchers_count ?? 0),
     latestTag,
     releaseDownloads,
+    source: 'api',
   };
 }
 
@@ -138,15 +203,16 @@ async function main() {
   const state = readOpsState(statePath);
   const prevGh = state.github?.[cli.repo] || null;
 
-  const gh = await fetchGithubMetrics(cli.repo);
+  const gh = await fetchGithubMetrics(cli.repo, prevGh);
+  const dlNote = gh.source === 'web-fallback' ? '（API 限流，沿用上次记录）' : '';
   const lines = [
     `📊 ${cli.repo} · ★ ${gh.stars}${fmtDelta(gh.stars, prevGh?.stars)} | Fork ${gh.forks}${fmtDelta(gh.forks, prevGh?.forks)} | 下载 ${gh.releaseDownloads}${fmtDelta(gh.releaseDownloads, prevGh?.releaseDownloads)}`,
     '',
-    `### GitHub (${cli.repo})`,
+    `### GitHub (${cli.repo})${gh.source === 'web-fallback' ? ' · Web 兜底' : ''}`,
     `- Stars: **${gh.stars}**${fmtDelta(gh.stars, prevGh?.stars)}`,
     `- Forks: **${gh.forks}**${fmtDelta(gh.forks, prevGh?.forks)}`,
     `- Open Issues: **${gh.issues}**${fmtDelta(gh.issues, prevGh?.issues)}`,
-    `- Release 总下载 (${gh.latestTag || 'all'}): **${gh.releaseDownloads}**${fmtDelta(gh.releaseDownloads, prevGh?.releaseDownloads)}`,
+    `- Release 总下载 (${gh.latestTag || 'all'}): **${gh.releaseDownloads}**${fmtDelta(gh.releaseDownloads, prevGh?.releaseDownloads)}${dlNote}`,
   ];
 
   state.github = state.github || {};

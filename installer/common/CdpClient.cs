@@ -6,11 +6,13 @@ using System.IO;
 using System.Management;
 using System.Net.Http;
 using System.Net.WebSockets;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 
 namespace AgyClaudeStudio
 {
@@ -46,7 +48,7 @@ namespace AgyClaudeStudio
             string manifestPath = Path.Combine(baseDir, "manifest.json");
             Dictionary<string, object> raw = MiniJson.ParseObject(File.ReadAllText(manifestPath, Encoding.UTF8));
             PluginManifest m = new PluginManifest();
-            m.Version = GetString(raw, "version", "2.2.1");
+            m.Version = GetString(raw, "version", "2.2.3");
             m.StyleId = GetString(raw, "styleId", "ag-claude-studio-css");
             m.SettingBinding = GetString(raw, "settingBinding", "__agClaudeStudioSetting");
             m.RemoveExpression = GetString(raw, "removeExpression", "");
@@ -1053,6 +1055,7 @@ namespace AgyClaudeStudio
 
         public static string FindAntigravityExePath()
         {
+            // 1. Running Antigravity process
             try
             {
                 Process[] procs = Process.GetProcessesByName("Antigravity");
@@ -1072,6 +1075,15 @@ namespace AgyClaudeStudio
             }
             catch { }
 
+            // 2. Windows Uninstall Registry (HKCU / HKLM, 64-bit & WOW6432Node)
+            string fromRegistry = FindAntigravityFromUninstallRegistry();
+            if (!string.IsNullOrEmpty(fromRegistry)) return fromRegistry;
+
+            // 3. Existing Start Menu & Desktop .lnk shortcuts pointing to Antigravity.exe
+            string fromShortcut = FindAntigravityFromShortcuts();
+            if (!string.IsNullOrEmpty(fromShortcut)) return fromShortcut;
+
+            // 4. Default install paths
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
@@ -1088,6 +1100,176 @@ namespace AgyClaudeStudio
                     return candidates[i];
                 }
             }
+            return null;
+        }
+
+        private static string TryProbeAntigravityDir(string dir)
+        {
+            if (string.IsNullOrEmpty(dir)) return null;
+            string cleaned = dir.Trim().Trim('"');
+            if (string.IsNullOrEmpty(cleaned)) return null;
+            string exe = Path.Combine(cleaned, "Antigravity.exe");
+            return File.Exists(exe) ? exe : null;
+        }
+
+        private static string TryProbeAntigravityFromCmd(string cmd)
+        {
+            if (string.IsNullOrEmpty(cmd)) return null;
+            string s = cmd.Trim();
+            string pathPart = null;
+            if (s.StartsWith("\"", StringComparison.Ordinal))
+            {
+                int end = s.IndexOf('"', 1);
+                if (end > 1) pathPart = s.Substring(1, end - 1);
+            }
+            else
+            {
+                int exeIdx = s.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+                if (exeIdx > 0) pathPart = s.Substring(0, exeIdx + 4);
+            }
+            if (string.IsNullOrEmpty(pathPart)) return null;
+            int comma = pathPart.IndexOf(',');
+            if (comma > 0) pathPart = pathPart.Substring(0, comma);
+            try
+            {
+                if (string.Equals(Path.GetFileName(pathPart), "Antigravity.exe", StringComparison.OrdinalIgnoreCase) &&
+                    File.Exists(pathPart))
+                {
+                    return pathPart;
+                }
+                return TryProbeAntigravityDir(Path.GetDirectoryName(pathPart));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string FindAntigravityFromUninstallRegistry()
+        {
+            RegistryKey[] roots = new RegistryKey[] { Registry.CurrentUser, Registry.LocalMachine };
+            string[] subPaths = new string[]
+            {
+                @"Software\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
+            for (int r = 0; r < roots.Length; r++)
+            {
+                for (int sp = 0; sp < subPaths.Length; sp++)
+                {
+                    try
+                    {
+                        using (RegistryKey parent = roots[r].OpenSubKey(subPaths[sp]))
+                        {
+                            if (parent == null) continue;
+                            string[] names = parent.GetSubKeyNames();
+                            for (int i = 0; i < names.Length; i++)
+                            {
+                                try
+                                {
+                                    using (RegistryKey item = parent.OpenSubKey(names[i]))
+                                    {
+                                        if (item == null) continue;
+                                        string disp = item.GetValue("DisplayName") as string;
+                                        if (string.IsNullOrEmpty(disp)) continue;
+                                        if (!disp.StartsWith("Antigravity", StringComparison.OrdinalIgnoreCase)) continue;
+                                        if (disp.IndexOf("IDE", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+
+                                        string loc = item.GetValue("InstallLocation") as string;
+                                        string exe = TryProbeAntigravityDir(loc);
+                                        if (exe != null) return exe;
+
+                                        string uninst = item.GetValue("UninstallString") as string;
+                                        exe = TryProbeAntigravityFromCmd(uninst);
+                                        if (exe != null) return exe;
+
+                                        string icon = item.GetValue("DisplayIcon") as string;
+                                        exe = TryProbeAntigravityFromCmd(icon);
+                                        if (exe != null) return exe;
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            return null;
+        }
+
+        private static string ReadShortcutTargetPath(object shell, Type shellType, string lnkPath)
+        {
+            try
+            {
+                object lnk = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { lnkPath });
+                if (lnk == null) return null;
+                return lnk.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, null, lnk, null) as string;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string FindAntigravityFromShortcuts()
+        {
+            try
+            {
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType == null) return null;
+                object shell = Activator.CreateInstance(shellType);
+                if (shell == null) return null;
+
+                string[] roots = new string[]
+                {
+                    Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+                    Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)
+                };
+
+                List<string> dirsToScan = new List<string>();
+                for (int r = 0; r < roots.Length; r++)
+                {
+                    if (string.IsNullOrEmpty(roots[r]) || !Directory.Exists(roots[r])) continue;
+                    dirsToScan.Add(roots[r]);
+                    try
+                    {
+                        string[] subDirs = Directory.GetDirectories(roots[r]);
+                        for (int s = 0; s < subDirs.Length; s++)
+                        {
+                            string subName = Path.GetFileName(subDirs[s]);
+                            if (!string.IsNullOrEmpty(subName) &&
+                                (subName.IndexOf("Antigravity", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 subName.IndexOf("Google", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 subName.IndexOf("Gemini", StringComparison.OrdinalIgnoreCase) >= 0))
+                            {
+                                dirsToScan.Add(subDirs[s]);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                for (int d = 0; d < dirsToScan.Count; d++)
+                {
+                    string[] lnks;
+                    try { lnks = Directory.GetFiles(dirsToScan[d], "*.lnk", SearchOption.TopDirectoryOnly); }
+                    catch { continue; }
+                    for (int i = 0; i < lnks.Length; i++)
+                    {
+                        string target = ReadShortcutTargetPath(shell, shellType, lnks[i]);
+                        if (string.IsNullOrEmpty(target)) continue;
+                        if (string.Equals(Path.GetFileName(target), "Antigravity.exe", StringComparison.OrdinalIgnoreCase) &&
+                            File.Exists(target))
+                        {
+                            return target;
+                        }
+                    }
+                }
+            }
+            catch { }
             return null;
         }
 
