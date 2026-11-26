@@ -7,6 +7,7 @@ struct CdpPageInfo {
     let id: String
     let title: String
     let url: String
+    let type: String
     let webSocketDebuggerUrl: String
 }
 
@@ -381,6 +382,22 @@ enum CdpHelper {
         return nil
     }
 
+    static func isHostPage(_ page: CdpPageInfo, url raw: String) -> Bool {
+        guard page.type == "page", let url = URL(string: raw), let scheme = url.scheme?.lowercased(),
+              !raw.lowercased().contains("sharedprocess.html"),
+              url.path.range(of: #"/sidecars?/"#, options: [.regularExpression, .caseInsensitive]) == nil else { return false }
+        if page.title.trimmingCharacters(in: .whitespacesAndNewlines).range(of: #"^(?:(?:AGY\s+)?Claude\s+Studio|AGY\s+Claude\s+Style(?:\s+Studio)?|Antigravity\s+UI\s+(?:增强|增強|Enhanced|強化)|(?:Antigravity\s+)?Usage\s+Monitor|Swarm\s+Board)\s*$"#, options: [.regularExpression, .caseInsensitive]) != nil && url.path.range(of: #"/c/[0-9a-f-]{36}(?:/|$)"#, options: [.regularExpression, .caseInsensitive]) == nil { return false }
+        if scheme == "http" || scheme == "https" { return ["localhost", "127.0.0.1", "::1", "[::1]"].contains(url.host?.lowercased() ?? "") }
+        return scheme == "file" || scheme == "vscode-file"
+    }
+
+    static func isFileActionDocument(_ page: CdpPageInfo, url raw: String) -> Bool {
+        guard isHostPage(page, url: raw), let live = URL(string: raw), let initial = URL(string: page.url),
+              live.scheme == initial.scheme, live.host == initial.host, live.port == initial.port else { return false }
+        let pattern = ["http", "https"].contains(live.scheme ?? "") ? #"^/c/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/?$"# : #"/workbench(?:\.desktop)?(?:\.main)?\.html$"#
+        return live.path.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
     static func listPages(port: Int) throws -> [CdpPageInfo] {
         guard let url = URL(string: "http://127.0.0.1:\(port)/json/list") else {
             throw CdpError("Invalid CDP HTTP URL")
@@ -427,7 +444,8 @@ enum CdpHelper {
             if (isPage || isSwarmSidecar) && !wsUrl.isEmpty && !lowerUrl.hasPrefix("devtools://") && !lowerUrl.hasPrefix("data:") {
                 let id = t["id"]?.stringValue ?? wsUrl
                 let title = t["title"]?.stringValue ?? ""
-                pages.append(CdpPageInfo(id: id, title: title, url: pageUrl, webSocketDebuggerUrl: wsUrl))
+                let page = CdpPageInfo(id: id, title: title, url: pageUrl, type: type, webSocketDebuggerUrl: wsUrl)
+                if isSwarmSidecar || isHostPage(page, url: pageUrl) { pages.append(page) }
             }
         }
         return pages
@@ -547,6 +565,13 @@ enum CdpHelper {
         sb.append("    const css = ")
         sb.append(MiniJson.stringifyString(css))
         sb.append(";\n")
+        sb.append("    for (const cancel of globalThis.__agCsPendingReady || []) cancel();\n")
+        sb.append("    const listenUntilReady = (event, fn, opts) => {\n")
+        sb.append("      const pending = globalThis.__agCsPendingReady ||= new Set();\n")
+        sb.append("      const remove = () => { document.removeEventListener(event, fn); pending.delete(remove); };\n")
+        sb.append("      pending.add(remove);\n")
+        sb.append("      document.addEventListener(event, fn, opts);\n")
+        sb.append("    };\n")
         sb.append("    const applyStyle = () => {\n")
         sb.append("      const targetParent = document.head || document.documentElement;\n")
         sb.append("      if (!targetParent) return;\n")
@@ -573,7 +598,7 @@ enum CdpHelper {
         sb.append("        const isSidecar = typeof location !== 'undefined' && location.protocol === 'plugin:';\n")
         sb.append("        if (!isSidecar) {\n")
         sb.append("          if (document.head) applyStyle();\n")
-        sb.append("          else document.addEventListener('DOMContentLoaded', applyStyle, { once: true });\n")
+        sb.append("          else listenUntilReady('DOMContentLoaded', applyStyle, { once: true });\n")
         sb.append("        }\n")
         sb.append("        ")
         sb.append(bundle)
@@ -604,8 +629,8 @@ enum CdpHelper {
         sb.append("          mount();\n")
         sb.append("        }\n")
         sb.append("      };\n")
-        sb.append("      document.addEventListener('readystatechange', onReady);\n")
-        sb.append("      document.addEventListener('DOMContentLoaded', onReady);\n")
+        sb.append("      listenUntilReady('readystatechange', onReady);\n")
+        sb.append("      listenUntilReady('DOMContentLoaded', onReady);\n")
         sb.append("    }\n")
         sb.append("    const st = window.__agClaudeStudio && window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null;\n")
         sb.append("    return {\n")

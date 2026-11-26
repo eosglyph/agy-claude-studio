@@ -1,9 +1,11 @@
 import Foundation
+import AppKit
 #if canImport(Darwin)
 import Darwin
 #endif
 
 final class AttachedEntry {
+    let scriptLock = NSLock()
     let session: CdpSession
     var bootstrapScriptId: String?
     var configScriptId: String?
@@ -17,7 +19,59 @@ final class AttachedEntry {
     }
 }
 
+// CDP events arrive on the receive loop; frame-tree queries must run off that loop.
+private final class BindingSource {
+    private final class World { let frame: String; init(_ frame: String) { self.frame = frame } }
+    private let lock = NSLock()
+    private var worlds: [Int: World] = [:]
+
+    init(_ session: CdpSession) {
+        session.on("Runtime.executionContextCreated") { p in
+            guard let c = p["context"]?.objectValue, let id = c["id"]?.intValue else { return }
+            let aux = c["auxData"]?.objectValue
+            self.lock.lock(); defer { self.lock.unlock() }
+            self.worlds[id] = nil
+            if aux?["isDefault"]?.boolValue == true, let frame = aux?["frameId"]?.stringValue { self.worlds[id] = World(frame) }
+        }
+        session.on("Runtime.executionContextDestroyed") { p in
+            guard let id = p["executionContextId"]?.intValue else { return }
+            self.lock.lock(); defer { self.lock.unlock() }; self.worlds[id] = nil
+        }
+        session.on("Runtime.executionContextsCleared") { _ in self.lock.lock(); self.worlds.removeAll(); self.lock.unlock() }
+    }
+
+    func verify(_ id: Int, _ page: CdpPageInfo, _ session: CdpSession, fileAction: Bool) -> Bool {
+        lock.lock(); let world = worlds[id]; lock.unlock()
+        guard let current = world, CdpHelper.isHostPage(page, url: page.url),
+              let tree = try? session.send("Page.getFrameTree", timeoutMs: 3000),
+              let frame = tree["frameTree"]?.objectValue?["frame"]?.objectValue,
+              frame["parentId"] == nil, frame["id"]?.stringValue == current.frame,
+              let url = frame["url"]?.stringValue,
+              (fileAction ? CdpHelper.isFileActionDocument(page, url: url) : CdpHelper.isHostPage(page, url: url)) else { return false }
+        lock.lock(); defer { lock.unlock() }; return worlds[id] === current
+    }
+}
+
 final class WatcherApp {
+    private let hostConfigLock = NSLock()
+    private var lastHostEnabled = false
+
+    private func hostEnabled() -> Bool {
+        hostConfigLock.lock()
+        defer { hostConfigLock.unlock() }
+        let env = ProcessInfo.processInfo.environment
+        let override = [env["AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG"], env["AGY_CLAUDE_STYLE_ANTIGRAVITY_CONFIG"]]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
+        let path = override ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".gemini/config/config.json").path
+        do {
+            let raw = try String(contentsOfFile: path, encoding: .utf8)
+            let cfg = try MiniJson.parseObject(raw.hasPrefix("\u{feff}") ? String(raw.dropFirst()) : raw)
+            lastHostEnabled = cfg["plugins"]?.objectValue?["agy-claude-studio"]?.objectValue?["enabled"]?.boolValue != false
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
+            lastHostEnabled = true
+        } catch { /* retain the last decision during partial writes */ }
+        return lastHostEnabled
+    }
     private let baseDir: String
     private let logFile: String
     private let pidFile: String
@@ -25,6 +79,33 @@ final class WatcherApp {
     private let isWatch: Bool
     private let pollMs: Int
     private let logLock = NSLock()
+
+    private func handleFileLinkAction(_ raw: String, mode: String) -> Bool {
+        guard raw.utf8.count <= 4096, mode == "open" || mode == "reveal",
+              raw.lowercased().hasPrefix("file:///"), !raw.lowercased().hasPrefix("file:////"),
+              !raw.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7f || $0 == "\"" }),
+              let url = URL(string: raw), url.isFileURL,
+              url.host == nil || url.host == "",
+              !url.path.hasPrefix("//") else { return false }
+        let resolvedURL = URL(fileURLWithPath: url.path).resolvingSymlinksInPath().standardizedFileURL
+        let path = resolvedURL.path
+        guard !path.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7f || $0 == "\"" }) else { return false }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return false }
+        let packages: Set<String> = ["app", "pkg", "mpkg", "prefpane", "workflow", "action", "saver", "plugin", "scptd", "appex", "bundle", "framework"]
+        let allowed: Set<String> = ["html", "htm", "pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "wav", "mp3", "m4a", "flac", "ogg", "mp4", "mov", "mkv", "webm", "txt", "md", "markdown", "json", "yaml", "yml", "toml", "csv", "tsv", "xml", "log", "ini", "cfg", "conf", "css", "sql", "diff", "patch", "rtf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "zip", "tar", "gz", "7z"]
+        let ext = resolvedURL.pathExtension.lowercased()
+
+        if mode == "open" {
+            guard let values = try? resolvedURL.resourceValues(forKeys: [.isAliasFileKey, .isRegularFileKey]), values.isAliasFile == false else { return false }
+            if isDirectory.boolValue {
+                if packages.contains(ext) || NSWorkspace.shared.isFilePackage(atPath: path) { return false }
+            } else if values.isRegularFile != true || !allowed.contains(ext) { return false }
+        }
+        if mode == "open" { return NSWorkspace.shared.open(resolvedURL) }
+        NSWorkspace.shared.activateFileViewerSelecting([resolvedURL])
+        return true
+    }
 
     init(baseDir: String, isWatch: Bool, pollMs: Int = 2000) {
         self.baseDir = baseDir
@@ -87,6 +168,10 @@ final class WatcherApp {
     }
 
     func runOnce(overridePort: Int?, outFile: String?) -> Int32 {
+        guard hostEnabled() else {
+            Self.writeResult(outFile: outFile, ok: true, message: "plugin disabled", pages: [])
+            return 0
+        }
         do {
             let manifest = try PluginManifest.load(baseDir: baseDir)
             guard let port = CdpHelper.readPort(overridePort: overridePort) else {
@@ -111,6 +196,7 @@ final class WatcherApp {
             for page in pages {
                 let session = try CdpSession.connect(wsUrl: page.webSocketDebuggerUrl, timeoutMs: 4000)
                 defer { session.close() }
+                guard hostEnabled() else { break }
                 _ = try session.evaluate(expr, awaitPromise: false)
                 injectedTitles.append(CdpHelper.shortTitle(page))
             }
@@ -324,6 +410,9 @@ final class WatcherApp {
         intSource.resume()
 
         let applyToEntry: (AttachedEntry, String, String, Bool) throws -> JsonValue = { entry, fullExprToUse, configExprToUse, refreshOnly in
+            entry.scriptLock.lock()
+            defer { entry.scriptLock.unlock() }
+            guard self.hostEnabled() else { throw NSError(domain: "Watcher", code: NSUserCancelledError) }
             if refreshOnly, let _ = entry.bootstrapScriptId, !configExprToUse.isEmpty {
                 if let oldCfgId = entry.configScriptId, !oldCfgId.isEmpty {
                     _ = try? entry.session.send(
@@ -411,6 +500,7 @@ final class WatcherApp {
                 }
 
                 _ = try s.send("Page.enable", params: nil, timeoutMs: 5000)
+                let source = BindingSource(s)
                 s.on("Runtime.bindingCalled") { params in
                     guard let name = params["name"]?.stringValue,
                           let payloadStr = params["payload"]?.stringValue else { return }
@@ -418,9 +508,25 @@ final class WatcherApp {
                     let manifestSnap = manifest
                     stateLock.unlock()
                     guard name == manifestSnap.settingBinding else { return }
-                    if let kv = try? MiniJson.parseObject(payloadStr),
-                       let key = kv["key"]?.stringValue,
-                       let value = kv["value"] {
+                    guard let kv = try? MiniJson.parseObject(payloadStr) else { return }
+                    if kv["action"]?.stringValue == "fileLinkAction" || kv["key"]?.stringValue == "fileLinkContextMenu" {
+                        guard let id = params["executionContextId"]?.intValue else { return }
+                        DispatchQueue.global().async {
+                            guard source.verify(id, page, s, fileAction: kv["action"]?.stringValue == "fileLinkAction") else { return }
+                            if kv["action"]?.stringValue != "fileLinkAction" {
+                                if let value = kv["value"] { _ = CdpHelper.updateConfigSetting(baseDir: self.baseDir, manifest: manifestSnap, key: "fileLinkContextMenu", value: value) }
+                                return
+                            }
+                            let mode = kv["mode"]?.stringValue ?? ""
+                            let enabled = CdpHelper.readConfig(baseDir: self.baseDir, manifest: manifestSnap)["fileLinkContextMenu"]?.boolValue != false
+                            let ok = enabled && self.handleFileLinkAction(kv["uri"]?.stringValue ?? "", mode: mode)
+                            let response: [String: JsonValue] = ["requestId": kv["requestId"] ?? .null, "ok": .bool(ok), "mode": .string(mode)]
+                            let json = MiniJson.stringify(.object(response), pretty: false)
+                            _ = try? s.send("Runtime.evaluate", params: ["contextId": .int(Int64(id)), "expression": .string("window.__agClaudeStudio?.onFileLinkActionResult?.(" + json + ")")])
+                        }
+                        return
+                    }
+                    if let key = kv["key"]?.stringValue, let value = kv["value"] {
                         if CdpHelper.updateConfigSetting(baseDir: self.baseDir, manifest: manifestSnap, key: key, value: value) {
                             self.log("[⚙] 设置已保存: \(key) = \(MiniJson.stringify(value, pretty: false))")
                         }
@@ -508,6 +614,7 @@ final class WatcherApp {
                 currentConfigExpr = nextConfigExpr
                 cfgAutoRelaunch = nextCfg["autoRelaunchWithCdp"]?.boolValue ?? true
                 cfgExitOnHostClose = nextCfg["exitOnHostClose"]?.boolValue ?? false
+
                 let entries = Array(attached.values)
                 stateLock.unlock()
 
@@ -576,8 +683,32 @@ final class WatcherApp {
             }
 
             // Poll fallback for in-place edits that don't fire directory vnode write events
+            let enabled = hostEnabled()
             reloadQueue.sync {
+                if !enabled {
+                    stateLock.lock()
+                    let entries = Array(attached.values)
+                    let removeExpr = manifest.removeExpression
+                    attached.removeAll()
+                    stateLock.unlock()
+                    for entry in entries {
+                        entry.session.onClose = nil
+                        for id in [entry.configScriptId, entry.bootstrapScriptId].compactMap({ $0 }) {
+                            _ = try? entry.session.send("Page.removeScriptToEvaluateOnNewDocument", params: ["identifier": .string(id)], timeoutMs: 5000)
+                        }
+                        _ = try? entry.session.evaluate(removeExpr, awaitPromise: false)
+                        entry.session.close()
+                    }
+                }
                 performReload(nil)
+            }
+
+            stateLock.lock()
+            let monitorExit = exitOnHostCloseFlag || cfgExitOnHostClose
+            stateLock.unlock()
+            if !enabled && !monitorExit {
+                _ = exitSem.wait(timeout: .now() + .milliseconds(pollMs))
+                continue
             }
 
             var sleepMs = pollMs
@@ -611,7 +742,7 @@ final class WatcherApp {
                     stateLock.lock()
                     let needsAttach = (attached[page.id] == nil && !attaching.contains(page.id))
                     stateLock.unlock()
-                    if needsAttach {
+                    if enabled && needsAttach {
                         group.enter()
                         DispatchQueue.global(qos: .utility).async {
                             attachPage(page)
@@ -619,7 +750,7 @@ final class WatcherApp {
                         }
                     }
                 }
-                _ = group.wait(timeout: .now() + .seconds(10))
+                group.wait() // Finish this attach batch before the next tick can retire entries.
             } else {
                 consecutivePortFailures += 1
                 if consecutivePortFailures >= 3 {
@@ -651,7 +782,7 @@ final class WatcherApp {
                     break
                 }
 
-                if !runningPids.isEmpty {
+                if enabled && !runningPids.isEmpty {
                     noCdpRunningTicks += 1
                     let pidSig = runningPids.map { String($0) }.joined(separator: ",")
                     if noCdpRunningTicks >= 3 {
@@ -672,7 +803,7 @@ final class WatcherApp {
                                     log("[*] 提示：可在 config.json 中设置 \"autoRelaunchWithCdp\": true 以启用自动温和重启接管")
                                 }
                             }
-                            if autoRelaunch && relaunchedPidSig != pidSig && Date().timeIntervalSince(lastRelaunchAt) >= 60.0 {
+                            if enabled && autoRelaunch && hostEnabled() && relaunchedPidSig != pidSig && Date().timeIntervalSince(lastRelaunchAt) >= 60.0 {
                                 relaunchedPidSig = pidSig
                                 lastRelaunchAt = Date()
                                 log("[↻] autoRelaunchWithCdp 已启用：正在温和重启 Antigravity 并附加 --remote-debugging-port=0 ...")
@@ -727,6 +858,9 @@ final class WatcherApp {
         startupGraceSeconds: Double,
         outFile: String?
     ) -> Int32 {
+        if !hostEnabled() {
+            return runWatch(overridePort: overridePort, exitOnHostCloseFlag: true, parentPid: parentPid, startupGraceEnabled: true, startupGraceSeconds: startupGraceSeconds, replaceExisting: replaceExisting, waitBrieflyForLock: true)
+        }
         try? FileManager.default.createDirectory(atPath: baseDir, withIntermediateDirectories: true, attributes: nil)
         var cfgAutoRelaunch = true
         if let manifest = try? PluginManifest.load(baseDir: baseDir) {

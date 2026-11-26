@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { verifyNativeToggle } from './native-watcher-toggle.mjs';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -387,6 +388,7 @@ test(
     const modeFile = path.join(installDir, '.install-mode');
 
     const testEnv = {
+      AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: path.join(workDir, 'host.json'),
       AGY_CS_TEST_SYSTEM_ROOT: testSysRoot,
       AGY_CS_NO_UI: '1',
       AG_WATCH_POLL_MS: '300',
@@ -623,6 +625,8 @@ test(
   const outUninstall = path.join(workDir, 'uninstall.json');
   const outStatus = path.join(workDir, 'status.json');
   const mockCdp = createMockCdpServer();
+  const file = path.join(workDir, 'host.json');
+  const testEnv = { AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: file, AGY_CS_TEST_SYSTEM_ROOT: path.join(workDir, 'sysroot'), AG_WATCH_POLL_MS: '200' };
 
   try {
     const buildRes = buildInstaller({ outputPath: installerExe });
@@ -655,7 +659,7 @@ test(
         '--out',
         outInstall,
       ],
-      20000
+      20000, testEnv
     );
 
     const installResult = JSON.parse(fs.readFileSync(outInstall, 'utf8'));
@@ -701,11 +705,48 @@ test(
 
     // Verify watcher --once CLI mode works standalone against CDP
     const watcherExe = path.join(installDir, 'agy-claude-studio-watcher.exe');
+    // Exercise the actual assembly from the installer payload; never open Explorer.
+    const probe = String.raw`
+      $ErrorActionPreference = 'Stop'
+      $assembly = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($env:AGY_TEST_WATCHER))
+      Add-Type -TypeDefinition @'
+using System;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+public static class RevealProbe {
+    public static void Check(Assembly assembly) {
+        var method = assembly.GetType("AgyClaudeStudio.WindowsFileAction", true).GetMethod("RunInSta", BindingFlags.Static | BindingFlags.NonPublic);
+        Func<bool> probe = () => Thread.CurrentThread.GetApartmentState() == ApartmentState.STA;
+        bool ok = Task.Run(() => Thread.CurrentThread.GetApartmentState() == ApartmentState.MTA &&
+            (bool)method.Invoke(null, new object[] { probe })).Result;
+        if (!ok) throw new InvalidOperationException("Shell callback did not run in STA");
+    }
+}
+'@
+      [RevealProbe]::Check($assembly)
+      $flags = [Reflection.BindingFlags]'NonPublic,Static'
+      $enabled = $assembly.GetType('AgyClaudeStudio.Watcher.Program', $true).GetMethod('HostEnabled', $flags)
+      $fixture = $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG
+      foreach ($expected in @($true, $false)) {
+        $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG = $fixture
+        [IO.File]::WriteAllText($fixture, (@{plugins=@{'agy-claude-studio'=@{enabled=$expected}}} | ConvertTo-Json -Depth 4))
+        if ($enabled.Invoke($null, $null) -ne $expected) { throw 'valid decision failed' }
+        [IO.File]::WriteAllText($fixture, '{')
+        if ($enabled.Invoke($null, $null) -ne $expected) { throw 'partial write changed last decision' }
+        $env:AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG = 'invalid"path'
+        if ($enabled.Invoke($null, $null) -ne $expected) { throw 'invalid config path changed last decision' }
+      }
+    `;
+    const powershell = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    await runExe(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(probe, 'utf16le').toString('base64')], 15000, {
+      AGY_TEST_WATCHER: watcherExe, AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: path.join(workDir, 'probe-config.json'),
+    });
     const onceOut = path.join(workDir, 'once.json');
     await runExe(
       watcherExe,
       ['--once', '--dir', installDir, '--cdp-port', String(port), '--out', onceOut],
-      10000
+      10000, testEnv
     );
     const onceResult = JSON.parse(fs.readFileSync(onceOut, 'utf8'));
     assert.equal(onceResult.ok, true);
@@ -735,6 +776,11 @@ test(
     assert.ok(reloadAddCalls.length >= 1);
     const maxReloadLen = Math.max(...reloadAddCalls.map((c) => (c.params?.source || '').length));
     assert.ok(maxReloadLen < 2048, `Expected short config script (<2KB) on C# hot-reload, got ${maxReloadLen}`);
+
+    await verifyNativeToggle({ file, mock: mockCdp, waitFor, removeExpr: cdp.REMOVE_EXPRESSION, once: async () => {
+      await runExe(watcherExe, ['--once', '--dir', installDir, '--cdp-port', String(port), '--out', onceOut], 10000, testEnv);
+      return JSON.parse(fs.readFileSync(onceOut, 'utf8'));
+    } });
 
     // Verify compiled C# watcher --remove refuses to kill a foreign PID stored in .watch.pid
     const probeDir = path.join(workDir, 'foreign-pid-probe');
@@ -767,7 +813,7 @@ test(
         '--out',
         outUpgrade,
       ],
-      20000
+      20000, testEnv
     );
     const upgradeResult = JSON.parse(fs.readFileSync(outUpgrade, 'utf8'));
     assert.equal(upgradeResult.ok, true);
@@ -790,7 +836,7 @@ test(
         '--out',
         outUninstall,
       ],
-      20000
+      20000, testEnv
     );
 
     const uninstallResult = JSON.parse(fs.readFileSync(outUninstall, 'utf8'));

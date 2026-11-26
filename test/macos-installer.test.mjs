@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { verifyNativeToggle } from './native-watcher-toggle.mjs';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -529,6 +530,7 @@ test(
     const plistPath = path.join(testRoot, 'LaunchAgents', 'io.github.eosglyph.agy-claude-studio.plist');
     const appLauncherPath = path.join(testRoot, 'Applications', 'Antigravity (Claude Studio).app');
     const testEnv = {
+      AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: path.join(workDir, 'host.json'),
       AGY_CS_TEST_SYSTEM_ROOT: testRoot,
       AGY_CS_NO_UI: '1',
       AG_WATCH_POLL_MS: '200',
@@ -719,6 +721,11 @@ test(
       assert.ok(reloadAddCalls.length >= 1, 'Expected lightweight Page.addScriptToEvaluateOnNewDocument during config reload');
       const maxReloadLen = Math.max(...reloadAddCalls.map((c) => (c.params?.source || '').length));
       assert.ok(maxReloadLen < 2048, `Expected short config script (<2KB) on Swift hot-reload, got ${maxReloadLen}`);
+
+      await verifyNativeToggle({ file: testEnv.AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG, mock: mockCdp, waitFor, removeExpr: cdp.REMOVE_EXPRESSION, once: async () => {
+        await runBin(watcherBin, ['--once', '--dir', installDir, '--cdp-port', String(port), '--out', onceOut], 10000, testEnv);
+        return JSON.parse(fs.readFileSync(onceOut, 'utf8'));
+      } });
 
       // Verify compiled Swift watcher --remove refuses to kill a foreign PID stored in .watch.pid
       const probeDir = path.join(workDir, 'foreign-pid-probe');

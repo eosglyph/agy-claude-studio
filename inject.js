@@ -79,6 +79,11 @@ function shortTitle(page) {
 }
 
 async function injectOnce({ log: outLog = log } = {}) {
+  const enabled = cdpApi.createWatcherEnabledReader();
+  if (!enabled()) {
+    outLog('[*] 宿主已禁用 Claude Studio，跳过注入');
+    return { port: null, injected: 0, skipped: 0 };
+  }
   const ports = typeof cdpApi.readActivePorts === 'function' ? cdpApi.readActivePorts() : [cdpApi.readPort()].filter(Boolean);
   if (!ports.length) {
     const proc = cdpApi.detectAntigravityProcess();
@@ -107,6 +112,7 @@ async function injectOnce({ log: outLog = log } = {}) {
   for (const page of pages) {
     const session = await cdpApi.CdpSession.connect(page.webSocketDebuggerUrl);
     try {
+      if (!enabled()) break;
       const res = await session.evaluate(expr);
       if (res && res.status === 'skipped-non-host') {
         skipped += 1;
@@ -122,6 +128,8 @@ async function injectOnce({ log: outLog = log } = {}) {
 }
 
 async function launchWithCdp({ autoRelaunchFromConfig = false } = {}) {
+  const enabled = cdpApi.createWatcherEnabledReader();
+  if (!enabled()) return;
   const autoRelaunchWithCdp =
     WATCH || autoRelaunchFromConfig ? cdpApi.readConfig().autoRelaunchWithCdp === true : false;
   const res = await cdpApi.ensureAntigravityWithCdp({
@@ -262,7 +270,28 @@ function acquireLock(opts = {}) {
   return { acquired: true, replaced: decision.action === 'owned', priorStatus: decision.status };
 }
 
-async function applyPageScripts(entry, { expr, configExpr, refreshOnly = false } = {}) {
+function applyPageScripts(entry, options = {}) {
+  // Attach, hot reload and config sync share the script IDs for this target.
+  const next = (entry.pending || Promise.resolve()).then(() =>
+    entry.retired || options.enabled?.() === false ? { status: 'paused' } : writePageScripts(entry, options));
+  entry.pending = next.catch(() => {});
+  return next;
+}
+
+function retirePageScripts(entry) {
+  entry.retired = true;
+  return entry.cleanup ||= removePageScripts(entry);
+}
+
+async function removePageScripts(entry) {
+  await entry.pending;
+  for (const identifier of [entry.configScriptId, entry.bootstrapScriptId]) {
+    if (identifier) await entry.session.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {});
+  }
+  await entry.session.evaluate(cdpApi.REMOVE_EXPRESSION).catch(() => {});
+}
+
+async function writePageScripts(entry, { expr, configExpr, refreshOnly = false } = {}) {
   if (refreshOnly && configExpr && entry.bootstrapScriptId) {
     if (entry.configScriptId) {
       await entry.session
@@ -324,6 +353,7 @@ async function watch({
   const effectiveExitOnCloseFlag = EXIT_ON_HOST_CLOSE_FLAG || forceExitOnHostClose;
 
   const attached = new Map();
+  const enabled = cdpApi.createWatcherEnabledReader();
   let currentConfig = cdpApi.readConfig();
   let currentCodeHash = cdpApi.computeHash(cdpApi.readRuntimeBundle());
   let currentCssHash = cdpApi.computeHash(cdpApi.readCss());
@@ -395,7 +425,7 @@ async function watch({
   }
 
   async function apply(entry, opts = {}) {
-    return applyPageScripts(entry, { expr, configExpr, refreshOnly: opts.refreshOnly });
+    return applyPageScripts(entry, { expr, configExpr, enabled, refreshOnly: opts.refreshOnly });
   }
 
   async function attach(page) {
@@ -409,11 +439,14 @@ async function watch({
         log(`[-] 窗口已关闭: ${shortTitle(page)}`);
       };
       let periodicSyncInFlight = false;
+      const trustedSource = cdpApi.trackBindingSource(session, page);
       await session.send('Page.enable');
-      session.on('Runtime.bindingCalled', ({ name, payload }) => {
-        if (name !== SETTING_BINDING) return;
+      session.on('Runtime.bindingCalled', async ({ name, payload, executionContextId }) => {
+        if (name !== SETTING_BINDING || entry.retired) return;
         try {
           const msg = JSON.parse(payload);
+          const fileAction = msg?.action === 'fileLinkAction';
+          if ((fileAction || msg?.key === 'fileLinkContextMenu') && !await trustedSource(executionContextId, fileAction)) return;
           if (msg && msg.action === 'syncPeriodicElements') {
             const requestId = String(msg.requestId || '');
             if (periodicSyncInFlight) return;
@@ -466,6 +499,22 @@ async function watch({
             })();
             return;
           }
+          if (msg && msg.action === 'fileLinkAction') {
+            const mode = msg.mode;
+            if (mode !== 'open' && mode !== 'reveal') return;
+            const requestId = String(msg.requestId || '').slice(0, 100);
+            const resultExpr = (result) => `window.__agClaudeStudio?.onFileLinkActionResult?.(${JSON.stringify({ requestId, ...result })})`;
+            (async () => {
+              let result = { ok: false, reason: 'unsupported' };
+              if (cdpApi.readConfig().fileLinkContextMenu !== false) {
+                result = await cdpApi.openLocalFileActionAsync({ mode, target: msg.uri });
+              }
+              if (!session.closed && requestId) {
+                await session.evaluate(resultExpr({ ok: Boolean(result.ok), mode })).catch(() => {});
+              }
+            })().catch(() => {});
+            return;
+          }
           const { key, value } = msg;
           if (cdpApi.updateConfigSetting(key, value)) {
             currentConfig = cdpApi.readConfig();
@@ -476,6 +525,13 @@ async function watch({
       await session.send('Runtime.enable');
       await session.send('Runtime.addBinding', { name: SETTING_BINDING });
       const res = await apply(entry);
+      if (res.status === 'paused') {
+        session.onClose = null;
+        await retirePageScripts(entry);
+        session.close();
+        attached.delete(page.id);
+        return;
+      }
       hadAttachedWindow = true;
       log(`[✓] 已注入 agy-claude-studio: ${shortTitle(page)} (${res.status})`);
     } catch (err) {
@@ -505,6 +561,12 @@ async function watch({
     busy = true;
     let nextDelayMs = POLL_INTERVAL_MS;
     try {
+      const active = enabled();
+      if (!active && attached.size) {
+        await Promise.all([...attached.values()].filter(Boolean).map(retirePageScripts));
+        closeAllSessions();
+      }
+      if (!active && !effectiveExitOnCloseFlag && !currentConfig.exitOnHostClose) return;
       const port = cdpApi.readPort();
       let pages = null;
       if (port) {
@@ -525,7 +587,7 @@ async function watch({
           log(`[+] 连接到调试端口 ${port}`);
           lastPort = port;
         }
-        await Promise.all(pages.filter((p) => !attached.has(p.id)).map(attach));
+        if (active) await Promise.all(pages.filter((p) => !attached.has(p.id)).map(attach));
       } else {
         consecutivePortFailures++;
         if (consecutivePortFailures >= 3 && (attached.size > 0 || lastPort !== null)) {
@@ -552,7 +614,7 @@ async function watch({
           return;
         }
 
-        if (proc.running) {
+        if (proc.running && active && enabled()) {
           noCdpRunningTicks++;
           const pidSig = proc.pids.slice().sort((a, b) => a - b).join(',');
           if (noCdpRunningTicks >= 3) {
@@ -681,6 +743,7 @@ async function main() {
 module.exports = {
   acquireLock,
   applyPageScripts,
+  retirePageScripts,
   updateConfigSetting: cdpApi.updateConfigSetting,
   injectOnce,
   launchWithCdp,

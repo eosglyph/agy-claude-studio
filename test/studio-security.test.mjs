@@ -153,20 +153,25 @@ test('timed-out scripts stop their child and do not inherit the sidecar UI token
     setTimeout(() => process.exit(0), 10000);
   `);
   fs.writeFileSync(parent, `
-    if (process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN) process.exit(3);
+    if (Object.keys(process.env).some(key => key.toUpperCase().startsWith('ANTIGRAVITY_SIDECAR_'))) process.exit(3);
     require('node:child_process').spawn(process.execPath, process.argv.slice(2), { stdio: 'inherit' });
     setTimeout(() => process.exit(0), 11000);
   `);
   const saved = scripts.upsertCustomScript(dataDir, { name: 'Process tree', scriptPath: parent, args: [descendant, pulse], timeoutSec: 5 });
   const key = 'ANTIGRAVITY_SIDECAR_UI_TOKEN';
   const previous = process.env[key];
+  const future = 'ANTIGRAVITY_SIDECAR_FUTURE_TOKEN';
+  const previousFuture = process.env[future];
   let pending;
   try {
     process.env[key] = 'test-token';
+    process.env[future] = 'test-future-token';
     pending = scripts.runCustomScript(dataDir, saved.script.id);
   } finally {
     if (previous === undefined) delete process.env[key];
     else process.env[key] = previous;
+    if (previousFuture === undefined) delete process.env[future];
+    else process.env[future] = previousFuture;
   }
   const result = await pending;
   assert.equal(result.timedOut, true);

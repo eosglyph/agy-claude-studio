@@ -18,7 +18,7 @@ const {
   buildConfigScriptExpression,
   REMOVE_EXPRESSION,
 } = require('./cdp');
-const { applyPageScripts } = require('./inject');
+const { applyPageScripts, retirePageScripts } = require('./inject');
 const {
   createSafeLogger,
   createIdleHostTracker,
@@ -140,6 +140,7 @@ async function startWatchController(options = {}) {
   );
 
   const attached = new Map();
+  const enabled = require('./cdp').createWatcherEnabledReader(options.antigravityConfigPath);
   const skippedTargets = new Map();
   const idleTracker = createIdleHostTracker({ maxIdleFailures, keepAlive });
   let currentConfig = readConfig();
@@ -168,7 +169,7 @@ async function startWatchController(options = {}) {
   }
 
   async function apply(entry, { refreshOnly = false } = {}) {
-    return await applyPageScripts(entry, { expr, configExpr, refreshOnly });
+    return await applyPageScripts(entry, { expr, configExpr, refreshOnly, enabled: () => !stopped && enabled() });
   }
 
   async function attach(page) {
@@ -192,11 +193,14 @@ async function startWatchController(options = {}) {
       };
 
       let periodicSyncInFlight = false;
+      const trustedSource = require('./cdp').trackBindingSource(session, page);
       await session.send('Page.enable');
-      session.on('Runtime.bindingCalled', ({ name, payload }) => {
-        if (name !== SETTING_BINDING) return;
+      session.on('Runtime.bindingCalled', async ({ name, payload, executionContextId }) => {
+        if (name !== SETTING_BINDING || entry.retired) return;
         try {
           const msg = JSON.parse(payload);
+          const fileAction = msg?.action === 'fileLinkAction';
+          if ((fileAction || msg?.key === 'fileLinkContextMenu') && !await trustedSource(executionContextId, fileAction)) return;
           if (msg && msg.action === 'syncPeriodicElements') {
             const requestId = String(msg.requestId || '');
             if (periodicSyncInFlight) {
@@ -261,6 +265,23 @@ async function startWatchController(options = {}) {
             })();
             return;
           }
+          if (msg && msg.action === 'fileLinkAction') {
+            const mode = msg.mode;
+            if (mode !== 'open' && mode !== 'reveal') return;
+            const requestId = String(msg.requestId || '').slice(0, 100);
+            (async () => {
+              let result = { ok: false };
+              const freshCdp = require('./cdp');
+              if (freshCdp.readConfig().fileLinkContextMenu !== false) {
+                result = await freshCdp.openLocalFileActionAsync({ mode, target: msg.uri });
+              }
+              if (!session.closed && requestId) {
+                const payload = JSON.stringify({ requestId, ok: Boolean(result.ok), mode });
+                await session.evaluate(`window.__agClaudeStudio?.onFileLinkActionResult?.(${payload})`).catch(() => {});
+              }
+            })().catch(() => {});
+            return;
+          }
           if (typeof updateConfigSetting !== 'function') return;
           const { key, value } = msg;
           if (updateConfigSetting(key, value)) {
@@ -271,6 +292,16 @@ async function startWatchController(options = {}) {
       await session.send('Runtime.enable');
       await session.send('Runtime.addBinding', { name: SETTING_BINDING });
       const res = await apply(entry);
+      if (res.status === 'paused') {
+        // stop() may already be retiring this session; let that cleanup finish.
+        if (!stopped) {
+          session.onClose = null;
+          await retirePageScripts(entry);
+          session.close();
+          attached.delete(page.id);
+        }
+        return;
+      }
       if (res && res.status === 'skipped-non-host') {
         for (const id of [entry.configScriptId, entry.bootstrapScriptId]) {
           if (!id) continue;
@@ -300,21 +331,14 @@ async function startWatchController(options = {}) {
   }
 
   async function removeInjectedUiBestEffort() {
-    const evaluateRemove = async () => {
-      const activeEntries = Array.from(attached.values()).filter((e) => e && e.session && !e.session.closed);
-      if (activeEntries.length > 0) {
-        await Promise.allSettled(
-          activeEntries.map((entry) => entry.session.evaluate(REMOVE_EXPRESSION).catch(() => {}))
-        );
-        return;
-      }
+    const activeEntries = Array.from(attached.values()).filter((e) => e && e.session && !e.session.closed);
+    if (activeEntries.length) {
+      // Commands have their own CDP deadlines. Don't close a live session under
+      // an in-flight refresh before its registrations and mounted UI are removed.
+      await Promise.allSettled(activeEntries.map(retirePageScripts));
+    } else {
       await removeInjectedUiFromReachablePages({ timeoutMs: 1200 });
-    };
-    const timeout = new Promise((resolve) => {
-      const t = setTimeout(resolve, 1200);
-      if (typeof t.unref === 'function') t.unref();
-    });
-    await Promise.race([evaluateRemove().catch(() => {}), timeout]);
+    }
   }
 
   async function stop({ removeFromPages = false, exitCode = 0, reason = 'stop' } = {}) {
@@ -367,6 +391,12 @@ async function startWatchController(options = {}) {
     if (stopped || busy) return;
     busy = true;
     try {
+      const active = enabled();
+      if (!active && attached.size) {
+        await Promise.all([...attached.values()].filter(Boolean).map(retirePageScripts));
+        clearAttachedSessions();
+      }
+      if (!active && !watchHostExit) return;
       const { port, pages } = await resolveReachableTarget();
       if (stopped) return;
 
@@ -401,7 +431,7 @@ async function startWatchController(options = {}) {
         }
       }
 
-      await Promise.all(
+      if (active) await Promise.all(
         pages.filter((p) => !attached.has(p.id) && !skippedTargets.has(p.id)).map(attach)
       );
 

@@ -18,8 +18,9 @@ const cdp = require(path.join(ROOT_DIR, 'cdp.js'));
 const injectMod = require(path.join(ROOT_DIR, 'inject.js'));
 const removeMod = require(path.join(ROOT_DIR, 'remove.js'));
 
-function createMockCdpServer({ evaluateDelayMs = 0 } = {}) {
+function createMockCdpServer({ evaluateDelayMs = 0, pageIds = ['PAGE_MOCK'] } = {}) {
   const sockets = new Set();
+  const events = [];
   let injectCount = 0;
 
   function encodeWsTextFrame(str) {
@@ -49,15 +50,13 @@ function createMockCdpServer({ evaluateDelayMs = 0 } = {}) {
       const addr = server.address();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(
-        JSON.stringify([
-          {
-            id: 'PAGE_MOCK',
+        JSON.stringify(pageIds.map((id) => ({
+            id,
             type: 'page',
             title: 'Antigravity Mock',
             url: 'https://127.0.0.1:9999/',
-            webSocketDebuggerUrl: `ws://127.0.0.1:${addr.port}/devtools/page/PAGE_MOCK`,
-          },
-        ])
+            webSocketDebuggerUrl: `ws://127.0.0.1:${addr.port}/devtools/page/${id}`,
+          })))
       );
       return;
     }
@@ -123,10 +122,15 @@ function createMockCdpServer({ evaluateDelayMs = 0 } = {}) {
             fragChunks = [];
             try {
               const msg = JSON.parse(text);
+              const event = { page: req.url, op: msg.method };
+              events.push(event);
               let result = {};
               if (msg.method === 'Page.addScriptToEvaluateOnNewDocument') {
-                result = { identifier: 'script-1' };
+                result = { identifier: event.id = 'script-' + events.length };
+              } else if (msg.method === 'Page.removeScriptToEvaluateOnNewDocument') {
+                event.id = msg.params.identifier;
               } else if (msg.method === 'Runtime.evaluate') {
+                event.cleanup = msg.params.expression === cdp.REMOVE_EXPRESSION;
                 injectCount++;
                 result = { result: { type: 'object', value: { version: cdp.PLUGIN_VERSION, status: 'ok' } } };
               }
@@ -148,6 +152,7 @@ function createMockCdpServer({ evaluateDelayMs = 0 } = {}) {
   });
 
   return {
+    events,
     async start() {
       await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
       return server.address().port;
@@ -179,7 +184,7 @@ function stageTempRuntimeDir() {
   return dir;
 }
 
-async function waitFor(fn, timeoutMs = 12000, intervalMs = 150) {
+async function waitFor(fn, timeoutMs = 25000, intervalMs = 150) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const v = await fn();
@@ -222,6 +227,98 @@ function cleanupTempDir(dir) {
       throw err;
     }
   }
+}
+
+test('host plugin decision is strict and survives an incomplete config write', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-host-state-'));
+  try {
+    const file = path.join(dir, 'host.json');
+    const enabled = cdp.createWatcherEnabledReader(file);
+    assert.equal(enabled(), true);
+    for (const [value, expected] of [[false, false], ['false', true], [0, true], [true, true], [false, false]]) {
+      fs.writeFileSync(file, '\uFEFF' + JSON.stringify({ plugins: { 'agy-claude-studio': { enabled: value } } }));
+      assert.equal(enabled(), expected);
+      fs.writeFileSync(file, '{');
+      assert.equal(enabled(), expected);
+    }
+    assert.equal(cdp.createWatcherEnabledReader(file)(), false);
+    fs.writeFileSync(file, '{}');
+    assert.equal(enabled(), true);
+  } finally { cleanupTempDir(dir); }
+});
+
+test('disable drains an in-flight registration and cancels queued reload before removing the UI', async () => {
+  const calls = [];
+  let started, resume;
+  const first = new Promise(r => { started = r; });
+  const hold = new Promise(r => { resume = r; });
+  const entry = { session: {
+    async send(op, params) {
+      if (params.source) {
+        if (params.source === 'boot') { started(); await hold; }
+        calls.push('add ' + params.source);
+        return { identifier: params.source };
+      }
+      calls.push('remove ' + params.identifier);
+    },
+    async evaluate(expr) { calls.push(expr === cdp.REMOVE_EXPRESSION ? 'unmount' : expr); return { status: 'ok' }; },
+  } };
+  const initial = injectMod.applyPageScripts(entry, { expr: 'boot', configExpr: 'config' });
+  await first;
+  const reload = injectMod.applyPageScripts(entry, { expr: 'late' });
+  const retiring = injectMod.retirePageScripts(entry);
+  assert.equal(injectMod.retirePageScripts(entry), retiring);
+  resume();
+  await Promise.all([initial, retiring]);
+  assert.equal((await reload).status, 'paused');
+  assert.deepEqual(calls, ['add boot', 'add config', 'config', 'boot', 'remove config', 'remove boot', 'unmount']);
+});
+
+for (const mode of ['cli', 'controller']) {
+  test(`${mode} watcher: pause, retire both scripts per window, resume after host restart`, async () => {
+    const dir = stageTempRuntimeDir();
+    const pageIds = ['PAGE_A', 'PAGE_B'];
+    const mock = createMockCdpServer({ pageIds });
+    const file = path.join(dir, 'host-state.fixture');
+    const set = enabled => fs.writeFileSync(file, JSON.stringify({ plugins: { 'agy-claude-studio': { enabled } } }));
+    let child;
+    try {
+      set(false);
+      const port = await mock.start();
+      const env = { ...process.env, AG_CDP_PORT: String(port), AG_WATCH_POLL_MS: '100', AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: file, AGY_CLAUDE_STUDIO_STATE_DIR: dir };
+      for (const name of ['watcher-core.js', 'lifecycle.js']) fs.copyFileSync(path.join(ROOT_DIR, name), path.join(dir, name));
+      const args = mode === 'cli' ? ['inject.js', '--watch'] : ['-e', "require('./watcher-core').startWatchController({watchHostExit:false, tickIntervalMs:100, installWatchdog:false})"];
+      child = spawn(process.execPath, args, { env, cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
+      let stderr = '';
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      await waitFor(() => {
+        assert.equal(child.exitCode, null, stderr);
+        return fs.existsSync(path.join(dir, '.watch.pid'));
+      });
+      await new Promise(r => setTimeout(r, 350));
+      assert.equal(mock.events.length, 0);
+      set(true);
+      await waitFor(() => mock.events.filter(e => e.cleanup === false).length === 4);
+      set(false);
+      await waitFor(() => mock.events.filter(e => e.cleanup).length === 2);
+      for (const id of pageIds) {
+        const ev = mock.events.filter(e => e.page.endsWith('/' + id));
+        const ids = op => ev.filter(e => e.op === `Page.${op}ScriptToEvaluateOnNewDocument`).map(e => e.id).sort();
+        assert.equal(ids('add').length, 2);
+        assert.deepEqual(ids('remove'), ids('add'));
+        assert.ok(ev.at(-1).cleanup);
+      }
+      const count = mock.events.length;
+      fs.writeFileSync(file, '{');
+      pageIds.splice(0, 2, 'NEW_HOST');
+      fs.writeFileSync(path.join(dir, 'config.json'), '{}');
+      await new Promise(r => setTimeout(r, 500));
+      assert.equal(mock.events.length, count);
+      set(true);
+      await waitFor(() => mock.events.slice(count).filter(e => e.cleanup === false).length === 2);
+      assert.ok(mock.events.slice(count).every(e => e.page.endsWith('/NEW_HOST')));
+    } finally { await killAndWait(child); await mock.close(); cleanupTempDir(dir); }
+  });
 }
 
 test('formatCdpUnavailableMessage clearly distinguishes Antigravity 2.33.0+ running without CDP vs not running', () => {
@@ -1151,6 +1248,9 @@ test('applyPageScripts separates immutable bootstrap from short config script an
   sandbox.globalThis = sandbox;
 
   // Step 1: Execute new-document scripts in exact registration order at document-start
+  for (const source of activeScripts.values()) vm.runInNewContext(source, sandbox);
+  vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  assert.ok([...docListeners.values()].every(list => list.length === 0), 'disable before DOM readiness cancels deferred mounts');
   for (const scriptSource of activeScripts.values()) {
     vm.runInNewContext(scriptSource, sandbox);
   }

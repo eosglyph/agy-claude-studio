@@ -146,6 +146,8 @@ jobs:
           - **macOS (Apple Silicon + Intel Universal)**：下载 \`${MAC_FILE}\`，打开后拖入「应用程序」并运行 \`Claude Studio.app\`，可自由选择「托管启动（推荐）」或「常驻守护（LaunchAgent）」；使用生成的 \`Antigravity (Claude Studio).app\` 或 \`launch-antigravity.command\` 启动即可。
             > **macOS 首次打开提示说明**：本构建采用 Ad-hoc 签名；若 macOS 提示“无法验证开发者”，请**右键点击 App → 打开**，或在终端执行 \`xattr -cr "/Applications/Claude Studio.app"\` 后再次打开。
 
+          **旧版 Windows 守护进程迁移**：如果曾独立安装 Claude Style，请先用旧版的卸载入口关闭其自启动并卸载，确认旧安装目录里的 \`agy-claude-style-watcher.exe\` 已退出，再安装新版。仅更新插件源码或安装到新的 Claude Studio 目录，不会替换另一个目录中运行的旧进程。
+
           ### 🔐 SHA256 Checksums
           \`\`\`text
           EOF

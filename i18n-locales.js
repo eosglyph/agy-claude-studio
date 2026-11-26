@@ -359,6 +359,12 @@
 
     // ── Chat File Link Context Menu ──────────────────────────────────────────
     fileMenuCopyPath: ['复制完整路径', '複製完整路徑', '複製完整路徑', 'Copy Full Path', 'フルパスをコピー'],
+    fileMenuOpen: ['打开文件', '開啟檔案', '打開檔案', 'Open file', 'ファイルを開く'],
+    fileMenuReveal: ['在文件夹中显示', '在資料夾中顯示', '在資料夾中顯示', 'Show in folder', 'フォルダに表示'],
+    fileMenuOpened: ['已打开文件', '已開啟檔案', '已打開檔案', 'File opened', 'ファイルを開きました'],
+    fileMenuRevealed: ['已在文件夹中显示', '已在資料夾中顯示', '已在資料夾中顯示', 'Shown in folder', 'フォルダに表示しました'],
+    fileMenuActionFailed: ['操作失败', '操作失敗', '操作失敗', 'File action failed', '操作に失敗しました'],
+    fileMenuActionUnavailable: ['文件操作暂不可用', '檔案操作暫不可用', '檔案操作暫不可用', 'File action unavailable', 'ファイル操作を利用できません'],
     fileMenuCopyFailed: ['复制失败', '複製失敗', '複製失敗', 'Could not copy the path', 'パスをコピーできませんでした'],
     fileMenuCopied: ['已复制完整路径', '已複製完整路徑', '已複製完整路徑', 'Full path copied', 'フルパスをコピーしました'],
   };
@@ -2005,6 +2011,8 @@
     ['Turbo Mode', 'Turbo 模式', 'Turbo 模式', 'Turbo 模式', 'Turbo モード'],
     ['Model cannot be changed while the agent is running', '智能体运行中无法更改模型', '代理執行中無法變更模型', '代理行緊嗰陣唔可以改模型', 'エージェント実行中はモデルを変更できません'],
     ['Model cannot be changed while the agent is running.', '智能体运行中无法更改模型。', '代理執行中無法變更模型。', '代理行緊嗰陣唔可以改模型。', 'エージェント実行中はモデルを変更できません。'],
+    ['Applies to /btw and messages sent after this turn', '适用于 /btw 及本轮之后发送的消息', '適用於 /btw 及本輪之後傳送的訊息', '適用於 /btw 同今輪之後發送嘅訊息', '/btw およびこのターン以降に送信されるメッセージに適用'],
+    ['Applies to /btw and messages sent after this turn.', '适用于 /btw 及本轮之后发送的消息。', '適用於 /btw 及本輪之後傳送的訊息。', '適用於 /btw 同今輪之後發送嘅訊息。', '/btw およびこのターン以降に送信されるメッセージに適用されます。'],
     ['Permissions cannot be changed while the agent is running', '智能体运行中无法更改权限', '代理執行中無法變更權限', '代理行緊嗰陣唔可以改權限', 'エージェント実行中は権限を変更できません'],
     ['Permissions cannot be changed while the agent is running.', '智能体运行中无法更改权限。', '代理執行中無法變更權限。', '代理行緊嗰陣唔可以改權限。', 'エージェント実行中は権限を変更できません。'],
     ['Modify permissions for file, terminal, and MCP tools.', '修改文件、终端和 MCP 工具的权限。', '修改檔案、終端機與 MCP 工具的權限。', '修改檔案、終端機同 MCP 工具嘅權限。', 'ファイル・ターミナル・MCP ツールの権限を変更します。'],

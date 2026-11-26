@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -18,6 +19,7 @@ namespace AgyClaudeStudio
         public string Id;
         public string Title;
         public string Url;
+        public string Type;
         public string WebSocketDebuggerUrl;
     }
 
@@ -435,6 +437,27 @@ namespace AgyClaudeStudio
             return null;
         }
 
+        public static bool IsHostPage(CdpPageInfo page, string raw)
+        {
+            Uri uri;
+            if (page.Type != "page" || !Uri.TryCreate(raw, UriKind.Absolute, out uri) ||
+                raw.IndexOf("sharedProcess.html", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                Regex.IsMatch(uri.AbsolutePath, @"/sidecars?/", RegexOptions.IgnoreCase)) return false;
+            if (Regex.IsMatch(page.Title.Trim(), @"^(?:(?:AGY\s+)?Claude\s+Studio|AGY\s+Claude\s+Style(?:\s+Studio)?|Antigravity\s+UI\s+(?:增强|增強|Enhanced|強化)|(?:Antigravity\s+)?Usage\s+Monitor|Swarm\s+Board)\s*\z", RegexOptions.IgnoreCase) &&
+                !Regex.IsMatch(uri.AbsolutePath, @"/c/[0-9a-f-]{36}(?:/|$)", RegexOptions.IgnoreCase)) return false;
+            if (uri.Scheme == "http" || uri.Scheme == "https")
+                return Array.IndexOf(new[] { "127.0.0.1", "localhost", "::1", "[::1]" }, uri.Host.ToLowerInvariant()) >= 0;
+            return raw.StartsWith("file://", StringComparison.OrdinalIgnoreCase) || raw.StartsWith("vscode-file://", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsFileActionDocument(CdpPageInfo page, string raw)
+        {
+            if (!IsHostPage(page, raw)) return false;
+            Uri live = new Uri(raw), initial = new Uri(page.Url);
+            return live.Scheme == initial.Scheme && live.Authority == initial.Authority &&
+                Regex.IsMatch(live.AbsolutePath, live.Scheme == "http" || live.Scheme == "https" ? @"^/c/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/?\z" : @"/workbench(?:\.desktop)?(?:\.main)?\.html\z", RegexOptions.IgnoreCase);
+        }
+
         public static async Task<List<CdpPageInfo>> ListPagesAsync(int port)
         {
             string url = string.Format("http://127.0.0.1:{0}/json/list", port);
@@ -460,8 +483,9 @@ namespace AgyClaudeStudio
                     info.Id = GetStr(t, "id") ?? wsUrl;
                     info.Title = GetStr(t, "title") ?? "";
                     info.Url = pageUrl;
+                    info.Type = type;
                     info.WebSocketDebuggerUrl = wsUrl;
-                    pages.Add(info);
+                    if (isSwarmSidecar || IsHostPage(info, pageUrl)) pages.Add(info);
                 }
             }
             return pages;
@@ -647,6 +671,13 @@ namespace AgyClaudeStudio
             sb.Append("    const css = ");
             sb.Append(MiniJson.StringifyString(css));
             sb.Append(";\n");
+            sb.Append("    for (const cancel of globalThis.__agCsPendingReady || []) cancel();\n");
+            sb.Append("    const listenUntilReady = (event, fn, opts) => {\n");
+            sb.Append("      const pending = globalThis.__agCsPendingReady ||= new Set();\n");
+            sb.Append("      const remove = () => { document.removeEventListener(event, fn); pending.delete(remove); };\n");
+            sb.Append("      pending.add(remove);\n");
+            sb.Append("      document.addEventListener(event, fn, opts);\n");
+            sb.Append("    };\n");
             sb.Append("    const applyStyle = () => {\n");
             sb.Append("      const targetParent = document.head || document.documentElement;\n");
             sb.Append("      if (!targetParent) return;\n");
@@ -669,7 +700,7 @@ namespace AgyClaudeStudio
             sb.Append("        const isSidecar = typeof location !== 'undefined' && location.protocol === 'plugin:';\n");
             sb.Append("        if (!isSidecar) {\n");
             sb.Append("          if (document.head) applyStyle();\n");
-            sb.Append("          else document.addEventListener('DOMContentLoaded', applyStyle, { once: true });\n");
+            sb.Append("          else listenUntilReady('DOMContentLoaded', applyStyle, { once: true });\n");
             sb.Append("        }\n");
             sb.Append("        ").Append(bundle).Append('\n');
             sb.Append("        if (typeof globalThis.__agCsUiMain === 'function') {\n");
@@ -696,8 +727,8 @@ namespace AgyClaudeStudio
             sb.Append("          mount();\n");
             sb.Append("        }\n");
             sb.Append("      };\n");
-            sb.Append("      document.addEventListener('readystatechange', onReady);\n");
-            sb.Append("      document.addEventListener('DOMContentLoaded', onReady);\n");
+            sb.Append("      listenUntilReady('readystatechange', onReady);\n");
+            sb.Append("      listenUntilReady('DOMContentLoaded', onReady);\n");
             sb.Append("    }\n");
             sb.Append("    const st = window.__agClaudeStudio && window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null;\n");
             sb.Append("    return {\n");

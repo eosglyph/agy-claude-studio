@@ -13,6 +13,28 @@ const STARTUP_GRACE_SECONDS = 90;
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
 
+function resolveHostPluginConfigPath({ env = process.env, homeDir = os.homedir() } = {}) {
+  const override = String(env.AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG || env.AGY_CLAUDE_STYLE_ANTIGRAVITY_CONFIG || '').trim();
+  return override ? path.resolve(override) : path.join(homeDir, '.gemini', 'config', 'config.json');
+}
+
+function createWatcherEnabledReader(configPath = resolveHostPluginConfigPath()) {
+  let enabled = false;
+  return () => {
+    if (!configPath) return true;
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8').replace(/^\uFEFF/, ''));
+      if (config && typeof config === 'object' && !Array.isArray(config)) {
+        enabled = config.plugins?.['agy-claude-studio']?.enabled !== false;
+      }
+    } catch (err) {
+      // A standalone install has no host config. A partial write keeps the last decision.
+      if (err.code === 'ENOENT') enabled = true;
+    }
+    return enabled;
+  };
+}
+
 const APP_DATA = IS_MAC
   ? path.join(os.homedir(), 'Library', 'Application Support')
   : IS_WIN
@@ -529,6 +551,34 @@ async function listPages(port) {
   return targets.filter(isInjectableTarget);
 }
 
+// Limit the OS bridge to a conversation or IDE workbench, not every local preview.
+function isFileActionDocument(page, url) {
+  if (!isAntigravityPageTarget({ ...page, url })) return false;
+  const initial = new URL(page.url), live = new URL(url);
+  if (initial.protocol !== live.protocol || initial.host !== live.host) return false;
+  return isLoopbackHttpUrl(url) ? /^\/c\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/?$/i.test(live.pathname)
+    : /\/workbench(?:\.desktop)?(?:\.main)?\.html$/i.test(live.pathname);
+}
+
+// Runtime supplies the world/frame mapping; never take either ID from the binding payload.
+function trackBindingSource(session, page) {
+  const worlds = new Map();
+  session.on('Runtime.executionContextCreated', ({ context }) => {
+    worlds.delete(context.id);
+    if (context.auxData?.isDefault === true && context.auxData.frameId) worlds.set(context.id, context);
+  });
+  session.on('Runtime.executionContextDestroyed', ({ executionContextId }) => worlds.delete(executionContextId));
+  session.on('Runtime.executionContextsCleared', () => worlds.clear());
+  return async (id, fileAction = true) => {
+    const world = worlds.get(id);
+    if (!world || page.type !== 'page' || !isAntigravityPageTarget(page)) return false;
+    const tree = await session.send('Page.getFrameTree').catch(() => null);
+    const frame = tree?.frameTree?.frame;
+    return !session.closed && worlds.get(id) === world && frame?.id === world.auxData.frameId &&
+      !frame.parentId && (fileAction ? isFileActionDocument(page, frame.url) : isAntigravityPageTarget({ ...page, url: frame.url }));
+  };
+}
+
 class CdpSession {
   constructor(ws) {
     this.ws = ws;
@@ -656,6 +706,13 @@ function buildInjectExpression(customConfig) {
   const codeHash = computeHash(bundle);
   return `(() => {
     const css = ${JSON.stringify(css)};
+    for (const cancel of globalThis.__agCsPendingReady || []) cancel();
+    const listenUntilReady = (event, fn, opts) => {
+      const pending = globalThis.__agCsPendingReady ||= new Set();
+      const remove = () => { document.removeEventListener(event, fn); pending.delete(remove); };
+      pending.add(remove);
+      document.addEventListener(event, fn, opts);
+    };
     const applyStyle = () => {
       const targetParent = document.head || document.documentElement;
       if (!targetParent) return;
@@ -708,7 +765,7 @@ function buildInjectExpression(customConfig) {
           status = 'deferred';
           if (!hostDeferred) {
             hostDeferred = true;
-            document.addEventListener('DOMContentLoaded', mount, { once: true });
+            listenUntilReady('DOMContentLoaded', mount, { once: true });
           }
           return;
         }
@@ -721,7 +778,7 @@ function buildInjectExpression(customConfig) {
         const isSidecar = typeof location !== 'undefined' && location.protocol === 'plugin:';
         if (!isSidecar) {
           if (document.head) applyStyle();
-          else document.addEventListener('DOMContentLoaded', applyStyle, { once: true });
+          else listenUntilReady('DOMContentLoaded', applyStyle, { once: true });
         }
         ${bundle}
         if (typeof globalThis.__agCsUiMain === 'function') {
@@ -761,8 +818,8 @@ function buildInjectExpression(customConfig) {
           mount();
         }
       };
-      document.addEventListener('readystatechange', onReady);
-      document.addEventListener('DOMContentLoaded', onReady);
+      listenUntilReady('readystatechange', onReady);
+      listenUntilReady('DOMContentLoaded', onReady);
     }
     const st = window.__agClaudeStudio && window.__agClaudeStudio.getState ? window.__agClaudeStudio.getState() : null;
     return {
@@ -805,6 +862,8 @@ function buildRefreshExpression(customConfig, expectedCodeHash) {
 }
 
 const REMOVE_EXPRESSION = `(() => {
+  for (const cancel of globalThis.__agCsPendingReady || []) cancel();
+  delete globalThis.__agCsPendingReady;
   if (Array.isArray(globalThis.__agCsCleanups)) {
     while (globalThis.__agCsCleanups.length) {
       const fn = globalThis.__agCsCleanups.pop();
@@ -1685,7 +1744,73 @@ function formatCdpUnavailableMessage({ running, port }) {
   return `未找到调试端口文件，Antigravity 未运行: ${PORT_FILE}。如使用 Antigravity 2.33.0+，请使用 ${launchHint}`;
 }
 
+const SAFE_OPEN_FILE_EXTS = new Set([
+  '.html', '.htm', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',
+  '.wav', '.mp3', '.m4a', '.flac', '.ogg', '.mp4', '.mov', '.mkv', '.webm', '.txt', '.md',
+  '.markdown', '.json', '.yaml', '.yml', '.toml', '.csv', '.tsv', '.xml', '.log', '.ini',
+  '.cfg', '.conf', '.css', '.sql', '.diff', '.patch', '.rtf', '.doc', '.docx', '.xls',
+  '.xlsx', '.ppt', '.pptx', '.zip', '.tar', '.gz', '.7z',
+]);
+const MACOS_FILE_PACKAGE_EXTS = new Set([
+  '.app', '.pkg', '.mpkg', '.prefpane', '.workflow', '.action', '.saver', '.plugin',
+  '.scptd', '.appex', '.bundle', '.framework',
+]);
+
+function resolveLocalFileUri(rawInput, platform = process.platform) {
+  if (typeof rawInput !== 'string' || rawInput.length > 4096 || !/^file:\/\/\/(?!\/)/i.test(rawInput) || /[\x00-\x1f\x7f"\\]/.test(rawInput)) return null;
+  let value;
+  try { value = decodeURIComponent(rawInput.slice(7).split(/[?#]/, 1)[0]); } catch { return null; }
+  if (!value.startsWith('/') || /^\/[\\/]/.test(value) || /[\x00-\x1f\x7f"]/.test(value)) return null;
+  if (platform !== 'win32') return value;
+  if (!/^\/[a-z]:\//i.test(value) || value.slice(3).includes(':')) return null;
+  return value.slice(1).replace(/\//g, '\\');
+}
+
+function prepareLocalFileAction({ mode, target, platform = process.platform, fsApi = fs } = {}) {
+  let resolved = resolveLocalFileUri(target, platform);
+  if (!resolved || (mode !== 'open' && mode !== 'reveal')) return { ok: false, reason: 'invalid-path', mode };
+  if (platform === 'win32') {
+    // Keep all user data out of PowerShell source and arguments. The shared native
+    // helper checks drive type and each component before querying the target.
+    const command = 'try { Add-Type -LiteralPath $env:AGY_FILE_HELPER -ErrorAction Stop; if ([AgyClaudeStudio.WindowsFileAction]::Run($env:AGY_FILE_URI,$env:AGY_FILE_MODE)) { exit 0 } } catch {}; exit 1';
+    const bin = path.win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    return { ok: true, mode, bin, args: ['-NoProfile', '-NonInteractive', '-STA', '-Command', command], options: { windowsHide: true, stdio: 'ignore', env: { ...process.env, AGY_FILE_HELPER: path.join(__dirname, 'scripts', 'WindowsFileAction.cs'), AGY_FILE_URI: target, AGY_FILE_MODE: mode } } };
+  }
+  let stat;
+  try {
+    resolved = fsApi.realpathSync(resolved);
+    stat = fsApi.statSync(resolved);
+  } catch { return { ok: false, reason: 'not-found', mode }; }
+  const ext = path.posix.extname(resolved).toLowerCase();
+  const dir = stat.isDirectory();
+  const mac = platform === 'darwin';
+  if (mode === 'open' && ((!dir && (!stat.isFile() || !SAFE_OPEN_FILE_EXTS.has(ext))) ||
+      (mac && dir && MACOS_FILE_PACKAGE_EXTS.has(ext)))) return { ok: false, reason: 'blocked-extension', mode };
+  // Explicit Finder for directories: an unlisted package can never launch itself.
+  const args = mac ? (mode === 'reveal' ? ['-R', resolved] : dir ? ['-a', 'Finder', resolved] : [resolved])
+    : [mode === 'reveal' ? path.posix.dirname(resolved) : resolved];
+  return { ok: true, mode, bin: mac ? '/usr/bin/open' : 'xdg-open', args, options: { detached: true, stdio: 'ignore' } };
+}
+
+function openLocalFileActionAsync(options = {}) {
+  const prepared = prepareLocalFileAction(options);
+  if (!prepared.ok) return Promise.resolve(prepared);
+  const spawnFn = options.spawnFn || spawn;
+  return new Promise((resolve) => {
+    let child;
+    try { child = spawnFn(prepared.bin, prepared.args, prepared.options); }
+    catch (error) { resolve({ ok: false, mode: prepared.mode, reason: 'spawn-failed', error: error.message }); return; }
+    let settled = false;
+    const finish = (ok, reason) => { if (!settled) { settled = true; clearTimeout(timer); resolve({ ok, mode: prepared.mode, reason }); } };
+    const timer = setTimeout(() => { child.unref(); finish(false, 'launcher-timeout'); }, 10000);
+    child.once('error', () => finish(false, 'spawn-failed'));
+    child.once('exit', code => finish(code === 0, code === 0 ? undefined : 'launcher-error'));
+  });
+}
+
 module.exports = {
+  createWatcherEnabledReader,
+  resolveHostPluginConfigPath,
   STYLE_ID,
   PLUGIN_VERSION,
   SETTING_BINDING,
@@ -1720,6 +1845,7 @@ module.exports = {
   readPort,
   SWARM_SIDECAR_URL_PREFIX,
   isAntigravityPageTarget,
+  trackBindingSource,
   isInjectableTarget,
   listPages,
   detectAntigravityProcess,
@@ -1740,6 +1866,10 @@ module.exports = {
   relaunchAntigravityWithCdp,
   ensureAntigravityWithCdp,
   formatCdpUnavailableMessage,
+  SAFE_OPEN_FILE_EXTS,
+  resolveLocalFileUri,
+  prepareLocalFileAction,
+  openLocalFileActionAsync,
   CdpSession,
   readCss,
   readRuntimeBundle,

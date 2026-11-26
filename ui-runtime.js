@@ -7422,6 +7422,8 @@
   let openFileMenu = null;
   let fileToastEl = null;
   let fileToastTimer = null;
+  const pendingFileActions = new Map();
+  let nextFileActionId = 0;
 
   function clearFileLinkToast() {
     if (fileToastTimer) {
@@ -7488,7 +7490,7 @@
     const idx = cleanNoTrail.lastIndexOf(sep);
     const baseName = idx >= 0 ? cleanNoTrail.slice(idx + 1) : cleanNoTrail;
     const dirName = idx >= 0 ? cleanNoTrail.slice(0, idx) : '';
-    return { fullPath, baseName: baseName || fullPath, dirName };
+    return { fullPath, baseName: baseName || fullPath, dirName, uri: trimmed };
   }
 
   function extractHrefFromFiberNode(el) {
@@ -7602,6 +7604,8 @@
     const lang = getLang();
     const ui = uiText(lang);
     const copyLabel = ui.fileMenuCopyPath || 'Copy Full Path';
+    const openLabel = ui.fileMenuOpen || 'Open file';
+    const revealLabel = ui.fileMenuReveal || 'Show in folder';
 
     const menu = document.createElement('div');
     menu.className = FILE_MENU_CLS;
@@ -7643,6 +7647,28 @@
       });
       return btn;
     };
+
+    const requestFileAction = (mode) => {
+      if (destroyed || cfg.fileLinkContextMenu === false) return;
+      const send = window[cfg.binding];
+      if (typeof send !== 'function') {
+        showFileLinkToast(ui.fileMenuActionUnavailable || 'File action unavailable', true);
+        return;
+      }
+      const requestId = `file-${Date.now()}-${++nextFileActionId}`;
+      const timer = setTimeout(() => {
+        pendingFileActions.delete(requestId);
+        if (!destroyed && cfg.fileLinkContextMenu !== false) showFileLinkToast(ui.fileMenuActionFailed || 'File action failed', true);
+      }, 15000);
+      pendingFileActions.set(requestId, { mode, timer });
+      send(JSON.stringify({ action: 'fileLinkAction', mode, uri: info.uri, requestId }));
+    };
+    menu.appendChild(makeItem(openLabel,
+      '<path d="M14 2h-8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6z"/><path d="M14 2v4h4"/>',
+      () => requestFileAction('open')));
+    menu.appendChild(makeItem(revealLabel,
+      '<path d="M3 6h5l2 2h7a2 2 0 0 1 2 2v7H3z"/><path d="m10 13 2-2 2 2"/>',
+      () => requestFileAction('reveal')));
 
     menu.appendChild(
       makeItem(
@@ -8124,6 +8150,18 @@
   window.__agClaudeStudio = {
     version: VERSION,
     codeHash: CODE_HASH,
+    onFileLinkActionResult(result) {
+      if (destroyed || cfg.fileLinkContextMenu === false) return;
+      const requestId = String(result?.requestId || '');
+      const pending = pendingFileActions.get(requestId);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pendingFileActions.delete(requestId);
+      const text = uiText(getLang());
+      showFileLinkToast(result.ok
+        ? (pending.mode === 'open' ? (text.fileMenuOpened || 'File opened') : (text.fileMenuRevealed || 'Shown in folder'))
+        : (text.fileMenuActionFailed || 'File action failed'), !result.ok);
+    },
     refreshConfig(next) {
       if (next && typeof next === 'object') {
         runtimeInitConfig = { ...runtimeInitConfig, ...next };
@@ -8135,7 +8173,12 @@
         } catch {}
       }
       applyRootAttrs();
-      if (cfg.fileLinkContextMenu === false && openFileMenu) closeFileLinkMenu();
+      if (cfg.fileLinkContextMenu === false) {
+        if (openFileMenu) closeFileLinkMenu();
+        for (const pending of pendingFileActions.values()) clearTimeout(pending.timer);
+        pendingFileActions.clear();
+        clearFileLinkToast();
+      }
       refreshOpenEffortPopover();
       refreshOpenPeriodicSelector();
       runSync();
@@ -8189,6 +8232,8 @@
       };
     },
     destroy() {
+      for (const pending of pendingFileActions.values()) clearTimeout(pending.timer);
+      pendingFileActions.clear();
       teardownCore();
       for (const fn of [
         closePeriodicSelector,

@@ -65,6 +65,7 @@ function buildInstaller({ outputPath, configPath, version = cdp.PLUGIN_VERSION }
       '/r:System.Net.Http.dll',
       commonMiniJson,
       commonCdpClient,
+      path.join(ROOT_DIR, 'scripts', 'WindowsFileAction.cs'),
       watcherMain,
     ], { stdio: 'inherit' });
 

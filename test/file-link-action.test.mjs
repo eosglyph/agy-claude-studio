@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import os from 'node:os';
+import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 
@@ -26,7 +30,7 @@ function makeMenuContext() {
     navigator: { clipboard: { async writeText(value) { copied.push(value); } } },
     getLang: () => 'en', uiText: () => ({ fileMenuCopied: 'Copied' }),
     setTimeout: () => 1, clearTimeout() {},
-    cfg: { fileLinkContextMenu: true }, destroyed: false, isOwnPluginNode: () => false,
+    cfg: { fileLinkContextMenu: true, binding: '__binding' }, destroyed: false, isOwnPluginNode: () => false,
     nodeContains: () => false,
   });
   const api = vm.runInContext(fileMenu + '\n({ onDocContextMenu, closeFileLinkMenu, clearFileLinkToast })', context);
@@ -57,13 +61,70 @@ test('chat file context menu only copies the local path from a link or mention',
     assert.equal(event.prevented, true);
     const menu = body.children[0];
     const buttons = menu.children.filter((child) => child.tag === 'button');
-    assert.equal(buttons.length, 1);
-    buttons[0].handlers.click(event);
+    assert.equal(buttons.length, 3);
+    buttons[2].handlers.click(event);
     await new Promise(setImmediate);
     assert.equal(copied.at(-1), expected);
     assert.equal(body.children[0].attrs.role, 'status');
     api.clearFileLinkToast();
   }
+});
+
+test('local file actions reject remote and executable paths and construct platform-safe launch arguments', () => {
+  for (const value of [
+    'file://evil.example/share/report.pdf',
+    'file:////server/share/report.pdf',
+    'file:///C:/Temp/%22%2Fselect%2Cbad.txt',
+  ]) {
+    assert.equal(cdp.resolveLocalFileUri(value, 'win32'), null);
+  }
+  assert.equal(cdp.resolveLocalFileUri('file:////server/share/report.pdf', 'linux'), null);
+  const fsApi = { realpathSync: x => x, statSync: () => ({ isDirectory: () => false, isFile: () => true }) };
+  const uri = 'file:///C:/Temp/Project%20Notes/报告,1.pdf';
+  const windows = cdp.prepareLocalFileAction({ mode: 'reveal', target: uri, platform: 'win32' });
+  assert.equal(windows.options.env.AGY_FILE_URI, uri);
+  assert.equal(windows.args.some(arg => arg.includes(uri)), false);
+  const mac = cdp.prepareLocalFileAction({
+    mode: 'reveal', target: 'file:///Users/alice/report.pdf', platform: 'darwin', fsApi,
+  });
+  assert.deepEqual(mac.args, ['-R', '/Users/alice/report.pdf']);
+  const linux = cdp.prepareLocalFileAction({
+    mode: 'reveal', target: 'file:///home/alice/docs/report.pdf', platform: 'linux', fsApi,
+  });
+  assert.deepEqual(linux.args, ['/home/alice/docs']);
+});
+
+test('macOS reveal selects packages and open checks the resolved target', () => {
+  const fsApi = { realpathSync: () => '/fixtures/Example.APP', statSync: () => ({ isDirectory: () => true }) };
+  const opts = { target: 'file:///fixtures/report.pdf', platform: 'darwin', fsApi };
+  assert.equal(cdp.prepareLocalFileAction({ ...opts, mode: 'open' }).reason, 'blocked-extension');
+  assert.deepEqual(cdp.prepareLocalFileAction({ ...opts, mode: 'reveal' }).args, ['-R', '/fixtures/Example.APP']);
+  for (const uri of ['file:///C:/a%09b.pdf', 'file:///C:/a\tb.pdf', 'file:///C:/a.pdf:data', 'file:///C:/a%22.pdf']) assert.equal(cdp.resolveLocalFileUri(uri, 'win32'), null);
+});
+
+test('only the live main default world can request file actions', async () => {
+  const handlers = new Map();
+  const page = { url: 'https://localhost/c/01234567-89ab-cdef-0123-456789abcdef', title: 'Chat', type: 'page', webSocketDebuggerUrl: 'test' };
+  const frame = { id: 'top', url: page.url };
+  const allowed = cdp.trackBindingSource({ on: (k, cb) => handlers.set(k, cb), send: async () => ({ frameTree: { frame } }) }, page);
+  assert.equal(await allowed(1), false);
+  for (const [id, frameId, isDefault] of [[1, 'top', true], [2, 'sub', true], [3, 'top', false]]) handlers.get('Runtime.executionContextCreated')({ context: { id, auxData: { frameId, isDefault } } });
+  assert.deepEqual(await Promise.all([1, 2, 3].map(id => allowed(id))), [true, false, false]);
+  frame.url = "https://localhost/preview"; assert.equal(await allowed(1), false);
+  frame.url = 'https://example.test/'; assert.equal(await allowed(1), false);
+  frame.url = page.url; handlers.get('Runtime.executionContextsCleared')(); assert.equal(await allowed(1), false);
+});
+
+test('Windows native policy validates literal filenames without launching Explorer', { skip: process.platform !== 'win32' }, () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'agy-link-'));
+  try {
+    const file = path.join(dir, '报告, notes.pdf'); const script = path.join(dir, 'notes.ps1');
+    for (const p of [file, script]) writeFileSync(p, 'fixture');
+    const args = cdp.prepareLocalFileAction({ mode: 'open', target: pathToFileURL(file).href, platform: 'win32' });
+    const env = { ...args.options.env, AGY_SCRIPT: pathToFileURL(script).href };
+    const probe = 'Add-Type -LiteralPath $env:AGY_FILE_HELPER -ErrorAction Stop; $t=[AgyClaudeStudio.WindowsFileAction]; if (!$t::Validate($env:AGY_FILE_URI,"open") -or $t::Validate($env:AGY_SCRIPT,"open") -or !$t::Validate($env:AGY_SCRIPT,"reveal")) {exit 1}';
+    execFileSync(args.bin, [...args.args.slice(0,-1), probe], { env, windowsHide: true });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('chat file context menu preserves native handling outside chat or when disabled', () => {
@@ -88,13 +149,57 @@ test('chat file context menu preserves native handling outside chat or when disa
   assert.equal(cdp.validateConfigSetting('fileLinkContextMenu', 'yes'), false);
 });
 
+test('chat file open and reveal actions dispatch only the selected local file URI', () => {
+  const { api, context, body } = makeMenuContext();
+  let request;
+  context.window.__binding = (payload) => { request = JSON.parse(payload); };
+  const event = contextEvent({ href: 'file:///home/user/notes.md' });
+  api.onDocContextMenu(event);
+  const buttons = body.children[0].children.filter((child) => child.tag === 'button');
+  buttons[0].handlers.click(event);
+  assert.equal(request.action, 'fileLinkAction');
+  assert.equal(request.mode, 'open');
+  assert.equal(request.uri, 'file:///home/user/notes.md');
+  api.onDocContextMenu(contextEvent({ href: 'file:///home/user/notes.md' }));
+  const revealButtons = body.children[0].children.filter((child) => child.tag === 'button');
+  revealButtons[1].handlers.click(event);
+  assert.equal(request.mode, 'reveal');
+});
+
+test('turning off file actions cancels pending timers and ignores late replies after re-enable', () => {
+  const { api, context, body } = makeMenuContext();
+  const cleared = [];
+  Object.assign(context, { clearTimeout: t => cleared.push(t), runtimeInitConfig: {}, loadSettings: c => c,
+    applyRootAttrs() {}, refreshOpenEffortPopover() {}, refreshOpenPeriodicSelector() {}, runSync() {}, scheduleSync() {} });
+  const methods = runtime.slice(runtime.indexOf('    onFileLinkActionResult(result)'), runtime.indexOf('    openPeriodicSelector(triggerBtn', runtime.indexOf('    onFileLinkActionResult(result)')));
+  const controller = vm.runInContext('({' + methods + '})', context);
+  let request;
+  context.window.__binding = p => { request = JSON.parse(p); };
+  const event = contextEvent({ href: 'file:///home/user/notes.md' });
+  api.onDocContextMenu(event);
+  body.children[0].children.filter(c => c.tag === 'button')[0].handlers.click(event);
+  controller.refreshConfig({ fileLinkContextMenu: false });
+  assert.ok(cleared.length);
+  controller.refreshConfig({ fileLinkContextMenu: true });
+  controller.onFileLinkActionResult({ ...request, ok: true });
+  assert.equal(body.children.length, 0);
+});
+
+test('all watcher implementations have the same document extension policy', () => {
+  const native = readFileSync(new URL('../scripts/WindowsFileAction.cs', import.meta.url), 'utf8').split('Allowed =')[1].split('};')[0];
+  const swift = readFileSync(new URL('../installer/macos/Watcher/main.swift', import.meta.url), 'utf8').split('let allowed: Set<String> = [')[1].split(']')[0];
+  const expected = [...cdp.SAFE_OPEN_FILE_EXTS].sort();
+  assert.deepEqual([...native.matchAll(/"(\.[a-z0-9]+)"/g)].map(m => m[1]).sort(), expected);
+  assert.deepEqual([...swift.matchAll(/"([a-z0-9]+)"/g)].map(m => '.' + m[1]).sort(), expected);
+});
+
 test('chat file copy skips late toast and fallback after teardown', async () => {
   const { api, context, body } = makeMenuContext();
   let rejectCopy;
   context.navigator.clipboard.writeText = () => new Promise((_, reject) => { rejectCopy = reject; });
   const event = contextEvent({ href: 'file:///home/user/notes.md' });
   api.onDocContextMenu(event);
-  body.children[0].children.find((child) => child.tag === 'button').handlers.click(event);
+  body.children[0].children.filter((child) => child.tag === 'button')[2].handlers.click(event);
   context.destroyed = true;
   rejectCopy(new Error('clipboard unavailable'));
   await new Promise(setImmediate);

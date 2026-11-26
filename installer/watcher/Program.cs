@@ -16,6 +16,8 @@ namespace AgyClaudeStudio.Watcher
         public string BootstrapScriptId;
         public string ConfigScriptId;
         public string Title;
+        public readonly SemaphoreSlim ScriptLock = new SemaphoreSlim(1, 1);
+        public volatile bool Retired;
     }
 
     internal static class Program
@@ -29,6 +31,43 @@ namespace AgyClaudeStudio.Watcher
         private static string _pidFile;
         private static bool _isWatch;
         private static int _pollMs = 2000;
+        private static readonly object HostConfigLock = new object();
+        private static bool _hostEnabled;
+
+        private static bool HostEnabled()
+        {
+            lock (HostConfigLock)
+            {
+                try
+                {
+                    string path = Environment.GetEnvironmentVariable("AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG");
+                    if (string.IsNullOrWhiteSpace(path)) path = Environment.GetEnvironmentVariable("AGY_CLAUDE_STYLE_ANTIGRAVITY_CONFIG");
+                    if (string.IsNullOrWhiteSpace(path)) path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "config", "config.json");
+                    var plugins = Child(MiniJson.ParseObject(File.ReadAllText(path)), "plugins");
+                    _hostEnabled = GetConfigBool(Child(plugins, "agy-claude-studio"), "enabled", true);
+                }
+                catch (FileNotFoundException) { _hostEnabled = true; }
+                catch (DirectoryNotFoundException) { _hostEnabled = true; }
+                catch (Exception) { /* Unreadable or invalid config: keep the last decision. */ }
+                return _hostEnabled;
+            }
+        }
+
+        private static async Task RetireAsync(AttachedEntry entry, string removeExpr)
+        {
+            entry.Retired = true;
+            await entry.ScriptLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                foreach (var id in new[] { entry.ConfigScriptId, entry.BootstrapScriptId })
+                {
+                    if (id == null) continue;
+                    try { await entry.Session.SendAsync("Page.removeScriptToEvaluateOnNewDocument", new Dictionary<string, object> { { "identifier", id } }, 5000).ConfigureAwait(false); } catch { }
+                }
+                try { await entry.Session.EvaluateAsync(removeExpr, false).ConfigureAwait(false); } catch { }
+            }
+            finally { entry.Session.Close(); entry.ScriptLock.Release(); }
+        }
 
         [STAThread]
         private static int Main(string[] args)
@@ -179,6 +218,8 @@ namespace AgyClaudeStudio.Watcher
             }
         }
 
+
+
         private static void WriteResult(string outFile, bool ok, string message, List<string> pages)
         {
             if (string.IsNullOrEmpty(outFile)) return;
@@ -225,6 +266,7 @@ namespace AgyClaudeStudio.Watcher
 
         private static async Task<int> RunOnceAsync(int? overridePort, string outFile)
         {
+            if (!HostEnabled()) { WriteResult(outFile, true, "plugin disabled", new List<string>()); return 0; }
             PluginManifest manifest = PluginManifest.Load(_baseDir);
             int? port = CdpHelper.ReadPort(overridePort);
             if (!port.HasValue)
@@ -258,6 +300,7 @@ namespace AgyClaudeStudio.Watcher
                 CdpPageInfo page = pages[i];
                 using (CdpSession session = await CdpSession.ConnectAsync(page.WebSocketDebuggerUrl, 4000).ConfigureAwait(false))
                 {
+                    if (!HostEnabled()) break;
                     await session.EvaluateAsync(expr, false).ConfigureAwait(false);
                     injectedTitles.Add(CdpHelper.ShortTitle(page));
                 }
@@ -362,6 +405,15 @@ namespace AgyClaudeStudio.Watcher
             try { if (File.Exists(pidFile)) File.Delete(pidFile); } catch { }
         }
 
+        private static Dictionary<string, object> Child(Dictionary<string, object> d, string key)
+        {
+            object v; return d != null && d.TryGetValue(key, out v) ? v as Dictionary<string, object> : null;
+        }
+        private static int Id(Dictionary<string, object> d, string key)
+        {
+            object v; return d != null && d.TryGetValue(key, out v) ? Convert.ToInt32(v) : 0;
+        }
+
         private static bool GetConfigBool(Dictionary<string, object> cfg, string key, bool fallback)
         {
             object v;
@@ -382,6 +434,7 @@ namespace AgyClaudeStudio.Watcher
         {
             PluginManifest manifest = PluginManifest.Load(_baseDir);
             Dictionary<string, object> initCfg = CdpHelper.ReadConfig(_baseDir, manifest);
+            if (!HostEnabled()) return await RunWatchAsync(overridePort, true, parentPid, true, startupGraceSeconds, replaceExisting, true).ConfigureAwait(false);
             bool allowRelaunch = relaunchFlag || GetConfigBool(initCfg, "autoRelaunchWithCdp", true);
 
             EnsureAntigravityResult res = await CdpHelper.EnsureAntigravityWithCdpAsync(null, allowRelaunch, overridePort, 8000).ConfigureAwait(false);
@@ -460,6 +513,7 @@ namespace AgyClaudeStudio.Watcher
                 Dictionary<string, object> initCfg = CdpHelper.ReadConfig(_baseDir, manifest);
                 bool cfgAutoRelaunch = GetConfigBool(initCfg, "autoRelaunchWithCdp", true);
                 bool cfgExitOnHostClose = GetConfigBool(initCfg, "exitOnHostClose", false);
+
                 Log(string.Format("[*] Claude Studio (agy-claude-studio) {0}启动 (PID {1})，每 {2}ms 检查一次窗口",
                     exitOnHostCloseFlag ? "托管监听模式" : "守护模式", selfPid, _pollMs));
 
@@ -485,7 +539,7 @@ namespace AgyClaudeStudio.Watcher
                     ReleasePidFile(selfPid);
                 };
 
-                Func<AttachedEntry, string, string, bool, Task<Dictionary<string, object>>> applyAsync = async (entry, fullExprToUse, configExprToUse, refreshOnly) =>
+                Func<AttachedEntry, string, string, bool, Task<Dictionary<string, object>>> writeScripts = async (entry, fullExprToUse, configExprToUse, refreshOnly) =>
                 {
                     if (refreshOnly && !string.IsNullOrEmpty(entry.BootstrapScriptId) && !string.IsNullOrEmpty(configExprToUse))
                     {
@@ -565,6 +619,17 @@ namespace AgyClaudeStudio.Watcher
                     return evalVal as Dictionary<string, object>;
                 };
 
+                Func<AttachedEntry, string, string, bool, Task<Dictionary<string, object>>> applyAsync = async (entry, expr, cfg, refreshOnly) =>
+                {
+                    await entry.ScriptLock.WaitAsync().ConfigureAwait(false);
+                    try
+                    {
+                        if (entry.Retired || !HostEnabled()) throw new OperationCanceledException("plugin disabled");
+                        return await writeScripts(entry, expr, cfg, refreshOnly).ConfigureAwait(false);
+                    }
+                    finally { entry.ScriptLock.Release(); }
+                };
+
                 Func<CdpPageInfo, Task> attachAsync = async (page) =>
                 {
                     if (!attached.TryAdd(page.Id, null)) return;
@@ -587,20 +652,66 @@ namespace AgyClaudeStudio.Watcher
                         };
 
                         await session.SendAsync("Page.enable", null, 5000).ConfigureAwait(false);
+                        var worlds = new ConcurrentDictionary<int, Dictionary<string, object>>();
+                        session.On("Runtime.executionContextCreated", p => {
+                            var c = Child(p, "context"); var aux = Child(c, "auxData"); int id = Id(c, "id");
+                            Dictionary<string, object> ignored;
+                            worlds.TryRemove(id, out ignored);
+                            if (id > 0 && GetConfigBool(aux, "isDefault", false)) worlds[id] = aux;
+                        });
+                        session.On("Runtime.executionContextDestroyed", p => { Dictionary<string, object> ignored; worlds.TryRemove(Id(p, "executionContextId"), out ignored); });
+                        session.On("Runtime.executionContextsCleared", p => worlds.Clear());
+                        Func<int, bool, Task<bool>> trustedSource = async (id, fileAction) => {
+                            Dictionary<string, object> world, live;
+                            if (!worlds.TryGetValue(id, out world) || !CdpHelper.IsHostPage(page, page.Url)) return false;
+                            var tree = await session.SendAsync("Page.getFrameTree", null, 3000).ConfigureAwait(false);
+                            var frame = Child(Child(tree, "frameTree"), "frame");
+                            return frame != null && !frame.ContainsKey("parentId") && world.ContainsKey("frameId") &&
+                                frame.ContainsKey("id") && Equals(frame["id"], world["frameId"]) && frame.ContainsKey("url") &&
+                                (fileAction ? CdpHelper.IsFileActionDocument(page, frame["url"] as string) : CdpHelper.IsHostPage(page, frame["url"] as string)) &&
+                                worlds.TryGetValue(id, out live) && ReferenceEquals(world, live);
+                        };
                         session.On("Runtime.bindingCalled", (p) =>
                         {
+                            if (entry.Retired) return;
                             object bNameObj;
                             object payloadObj;
                             if (!p.TryGetValue("name", out bNameObj) || !string.Equals(bNameObj as string, manifest.SettingBinding, StringComparison.Ordinal)) return;
                             if (!p.TryGetValue("payload", out payloadObj) || !(payloadObj is string)) return;
+                            int executionContextId = Id(p, "executionContextId");
                             try
                             {
                                 Dictionary<string, object> kv = MiniJson.ParseObject((string)payloadObj);
+                                object actionObj;
+                                if (kv.TryGetValue("action", out actionObj) && string.Equals(actionObj as string, "fileLinkAction", StringComparison.Ordinal))
+                                {
+                                    object uriObj, modeObj, requestObj;
+                                    string rawUri = kv.TryGetValue("uri", out uriObj) ? uriObj as string : null;
+                                    string mode = kv.TryGetValue("mode", out modeObj) ? modeObj as string : null;
+                                    string requestId = kv.TryGetValue("requestId", out requestObj) ? requestObj as string : null;
+                                    Task.Run(async () =>
+                                    {
+                                        if (!await trustedSource(executionContextId, true).ConfigureAwait(false)) return;
+                                        bool ok = GetConfigBool(CdpHelper.ReadConfig(_baseDir, manifest), "fileLinkContextMenu", true) && WindowsFileAction.Run(rawUri, mode);
+                                        Dictionary<string, object> response = new Dictionary<string, object>(StringComparer.Ordinal);
+                                        response["requestId"] = requestId ?? "";
+                                        response["ok"] = ok;
+                                        response["mode"] = mode;
+                                        string json = MiniJson.Stringify(response, false);
+                                        try { await session.EvaluateAsync("window.__agClaudeStudio && window.__agClaudeStudio.onFileLinkActionResult(" + json + ")", false).ConfigureAwait(false); } catch { }
+                                    });
+                                    return;
+                                }
                                 object kObj;
                                 object vObj;
                                 if (kv.TryGetValue("key", out kObj) && kObj is string && kv.TryGetValue("value", out vObj))
                                 {
                                     string key = (string)kObj;
+                                    if (key == "fileLinkContextMenu")
+                                    {
+                                        Task.Run(async () => { if (await trustedSource(executionContextId, false).ConfigureAwait(false)) CdpHelper.UpdateConfigSetting(_baseDir, manifest, key, vObj); });
+                                        return;
+                                    }
                                     if (CdpHelper.UpdateConfigSetting(_baseDir, manifest, key, vObj))
                                     {
                                         Log("[⚙] 设置已保存: " + key + " = " + MiniJson.Stringify(vObj, false));
@@ -691,6 +802,7 @@ namespace AgyClaudeStudio.Watcher
                                             currentCssHash = nextCssHash;
                                             currentExpr = nextExpr;
                                             currentConfigExpr = nextConfigExpr;
+
                                             cfgAutoRelaunch = GetConfigBool(nextCfg, "autoRelaunchWithCdp", true);
                                             cfgExitOnHostClose = GetConfigBool(nextCfg, "exitOnHostClose", false);
                                         }
@@ -752,6 +864,22 @@ namespace AgyClaudeStudio.Watcher
                         int sleepMs = _pollMs;
                         try
                         {
+                            bool enabled = HostEnabled();
+                            if (!enabled)
+                            {
+                                var cleanup = new List<Task>();
+                                foreach (var kv in attached)
+                                {
+                                    AttachedEntry old;
+                                    if (!attached.TryRemove(kv.Key, out old) || old == null) continue;
+                                    old.Session.OnClose = null;
+                                    cleanup.Add(RetireAsync(old, manifest.RemoveExpression));
+                                }
+                                await Task.WhenAll(cleanup).ConfigureAwait(false);
+                                bool monitorExit;
+                                lock (exprLock) { monitorExit = exitOnHostCloseFlag || cfgExitOnHostClose; }
+                                if (!monitorExit) { exitEvent.Wait(sleepMs); continue; }
+                            }
                             int? port = CdpHelper.ReadPort(overridePort);
                             List<CdpPageInfo> pages = null;
                             if (port.HasValue)
@@ -792,7 +920,7 @@ namespace AgyClaudeStudio.Watcher
                                 List<Task> tasks = new List<Task>();
                                 for (int i = 0; i < pages.Count; i++)
                                 {
-                                    if (!attached.ContainsKey(pages[i].Id))
+                                    if (enabled && !attached.ContainsKey(pages[i].Id))
                                     {
                                         tasks.Add(attachAsync(pages[i]));
                                     }
@@ -841,7 +969,7 @@ namespace AgyClaudeStudio.Watcher
                                     break;
                                 }
 
-                                if (runningPids.Count > 0)
+                                if (enabled && runningPids.Count > 0)
                                 {
                                     noCdpRunningTicks++;
                                     string pidSig = string.Join(",", runningPids);
@@ -871,7 +999,7 @@ namespace AgyClaudeStudio.Watcher
                                                     Log("[*] 提示：可在 config.json 中设置 \"autoRelaunchWithCdp\": true 以启用自动温和重启接管");
                                                 }
                                             }
-                                            if (autoRelaunch && relaunchedPidSig != pidSig &&
+                                            if (enabled && autoRelaunch && HostEnabled() && relaunchedPidSig != pidSig &&
                                                 (DateTime.UtcNow - lastRelaunchUtc).TotalSeconds >= 60.0)
                                             {
                                                 relaunchedPidSig = pidSig;

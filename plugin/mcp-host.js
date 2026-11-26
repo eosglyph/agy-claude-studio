@@ -4,9 +4,8 @@
 // - Detects both plugin disable (stdin close while LS is still alive -> live restore UI)
 //   and host shutdown (LS /healthz unreachable or parent exit -> immediate clean exit with zero orphans).
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { STATE_DIR: CDP_STATE_DIR } = require('../cdp');
+const { STATE_DIR: CDP_STATE_DIR, createWatcherEnabledReader, resolveHostPluginConfigPath } = require('../cdp');
 const {
   isBrokenPipeError,
   isPidAlive,
@@ -57,18 +56,6 @@ function readPluginName() {
     return parsed.name.trim();
   }
   return 'agy-claude-studio';
-}
-
-function resolveHostPluginConfigPath({ env = process.env, homeDir = os.homedir() } = {}) {
-  const explicit = String(env?.AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG || env?.AGY_CLAUDE_STYLE_ANTIGRAVITY_CONFIG || '').trim();
-  if (explicit) {
-    return path.resolve(explicit);
-  }
-  const customStateDir = String(env?.AGY_CLAUDE_STUDIO_STATE_DIR || env?.AGY_CLAUDE_STYLE_STATE_DIR || '').trim();
-  if (customStateDir) {
-    return null;
-  }
-  return path.join(homeDir, '.gemini', 'config', 'config.json');
 }
 
 function handleMcpJsonRpcMessage(msg, serverVersion = '1.0.0') {
@@ -211,6 +198,7 @@ function startMcpPluginHost() {
   const lockFile = path.join(stateDir, '.watch.lock.json');
   const logFile = path.join(stateDir, 'watch.log');
   const antigravityConfigPath = resolveHostPluginConfigPath();
+  const watcherEnabled = createWatcherEnabledReader(antigravityConfigPath);
   const standbyPollMs = Math.max(
     100,
     Number(process.env.AGY_CLAUDE_STUDIO_STANDBY_POLL_MS || process.env.AGY_CLAUDE_STYLE_STANDBY_POLL_MS) || 1500
@@ -263,7 +251,7 @@ function startMcpPluginHost() {
         })
       : 'unknown';
 
-    if (pluginState === 'disabled') {
+    if (!watcherEnabled() || pluginState === 'disabled') {
       if (controller && !controller.isStopped()) {
         const ctrl = controller;
         controller = null;
@@ -297,6 +285,7 @@ function startMcpPluginHost() {
 
     try {
       const ctrl = await startWatchController({
+        antigravityConfigPath,
         mode: 'mcp-plugin',
         keepAlive: true,
         watchHostExit: false,
@@ -329,7 +318,7 @@ function startMcpPluginHost() {
             configPath: antigravityConfigPath,
           })
         : 'unknown';
-      if (postAcquireState === 'disabled') {
+      if (!watcherEnabled() || postAcquireState === 'disabled') {
         await ctrl.stop({ removeFromPages: true, exitCode: 0, reason: 'plugin-disabled' }).catch(() => {});
         return;
       }
