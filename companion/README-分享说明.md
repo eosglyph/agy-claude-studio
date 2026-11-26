@@ -1,6 +1,6 @@
-# Claude Studio · Windows 伴随启动定制包 (`v2.2.0`)
+# Claude Studio · Windows 伴随启动定制包 (`v2.2.1`)
 
-本发布包基于 [eosglyph/agy-claude-studio](https://github.com/eosglyph/agy-claude-studio) `v2.2.0`（Forked from `0DNANCY/agy-claude-style`）扩展编译，集成了以下核心增强：
+本发布包基于 [eosglyph/agy-claude-studio](https://github.com/eosglyph/agy-claude-studio) `v2.2.1`（Forked from `0DNANCY/agy-claude-style`）扩展编译，集成了以下核心增强：
 
 1. **自定义 Gemini AI 娘 × Clawd 透明图标与伴随启动**
    - 附带多分辨率（`16~256px`）`agy-gemini-clawd.ico`，默认关闭开机自启（`--no-autostart`），点击桌面快捷方式时随用随启；若本机已启用原生插件则自动退让，仅负责带 CDP 启动。

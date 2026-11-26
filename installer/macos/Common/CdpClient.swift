@@ -55,7 +55,7 @@ final class PluginManifest {
         let manifestPath = (baseDir as NSString).appendingPathComponent("manifest.json")
         let text = try String(contentsOfFile: manifestPath, encoding: .utf8)
         let raw = try MiniJson.parseObject(text)
-        let version = raw["version"]?.stringValue ?? "2.2.0"
+        let version = raw["version"]?.stringValue ?? "2.2.1"
         let styleId = raw["styleId"]?.stringValue ?? "ag-claude-studio-css"
         let settingBinding = raw["settingBinding"]?.stringValue ?? "__agClaudeStudioSetting"
         let removeExpression = raw["removeExpression"]?.stringValue ?? ""

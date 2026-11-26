@@ -2,6 +2,26 @@
 
 All notable changes to **Claude Studio (`agy-claude-studio`)** and its upstream base **AGY Claude Style (`0DNANCY/agy-claude-style`)** are documented in this file.
 
+## [v2.2.1] - 2026-11-26
+
+`v2.2.1` 为安全性与体验热修版本：全面加固侧栏/通知/快捷脚本/自升级与本地文件操作边界，新增聊天文件链接右键快捷菜单、插件禁用自动卸载恢复机制，并补齐 `/btw` 提示 5 语言本地化词条。
+
+### 安全性加固
+- **侧栏 API 与宿主鉴权隔离**：侧栏 HTTP API 全面改为经宿主 `window.sidecar.fetch` 发送认证 `POST` 请求并校验 `ANTIGRAVITY_SIDECAR_UI_TOKEN`；缺失令牌时拒绝启动侧栏服务，移除宽松 Host 头校验。
+- **通知凭据隔离与超时加固**：通知读取接口仅返回字段保存状态（`savedFields`），支持留空保留与显式清空并在切换通知渠道类型时清理绑定凭据；配置文件以 `O_NOFOLLOW` + `0o600` 写入；HTTP 响应体读取共享超时限制并禁止重定向。
+- **快捷脚本与原地升级防线**：快捷脚本校验工作目录 `cwd`、拦截 `.bat`/`.cmd` 批处理入口、完整过滤 `ANTIGRAVITY_SIDECAR_*` 环境变量前缀，并在超时后终止整个子进程树；原地升级增加受保护数据目录校验与归档替换失败回滚；工作区文件查看校验路径边界并拒绝符号链接/联接点。
+- **三端 CDP 来源与本地文件安全策略**：Node、Windows 原生与 macOS 原生 watcher 统一校验会话页面 URL、主 frame 默认 `executionContextId` 与配置开关，拒绝子 frame 或预览页伪造调用。Windows 共用 [WindowsFileAction.cs](scripts/WindowsFileAction.cs) 拦截 UNC / 映射网络盘 / 逐段重解析点 / ADS 与控制字符，定位动作经 STA 线程调用 Shell API（不再拼接 `explorer.exe /select`）；macOS 解析符号链接后拦截 `.app` 等包目录直接打开并在 Finder 中安全选中；三端打开扩展名白名单（49 项）完全对齐。
+
+### 新功能与体验修复
+- **聊天文件链接右键菜单**：右击对话区本地文件链接或提及胶囊可一键执行「打开文件」「在文件夹中显示」「复制完整路径」，设置页支持 `fileLinkContextMenu` 一键开关（关闭时即时清理待处理计时器与浮层提示，并丢弃过期回包）。
+- **关闭插件后重启自动停注与清理**：三端 watcher 实时监测宿主 `~/.gemini/config/config.json` 中的 `plugins["agy-claude-studio"].enabled` 状态（半写入 JSON 保留上次判断，无宿主配置默认启用）。禁用插件时立即撤销两个新文档注入脚本并无损卸载已附着窗口界面，不再重启后重复注入；重新开启插件后自动恢复。
+- **新增 5 语言词条**：补齐 `Applies to /btw and messages sent after this turn`（含带/不带句点变体）5 语言翻译。
+- **旧版 Windows 守护进程迁移提示**：发布说明新增从早期 `agy-claude-style` 目录迁移时的旧版 `agy-claude-style-watcher.exe` 卸载指引。
+
+**Full Changelog**: https://github.com/eosglyph/agy-claude-studio/compare/v2.2.0...v2.2.1
+
+---
+
 ## [v2.2.0] - 2026-11-25
 
 `v2.2.0` 重点重构了右侧 Claude Studio 面板，同时补齐了任务完成手机提醒、本地脚本工具箱、4 项原生引导技能，以及 Antigravity `v2.35.x` 的全套界面适配。

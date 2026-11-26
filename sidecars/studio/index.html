@@ -2193,7 +2193,7 @@
       <button type="button" class="section-head" id="update-section-head" aria-expanded="false">
         <span class="section-title" id="update-section-title">版本更新</span>
         <span class="section-head-right">
-          <span class="section-badge" id="update-section-badge">v2.2.0</span>
+          <span class="section-badge" id="update-section-badge">v2.2.1</span>
           <span class="section-chevron" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
           </span>
@@ -4052,7 +4052,7 @@
         'updates',
         lang === 'zh-CN' ? '版本更新' : (lang === 'zh-TW' || lang === 'yue') ? '版本更新' : lang === 'ja' ? 'アップデート' : 'Updates & Sync'
       );
-      const verStr = `v${lastStatus?.version || '2.2.0'}`;
+      const verStr = `v${lastStatus?.version || '2.2.1'}`;
       const badgeEl = document.getElementById('update-section-badge');
       if (badgeEl) {
         badgeEl.textContent = lastUpdateCheck?.hasUpdate ? `v${lastUpdateCheck.latestVersion}` : verStr;
@@ -4171,7 +4171,7 @@
         txt.textContent = hasCdp
           ? t.connected(st.cdp.port, st.cdp.pageCount)
           : st.watcher?.alive ? t.waitingPort : t.disconnected;
-        meta.textContent = `v${st.version || '2.2.0'} · ${st.watcher?.alive ? t.watcherOn(st.watcher.pid) : t.watcherOff}`;
+        meta.textContent = `v${st.version || '2.2.1'} · ${st.watcher?.alive ? t.watcherOn(st.watcher.pid) : t.watcherOff}`;
         const showBanner = Boolean(st.cdp?.needsCdpRestart);
         document.getElementById('cdp-banner').classList.toggle('show', showBanner);
         if (metaBanner) {
