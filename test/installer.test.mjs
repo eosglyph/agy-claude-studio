@@ -421,7 +421,7 @@ test(
   'Windows 1-click native plugin installer cleans legacy 2.1/2.2 installs, migrates config, creates Gemini-icon shortcut, enables plugin, and cleanly uninstalls',
   { skip: process.platform !== 'win32' ? 'Windows-only native plugin installer E2E test' : false },
   async () => {
-    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-native-exe-e2e-'));
+    const workDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-native-exe-e2e-')));
     const testSysRoot = path.join(workDir, 'sysroot');
     const installerExe = path.join(workDir, 'installer.exe');
     const pluginZip = path.join(workDir, 'plugin.zip');
@@ -625,7 +625,7 @@ test(
   'legacy C# watcher compiles cleanly and passes WindowsFileAction STA, HostEnabled fail-safe, and native toggle checks',
   { skip: process.platform !== 'win32' ? 'Windows-only C# watcher regression test' : false },
   async () => {
-    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-watcher-reg-'));
+    const workDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-watcher-reg-')));
     const watcherDir = path.join(workDir, 'watcher-dir');
     const watcherExe = path.join(watcherDir, 'agy-claude-studio-watcher.exe');
     const hostCfgFile = path.join(workDir, 'host.json');
