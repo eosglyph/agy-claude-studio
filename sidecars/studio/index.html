@@ -2351,7 +2351,7 @@
       <button type="button" class="section-head" id="update-section-head" aria-expanded="false">
         <span class="section-title" id="update-section-title">版本更新</span>
         <span class="section-head-right">
-          <span class="section-badge" id="update-section-badge">v2.2.1</span>
+          <span class="section-badge" id="update-section-badge">v2.2.3</span>
           <span class="section-chevron" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
           </span>
@@ -2373,6 +2373,18 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
               <span id="btn-self-update-lbl"></span>
             </button>
+          </div>
+        </div>
+        <div class="update-item-row">
+          <div class="update-meta-block">
+            <div class="update-meta-v" id="prerelease-meta-title">接受测试版本推送</div>
+            <div class="update-meta-sub" id="prerelease-meta-desc">测试版本可能会有各种预期之外的问题，请慎重考虑选择</div>
+          </div>
+          <div class="update-row-action">
+            <label class="switch">
+              <input type="checkbox" id="chk-receive-prerelease">
+              <span class="switch-track"></span>
+            </label>
           </div>
         </div>
         <div class="update-item-row">
@@ -4266,11 +4278,44 @@
         'updates',
         lang === 'zh-CN' ? '版本更新' : (lang === 'zh-TW' || lang === 'yue') ? '版本更新' : lang === 'ja' ? 'アップデート' : 'Updates & Sync'
       );
-      const verStr = `v${lastStatus?.version || '2.2.1'}`;
+      const verStr = `v${lastStatus?.version || '2.2.3'}`;
       const badgeEl = document.getElementById('update-section-badge');
       if (badgeEl) {
-        badgeEl.textContent = lastUpdateCheck?.hasUpdate ? `v${lastUpdateCheck.latestVersion}` : verStr;
+        badgeEl.textContent = lastUpdateCheck?.hasUpdate
+          ? `v${lastUpdateCheck.latestVersion}${lastUpdateCheck.isPrerelease ? ' · Beta' : ''}`
+          : verStr;
         badgeEl.classList.toggle('is-compat', Boolean(lastUpdateCheck?.hasUpdate));
+      }
+
+      const preTitleEl = document.getElementById('prerelease-meta-title');
+      const preDescEl = document.getElementById('prerelease-meta-desc');
+      const preChkEl = document.getElementById('chk-receive-prerelease');
+      if (preTitleEl) {
+        preTitleEl.textContent =
+          lang === 'zh-CN'
+            ? '接受测试版本推送'
+            : lang === 'zh-TW'
+            ? '接受測試版本推送'
+            : lang === 'yue'
+            ? '接收測試版本推送'
+            : lang === 'ja'
+            ? 'テスト版の配信を受け取る'
+            : 'Receive Pre-release Updates';
+      }
+      if (preDescEl) {
+        preDescEl.textContent =
+          lang === 'zh-CN'
+            ? '测试版本可能会有各种预期之外的问题，请慎重考虑选择'
+            : lang === 'zh-TW'
+            ? '測試版本可能會有各種預期之外的問題，請慎重考慮選擇'
+            : lang === 'yue'
+            ? '測試版本可能會有各種預期之外嘅問題，請慎重考慮選擇'
+            : lang === 'ja'
+            ? 'テスト版には予期しない不具合が含まれる可能性があります。慎重にご判断ください'
+            : 'Pre-release builds may contain unexpected issues. Please enable with caution.';
+      }
+      if (preChkEl) {
+        preChkEl.checked = Boolean(currentConfig?.receivePrerelease);
       }
 
       const packK = document.getElementById('i18n-pack-meta-k');
@@ -4352,7 +4397,10 @@
           verSub.classList.add('is-available');
           const url = lastUpdateCheck.releaseUrl || lastStatus?.update?.releaseUrl || 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
           verSub.innerHTML = '';
-          verSub.appendChild(document.createTextNode(t.updateAvailableTitle(lastUpdateCheck.latestVersion)));
+          const preTag = lastUpdateCheck.isPrerelease
+            ? (lang === 'en' ? ' (Pre-release)' : lang === 'ja' ? '（テスト版）' : '（测试版）')
+            : '';
+          verSub.appendChild(document.createTextNode(t.updateAvailableTitle(lastUpdateCheck.latestVersion) + preTag));
           const a = document.createElement('a');
           a.href = url;
           a.target = '_blank';
@@ -4932,9 +4980,9 @@
       } catch {}
     }
 
-    async function checkUpdateSilently() {
+    async function checkUpdateSilently({ force = false } = {}) {
       try {
-        const res = await apiFetch('/api/check-update');
+        const res = await apiFetch('/api/check-update', force ? { body: JSON.stringify({ force: true }) } : undefined);
         if (!res.ok) return;
         const data = await res.json();
         if (data?.ok) {
@@ -5178,6 +5226,11 @@
     document.getElementById('btn-relaunch').addEventListener('click', triggerRelaunch);
     document.getElementById('btn-check-update').addEventListener('click', triggerCheckUpdate);
     document.getElementById('btn-self-update').addEventListener('click', triggerSelfUpdate);
+    document.getElementById('chk-receive-prerelease')?.addEventListener('change', async (ev) => {
+      const enabled = Boolean(ev.target.checked);
+      await saveOne('receivePrerelease', enabled);
+      await checkUpdateSilently({ force: true });
+    });
     document.getElementById('btn-sync-compat').addEventListener('click', triggerSyncCompat);
     document.getElementById('btn-sync-i18n-pack').addEventListener('click', () => triggerSyncI18nPack());
     document.getElementById('btn-reset-i18n-pack').addEventListener('click', () => triggerResetI18nPack());

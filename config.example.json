@@ -28,6 +28,7 @@
   "orchestratorSwitch": true,
   "pluginPageTranslate": true,
   "fileLinkContextMenu": true,
+  "receivePrerelease": false,
   "i18nIgnoreSelectors": [],
   "autoRelaunchWithCdp": true,
   "exitOnHostClose": false

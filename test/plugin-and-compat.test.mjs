@@ -2417,3 +2417,85 @@ test('compactPreset config validation, sanitization, and auto-fill after /compac
     for (const id of timers) clearTimeout(id);
   }
 });
+
+test('receivePrerelease config defaults off, compareSemver orders prereleases, and checkStudioUpdate supports beta channel with HTML fallback', async () => {
+  assert.equal(cdp.DEFAULT_CONFIG.receivePrerelease, false);
+  assert.equal(cdp.validateConfigSetting('receivePrerelease', true), true);
+  assert.equal(cdp.validateConfigSetting('receivePrerelease', false), true);
+  assert.equal(cdp.validateConfigSetting('receivePrerelease', 'yes'), false);
+
+  const sidecarMod = await import(new URL('../sidecars/studio/main.mjs', import.meta.url).href);
+  const { compareSemver, checkStudioUpdate } = sidecarMod;
+
+  assert.equal(compareSemver('2.2.4-beta.1', '2.2.3'), 1);
+  assert.equal(compareSemver('2.2.4', '2.2.4-beta.1'), 1);
+  assert.equal(compareSemver('2.2.4-beta.2', '2.2.4-beta.1'), 1);
+  assert.equal(compareSemver('2.2.4-rc.1', '2.2.4-beta.9'), 1);
+  assert.equal(compareSemver('2.2.4-beta.1', '2.2.4-beta.1'), 0);
+
+  // Beta channel via Releases API: picks non-draft prerelease over older stable
+  const betaApiRes = await checkStudioUpdate({
+    currentVersion: '2.2.3',
+    includePrerelease: true,
+    forceRefresh: true,
+    fetchFn: async (url) => {
+      assert.ok(url.includes('/releases?per_page=10'));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [
+          { tag_name: 'v2.2.5-alpha.1', draft: true, prerelease: true },
+          { tag_name: 'v2.2.4-beta.1', draft: false, prerelease: true, name: 'v2.2.4-beta.1', html_url: 'https://github.com/eosglyph/agy-claude-studio/releases/tag/v2.2.4-beta.1' },
+          { tag_name: 'v2.2.3', draft: false, prerelease: false },
+        ],
+      };
+    },
+  });
+  assert.equal(betaApiRes.ok, true);
+  assert.equal(betaApiRes.hasUpdate, true);
+  assert.equal(betaApiRes.latestTag, 'v2.2.4-beta.1');
+  assert.equal(betaApiRes.isPrerelease, true);
+  assert.equal(betaApiRes.channel, 'beta');
+
+  // Beta channel fallback to public HTML when API hits 403
+  const betaHtmlRes = await checkStudioUpdate({
+    currentVersion: '2.2.3',
+    includePrerelease: true,
+    forceRefresh: true,
+    fetchFn: async (url) => {
+      if (url.includes('api.github.com')) return { ok: false, status: 403, json: async () => ({}) };
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '<a href="/eosglyph/agy-claude-studio/releases/tag/v2.2.4-beta.2">beta</a><a href="/eosglyph/agy-claude-studio/releases/tag/v2.2.3">stable</a>',
+      };
+    },
+  });
+  assert.equal(betaHtmlRes.ok, true);
+  assert.equal(betaHtmlRes.hasUpdate, true);
+  assert.equal(betaHtmlRes.latestTag, 'v2.2.4-beta.2');
+  assert.equal(betaHtmlRes.isPrerelease, true);
+  assert.equal(betaHtmlRes.source, 'releases-html');
+
+  // Stable channel ignores prereleases and hits /releases/latest
+  const stableRes = await checkStudioUpdate({
+    currentVersion: '2.2.3',
+    includePrerelease: false,
+    forceRefresh: true,
+    fetchFn: async (url) => {
+      assert.ok(url.includes('/releases/latest'));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ tag_name: 'v2.2.3', html_url: 'https://github.com/eosglyph/agy-claude-studio/releases/tag/v2.2.3' }),
+      };
+    },
+  });
+  assert.equal(stableRes.ok, true);
+  assert.equal(stableRes.hasUpdate, false);
+  assert.equal(stableRes.isPrerelease, false);
+  assert.equal(stableRes.channel, 'stable');
+
+  const studioHtml = fs.readFileSync(path.join(ROOT_DIR, 'sidecars', 'studio', 'index.html'), 'utf8');
+  assert.ok(studioHtml.includes('chk-receive-prerelease') && studioHtml.includes('接受测试版本推送'));
+});

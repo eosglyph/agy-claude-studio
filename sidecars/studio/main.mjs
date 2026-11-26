@@ -22,7 +22,9 @@ const PLUGIN_ROOT_DIR = resolve(__dirname, '..', '..');
 const HTML_PATH = join(__dirname, 'index.html');
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Referrer-Policy': 'no-referrer' };
 const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/eosglyph/agy-claude-studio/releases/latest';
+const RELEASES_LIST_API_URL = 'https://api.github.com/repos/eosglyph/agy-claude-studio/releases?per_page=10';
 const LATEST_RELEASE_WEB_URL = 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
+const RELEASES_LIST_WEB_URL = 'https://github.com/eosglyph/agy-claude-studio/releases';
 const LATEST_PACKAGE_RAW_URL = 'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/package.json';
 
 const LAUNCHER_CACHE_TTL_MS = 30000;
@@ -201,6 +203,9 @@ async function applyConfigUpdate(data) {
   const watcherLock = lifecycle.readWatcherLockInfo(cdp.PID_FILE, cdp.LOCK_FILE);
   const watcherAlive = Boolean(watcherLock && watcherLock.alive);
   const watcherPid = watcherAlive ? watcherLock.pid : null;
+  if (applied.includes('receivePrerelease')) {
+    updateCheckCache = { at: 0, channel: '', value: null };
+  }
   if (applied.length > 0 && !watcherAlive) {
     try {
       await injectOnce({ log: () => {} });
@@ -282,21 +287,54 @@ async function showScriptOutputInHostChat(data) {
   return lastResult;
 }
 
-function parseSemverParts(raw) {
-  const clean = String(raw || '').trim().replace(/^v/i, '').split('-')[0];
-  const parts = clean.split('.').map((n) => parseInt(n, 10));
+function parseSemver(raw) {
+  const clean = String(raw || '').trim().replace(/^v/i, '').split('+')[0];
+  if (!clean) return null;
+  const dashIdx = clean.indexOf('-');
+  const coreStr = dashIdx >= 0 ? clean.slice(0, dashIdx) : clean;
+  const preStr = dashIdx >= 0 ? clean.slice(dashIdx + 1) : '';
+  const parts = coreStr.split('.').map((n) => parseInt(n, 10));
   if (parts.some((n) => !Number.isFinite(n))) return null;
   while (parts.length < 3) parts.push(0);
-  return parts.slice(0, 3);
+  const prerelease = preStr ? preStr.split('.').filter(Boolean) : [];
+  return { core: parts.slice(0, 3), prerelease };
+}
+
+function isPrereleaseTag(raw) {
+  const parsed = parseSemver(raw);
+  return Boolean(parsed && parsed.prerelease.length > 0);
 }
 
 function compareSemver(a, b) {
-  const pa = parseSemverParts(a);
-  const pb = parseSemverParts(b);
+  const pa = parseSemver(a);
+  const pb = parseSemver(b);
   if (!pa || !pb) return 0;
   for (let i = 0; i < 3; i++) {
-    if (pa[i] > pb[i]) return 1;
-    if (pa[i] < pb[i]) return -1;
+    if (pa.core[i] > pb.core[i]) return 1;
+    if (pa.core[i] < pb.core[i]) return -1;
+  }
+  const aPre = pa.prerelease;
+  const bPre = pb.prerelease;
+  if (aPre.length === 0 && bPre.length === 0) return 0;
+  if (aPre.length === 0) return 1;
+  if (bPre.length === 0) return -1;
+  const len = Math.max(aPre.length, bPre.length);
+  for (let i = 0; i < len; i++) {
+    if (i >= aPre.length) return -1;
+    if (i >= bPre.length) return 1;
+    const ai = aPre[i];
+    const bi = bPre[i];
+    const aNum = /^\d+$/.test(ai);
+    const bNum = /^\d+$/.test(bi);
+    if (aNum && bNum) {
+      const na = parseInt(ai, 10);
+      const nb = parseInt(bi, 10);
+      if (na !== nb) return na > nb ? 1 : -1;
+    } else if (aNum !== bNum) {
+      return aNum ? -1 : 1;
+    } else if (ai !== bi) {
+      return ai > bi ? 1 : -1;
+    }
   }
   return 0;
 }
@@ -360,7 +398,7 @@ async function inspectGitRepoStateAsyncCached(pluginDir = PLUGIN_ROOT_DIR) {
 }
 
 const UPDATE_CHECK_CACHE_TTL_MS = 10 * 60 * 1000;
-let updateCheckCache = { at: 0, value: null };
+let updateCheckCache = { at: 0, channel: '', value: null };
 
 function isValidStudioPluginDir(pluginDir) {
   if (!pluginDir) return false;
@@ -382,7 +420,14 @@ async function checkStudioUpdate({
   execFn = execFileSync,
   timeoutMs = 8000,
   forceRefresh = false,
+  includePrerelease = undefined,
 } = {}) {
+  const wantBeta =
+    typeof includePrerelease === 'boolean'
+      ? includePrerelease
+      : Boolean(cdp.readConfig().receivePrerelease);
+  const channel = wantBeta ? 'beta' : 'stable';
+
   const isDefaultCall =
     pluginDir === PLUGIN_ROOT_DIR &&
     currentVersion === cdp.PLUGIN_VERSION &&
@@ -393,6 +438,7 @@ async function checkStudioUpdate({
     isDefaultCall &&
     !forceRefresh &&
     updateCheckCache.value &&
+    updateCheckCache.channel === channel &&
     Date.now() - updateCheckCache.at < UPDATE_CHECK_CACHE_TTL_MS
   ) {
     return updateCheckCache.value;
@@ -408,7 +454,7 @@ async function checkStudioUpdate({
     ? 'archive'
     : 'manual';
   const canAutoUpdate = updateMode === 'git' || updateMode === 'archive';
-  const extraState = { ...gitState, updateMode, canAutoUpdate };
+  const extraState = { ...gitState, updateMode, canAutoUpdate, channel, receivePrerelease: wantBeta };
 
   if (!fetchFn) {
     return { ok: false, error: 'fetch unavailable', currentVersion, ...extraState, releaseUrl: LATEST_RELEASE_WEB_URL };
@@ -417,7 +463,7 @@ async function checkStudioUpdate({
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const ua = `agy-claude-studio/${currentVersion}`;
 
-  const buildOkResult = ({ latestTag, releaseName, publishedAt, releaseUrl, source }) => {
+  const buildOkResult = ({ latestTag, releaseName, publishedAt, releaseUrl, source, isPrerelease = false }) => {
     const cleanTag = String(latestTag || '').trim();
     const latestVersion = cleanTag.replace(/^v/i, '');
     const hasUpdate = Boolean(latestVersion && compareSemver(latestVersion, currentVersion) > 0);
@@ -428,20 +474,92 @@ async function checkStudioUpdate({
       latestVersion: latestVersion || currentVersion,
       latestTag: cleanTag || `v${currentVersion}`,
       hasUpdate,
+      isPrerelease: Boolean(isPrerelease || isPrereleaseTag(cleanTag)),
       releaseName: String(releaseName || cleanTag || ''),
       publishedAt: String(publishedAt || ''),
       releaseUrl: String(releaseUrl || LATEST_RELEASE_WEB_URL),
       ...extraState,
     };
     if (isDefaultCall) {
-      updateCheckCache = { at: Date.now(), value: result };
+      updateCheckCache = { at: Date.now(), channel, value: result };
     }
     return result;
   };
 
   let primaryErr = '';
   try {
-    // 1. Primary: GitHub Releases API (rich metadata; may hit 403/429 rate limits on shared IPs)
+    if (wantBeta) {
+      // 0a. Beta channel primary: GitHub Releases list API (includes pre-releases, skips drafts)
+      try {
+        const listRes = await fetchFn(RELEASES_LIST_API_URL, {
+          headers: { Accept: 'application/vnd.github+json', 'User-Agent': ua },
+          signal: controller.signal,
+        });
+        if (listRes.ok) {
+          const list = await listRes.json();
+          if (Array.isArray(list)) {
+            let best = null;
+            for (const item of list) {
+              if (!item || item.draft) continue;
+              const tag = String(item.tag_name || '').trim();
+              if (!parseSemver(tag)) continue;
+              if (!best || compareSemver(tag, best.tag_name) > 0) {
+                best = item;
+              }
+            }
+            if (best?.tag_name) {
+              return buildOkResult({
+                latestTag: best.tag_name,
+                releaseName: best.name || best.tag_name,
+                publishedAt: best.published_at || '',
+                releaseUrl: best.html_url || RELEASES_LIST_WEB_URL,
+                source: 'github-releases-api',
+                isPrerelease: Boolean(best.prerelease || isPrereleaseTag(best.tag_name)),
+              });
+            }
+          }
+        } else {
+          primaryErr = `HTTP ${listRes.status}`;
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err;
+        primaryErr = err?.message || 'network error';
+      }
+
+      // 0b. Beta channel fallback: public Releases HTML page (no REST API 60/hr limit)
+      try {
+        const htmlRes = await fetchFn(RELEASES_LIST_WEB_URL, {
+          headers: { 'User-Agent': ua },
+          signal: controller.signal,
+        });
+        if (htmlRes.ok) {
+          const html = await htmlRes.text();
+          const re = /\/eosglyph\/agy-claude-studio\/releases\/tag\/(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/gi;
+          let bestTag = '';
+          let match = null;
+          while ((match = re.exec(html)) !== null) {
+            const candidate = match[1];
+            if (!bestTag || compareSemver(candidate, bestTag) > 0) {
+              bestTag = candidate;
+            }
+          }
+          if (bestTag) {
+            return buildOkResult({
+              latestTag: bestTag,
+              releaseName: bestTag,
+              publishedAt: '',
+              releaseUrl: `https://github.com/eosglyph/agy-claude-studio/releases/tag/${encodeURIComponent(bestTag)}`,
+              source: 'releases-html',
+              isPrerelease: isPrereleaseTag(bestTag),
+            });
+          }
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err;
+      }
+    }
+
+    // 1. Primary (Stable): GitHub Releases latest API (rich metadata; may hit 403/429 rate limits on shared IPs)
     try {
       const res = await fetchFn(LATEST_RELEASE_API_URL, {
         headers: { Accept: 'application/vnd.github+json', 'User-Agent': ua },

@@ -130,6 +130,7 @@ const DEFAULT_CONFIG = {
   pluginPageTranslate: true,
   fileLinkContextMenu: true,
   geminiLoader: true,
+  receivePrerelease: false,
   i18nIgnoreSelectors: [],
   autoRelaunchWithCdp: true,
   exitOnHostClose: false,
@@ -166,6 +167,7 @@ const CONFIG_VALIDATORS = {
   pluginPageTranslate: 'boolean',
   fileLinkContextMenu: 'boolean',
   geminiLoader: 'boolean',
+  receivePrerelease: 'boolean',
   autoRelaunchWithCdp: 'boolean',
   exitOnHostClose: 'boolean',
 };
