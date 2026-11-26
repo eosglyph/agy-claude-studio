@@ -571,7 +571,7 @@ test(
       assert.ok(fs.existsSync(startMenuLnk));
       assert.ok(fs.existsSync(desktopLnk));
 
-      const expectedIcon = `${path.join(pluginDir, 'assets', 'agy-gemini-clawd.ico')},0`;
+      const expectedIcon = `${path.join(localAppData, 'agy-claude-studio-setup', 'agy-gemini-clawd.ico')},0`;
       for (const lnk of [startMenuLnk, desktopLnk]) {
         const meta = readLnkMetadata(lnk);
         assert.equal(meta.targetPath.toLowerCase(), mockAgExe.toLowerCase());
