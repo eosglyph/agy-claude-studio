@@ -113,6 +113,16 @@ Claude 暖灰与黑曜石配色 · 3-Tab 右侧控制室（对话 / 工具 / 设
 >
 > **帮我安装 `https://github.com/eosglyph/agy-claude-studio` 以及推荐搭档 `https://github.com/yuhuan-dev/antigravity-usage-monitor`**
 
+### 安装、升级与旧版迁移核对清单（人类与 AI 助手通用）
+
+无论是首次安装，还是从 `v2.1` / `v2.2` 升级迁移至 `v2.2.1`：
+
+1. **保留本地个人数据**：升级时保留 `~/.gemini/antigravity/plugin_data/agy-claude-studio/` 下的 `config.json`、`notify.json`、`notify-state.json`、`scripts.json` 以及 `scripts/ops/` 自定义脚本；首次启用会自动迁移旧版 `plugin_data/agy-claude-style/config.json`。
+2. **旧版 Windows 独立守护进程迁移（`agy-claude-style-watcher.exe`）**：
+   - 仅更新插件源码，或将新版安装到新的 `agy-claude-studio` 目录，**不会**自动关闭或替换旧目录（如 `%LOCALAPPDATA%\agy-claude-style`）中仍在运行的旧版 `agy-claude-style-watcher.exe`。
+   - 先做只读排查，确认后台是否存在 `agy-claude-style-watcher` 进程或旧版开机自启/卸载入口；若存在，请在**征得用户确认后**通过旧版卸载入口关闭其自启动并完成卸载，确认 `agy-claude-style-watcher.exe` 已彻底退出后再安装新版 `Claude Studio v2.2.1`（新版已支持在插件管理关闭开关后自动卸载停注）。
+3. **启用与快速生效**：若 Antigravity 已携带 `--remote-debugging-port=0` 运行，可执行插件目录下的 `node inject.js` 热刷新（切勿未经用户确认强杀正在运行的 Antigravity 进程）。启用插件后可使用内置 `studio-setup`（30 秒引导配置）或 `studio-doctor`（一键诊断与自愈）。
+
 ### 方式一：Antigravity 原生插件模式（手动克隆）
 
 1. 将仓库克隆到 Antigravity 插件目录：

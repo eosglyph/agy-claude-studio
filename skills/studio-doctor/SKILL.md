@@ -1,7 +1,7 @@
 ---
 name: studio-doctor
 description: >-
-  Claude Studio 一键诊断、自愈与自然语言调参助手。当用户遇到「主题/汉化没生效」「Antigravity 更新后样式消失」「找不到调试端口」「侧边栏异常」，或想直接用自然语言切换配色/定制 /compact 预设时触发。
+  Claude Studio 一键诊断、自愈与自然语言调参助手。当用户遇到「主题/汉化没生效」「Antigravity 更新后样式消失」「找不到调试端口」「侧边栏异常」「关闭插件后重启仍注入 / 旧版守护迁移」，或想直接用自然语言切换配色/定制 /compact 预设时触发。
 ---
 
 # Claude Studio 一键诊断与自愈助手 (`studio-doctor`)
@@ -20,9 +20,12 @@ description: >-
    - 如果输出提示 **未找到调试端口 / Antigravity 未带 `--remote-debugging-port` 启动**：
      - 清晰向用户解释：Antigravity 需要通过带调试端口的快捷方式启动（或通过 Claude Studio 侧边栏点击「带调试端口重启」）；
      - 绝不擅自强杀正在运行的 Antigravity 主进程，先征得用户同意或引导其点击侧边栏按钮重启。
-3. **检查侧边栏（Studio Sidecar）同步问题**：
+3. **检查独立守护残留与旧版迁移（特别是「关闭插件重启仍注入」）**：
+   - 只读检查是否存在旧版独立守护进程（如 Windows 下的 `agy-claude-style-watcher.exe`、`%LOCALAPPDATA%\agy-claude-style`，或非本插件目录的旧版 `agy-claude-studio-watcher.exe`）。
+   - 若用户反馈「在插件管理中禁用 Claude Studio 后重启依然被注入」，先排查是否来自旧版目录进程或未升级至 `v2.2.1+` 的独立安装版；**仅更新插件源码或安装到新目录不会替换旧目录中运行的旧进程**，向用户说明后在确认前提下引导运行旧版卸载入口关闭自启并停止旧进程。
+4. **检查侧边栏（Studio Sidecar）同步问题**：
    - 若用户反馈「改了新开关没保存 / 看不到新功能」，提示可能是 Antigravity 更新插件文件后 sidecar 进程尚未重启，引导用户在插件管理中重载 `Claude Studio` 或重启一次 Antigravity 即可。
-4. **验证并简明汇报**：给出「问题原因 + 已执行动作 + 当前状态」三行清晰结论。
+5. **验证并简明汇报**：给出「问题原因 + 已执行动作 + 当前状态」三行清晰结论。
 
 ## 场景 B：自然语言快捷改配置
 

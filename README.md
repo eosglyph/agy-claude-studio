@@ -113,6 +113,17 @@ Once installed, you can also ask Gemini to run the built-in **`studio-setup`** s
 >
 > **Help me install `https://github.com/eosglyph/agy-claude-studio` along with the companion plugin `https://github.com/yuhuan-dev/antigravity-usage-monitor`**
 
+### Installation, Upgrade & Legacy Migration Checklist (for Users & Assistants)
+
+When installing fresh or upgrading from `v2.1` / `v2.2` to `v2.2.1` (manually or via an AI coding assistant):
+
+1. **Preserve user data**: Keep existing files under `~/.gemini/antigravity/plugin_data/agy-claude-studio/` (`config.json`, `notify.json`, `notify-state.json`, `scripts.json`) as well as custom scripts under `scripts/ops/`. First-time `Claude Studio` launches automatically migrate legacy `plugin_data/agy-claude-style/config.json`.
+2. **Legacy Windows watcher migration (`agy-claude-style-watcher.exe`)**:
+   - Updating plugin files or installing into a new `agy-claude-studio` folder does **not** automatically stop or replace a standalone `agy-claude-style-watcher.exe` running from an older install folder (such as `%LOCALAPPDATA%\agy-claude-style`).
+   - Run a read-only check first for any running `agy-claude-style-watcher` process or legacy Startup/Uninstall entry.
+   - If present, ask the user for confirmation before closing/uninstalling the legacy `Claude Style` entry (so its autostart is removed and `agy-claude-style-watcher.exe` has fully exited), then install or upgrade to `Claude Studio v2.2.1` (`Claude-Studio-v2.2.1-Windows-x64.exe` reads host plugin disable state cleanly).
+3. **Apply cleanly & verify**: Run `node inject.js` if an Antigravity CDP session is already active (do **not** force-kill a running Antigravity instance without user confirmation). After enabling `Claude Studio` under **Plugins**, invoke `studio-setup` for 30s guided configuration or `studio-doctor` for diagnostics.
+
 ### Option 1: Antigravity Native Plugin (Manual)
 
 1. Clone this repository into your Antigravity plugins directory:
