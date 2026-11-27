@@ -959,6 +959,9 @@ const REMOVE_EXPRESSION = `(() => {
     el.removeAttribute('data-ag-cs-has-effort');
     el.style?.removeProperty?.('--ag-cs-effort-cut');
   });
+  document.querySelectorAll('[data-ag-cs-inline-model-wrap]').forEach((el) => {
+    el.removeAttribute('data-ag-cs-inline-model-wrap');
+  });
   document.querySelectorAll('[data-ag-cs-dock-open], [data-ag-cs-dock-solo]').forEach((el) => {
     el.removeAttribute('data-ag-cs-dock-open');
     el.removeAttribute('data-ag-cs-dock-solo');

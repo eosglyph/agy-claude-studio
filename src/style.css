@@ -1462,7 +1462,7 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-tool
 .ag-cs-periodic-trigger:not(.is-disabled):not([aria-disabled="true"]):hover,
 .ag-cs-periodic-trigger[aria-expanded="true"],
 .agy-composer-footer:has([data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has([data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover)) > .ag-cs-periodic-trigger:not(.is-disabled):not([aria-disabled="true"]),
-*:has(> .no-focus-agent-input [data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has(> .no-focus-agent-input [data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover)) > .ag-cs-periodic-trigger.is-inline:not(.is-disabled):not([aria-disabled="true"]) {
+[data-ag-cs-inline-model-wrap="1"]:has(> .no-focus-agent-input [data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has(> .no-focus-agent-input [data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover)) > .ag-cs-periodic-trigger.is-inline:not(.is-disabled):not([aria-disabled="true"]) {
   background: var(--ag-cs-hover-wash) !important;
 }
 .ag-cs-periodic-trigger svg {
@@ -1474,7 +1474,7 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-tool
 .ag-cs-periodic-trigger:not(.is-disabled):not([aria-disabled="true"]):hover svg,
 .ag-cs-periodic-trigger[aria-expanded="true"] svg,
 .agy-composer-footer:has([data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has([data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover)) > .ag-cs-periodic-trigger:not(.is-disabled):not([aria-disabled="true"]) svg,
-*:has(> .no-focus-agent-input [data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has(> .no-focus-agent-input [data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover)) > .ag-cs-periodic-trigger.is-inline:not(.is-disabled):not([aria-disabled="true"]) svg {
+[data-ag-cs-inline-model-wrap="1"]:has(> .no-focus-agent-input [data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has(> .no-focus-agent-input [data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover)) > .ag-cs-periodic-trigger.is-inline:not(.is-disabled):not([aria-disabled="true"]) svg {
   transform: rotate(12deg);
 }
 .ag-cs-periodic-trigger.is-inline {

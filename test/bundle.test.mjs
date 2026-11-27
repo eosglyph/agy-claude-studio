@@ -5362,9 +5362,14 @@ test('model selector partitions sparkle+name from effort pill, suppresses native
     }
     assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
 
-    // ArrowUp / ArrowDown on modelBtn also opens/blocks native menu
+    // ArrowUp / ArrowDown on modelBtn also opens Periodic Table and blocks native menu
     modelBtn.dispatchEvent({ type: 'keydown', key: 'ArrowUp' });
     assert.equal(nativeMenuOpens, 0);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'ArrowUp opens periodic selector');
+    for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
+      fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    }
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
 
     // 3. Clicking effort badge opens ONLY effort popover (no native menu, no periodic selector)
     for (const type of ['pointerdown', 'mousedown', 'click']) {
@@ -5415,6 +5420,244 @@ test('model selector partitions sparkle+name from effort pill, suppresses native
     assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '');
     assert.equal(footer.querySelector('.ag-cs-periodic-trigger'), null);
     assert.equal(docCaptureListeners.get('click')?.length || 0, 0);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('inline model trigger tags data-ag-cs-inline-model-wrap without *:has(), opens periodic on ArrowDown/ArrowUp, and passes through modifiers/IME', () => {
+  const fs = require('node:fs');
+  const css = fs.readFileSync(require.resolve('../src/style.css'), 'utf8');
+  assert.equal(/\*:has\(>\s*\.no-focus-agent-input/.test(css), false, 'style.css must not use *:has(> .no-focus-agent-input ...)');
+  assert.ok(
+    css.includes('[data-ag-cs-inline-model-wrap="1"]:has(> .no-focus-agent-input'),
+    'style.css scopes inline hover selector to [data-ag-cs-inline-model-wrap="1"]'
+  );
+
+  const timers = new Set();
+  const docCaptureListeners = new Map();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const matchesSimple = (n, simple) => {
+      if (!n || n.nodeType !== 1) return false;
+      let rest = simple.trim();
+      for (const m of rest.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)) {
+        const [, k, v] = m;
+        if (v === undefined) {
+          if (!n.hasAttribute(k)) return false;
+        } else if (n.getAttribute(k) !== v) return false;
+      }
+      rest = rest.replace(/\[[^\]]+\]/g, '');
+      for (const m of rest.matchAll(/\.([A-Za-z0-9_-]+)/g)) if (!n.classes.has(m[1])) return false;
+      rest = rest.replace(/\.[A-Za-z0-9_-]+/g, '');
+      if (rest && n.tagName !== rest.toUpperCase()) return false;
+      return true;
+    };
+    const matchesSel = (n, sel) => {
+      const parts = sel.trim().split(/\s+/);
+      let cur = n;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (i === parts.length - 1) {
+          if (!matchesSimple(cur, parts[i])) return false;
+        } else {
+          cur = cur.parentElement;
+          while (cur && !matchesSimple(cur, parts[i])) cur = cur.parentElement;
+          if (!cur) return false;
+        }
+      }
+      return true;
+    };
+    const el = {
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      classes,
+      children,
+      childNodes: children,
+      parentElement: null,
+      parentNode: null,
+      isConnected: true,
+      _text: opts.text || '',
+      style: { _props: {}, setProperty(k, v) { this._props[k] = String(v); }, getPropertyValue(k) { return this._props[k] || ''; }, removeProperty(k) { delete this._props[k]; } },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      get childElementCount() { return children.length; },
+      get nextSibling() {
+        if (!this.parentElement) return null;
+        const idx = this.parentElement.children.indexOf(this);
+        return idx >= 0 ? this.parentElement.children[idx + 1] || null : null;
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      append(...nodes) { for (const n of nodes) this.appendChild(n); },
+      insertBefore(c, ref) {
+        if (c.parentElement) {
+          const old = c.parentElement.children.indexOf(c);
+          if (old >= 0) c.parentElement.children.splice(old, 1);
+        }
+        c.parentElement = this;
+        c.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) children.splice(i, 1);
+        c.parentElement = null;
+        c.parentNode = null;
+        c.isConnected = false;
+        return c;
+      },
+      remove() {
+        if (this.parentElement) {
+          this.parentElement.removeChild(this);
+        }
+        this.isConnected = false;
+      },
+      addEventListener(type, fn) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(fn);
+      },
+      removeEventListener(type, fn) {
+        const list = listeners.get(type);
+        if (!list) return;
+        const i = list.indexOf(fn);
+        if (i >= 0) list.splice(i, 1);
+      },
+      dispatchEvent(ev) {
+        ev.target = ev.target || this;
+        let stopped = false;
+        let defaultPrevented = false;
+        ev.stopPropagation = () => { stopped = true; };
+        ev.stopImmediatePropagation = () => { stopped = true; };
+        ev.preventDefault = () => { defaultPrevented = true; };
+        Object.defineProperty(ev, 'defaultPrevented', { get: () => defaultPrevented });
+        for (const fn of [...(docCaptureListeners.get(ev.type) || [])]) {
+          fn(ev);
+          if (stopped) return !defaultPrevented;
+        }
+        for (const fn of [...(listeners.get(ev.type) || [])]) fn(ev);
+        return !defaultPrevented;
+      },
+      closest(sel) {
+        const sels = sel.split(',').map((s) => s.trim());
+        let cur = this;
+        while (cur) {
+          if (sels.some((s) => matchesSel(cur, s))) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const sels = sel.split(',').map((s) => s.trim());
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (sels.some((s) => matchesSel(c, s))) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+      getBoundingClientRect: () => ({ left: 100, top: 200, width: 120, height: 26, right: 220, bottom: 226 }),
+    };
+    return el;
+  };
+
+  const head = makeEl('head');
+  const body = makeEl('body', { className: 'theme-dark' });
+  const html = makeEl('html');
+  html.appendChild(head);
+  html.appendChild(body);
+  const inputBox = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+  const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  // Inline mode (no .agy-composer-footer)
+  const inlineParent = card.appendChild(makeEl('div', { className: 'inline-row' }));
+  const wrap = inlineParent.appendChild(makeEl('div', { className: 'no-focus-agent-input' }));
+  const modelBtn = wrap.appendChild(makeEl('button', { attrs: { 'data-testid': 'model-selector-trigger' }, text: 'Claude Sonnet 4.6' }));
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    hidden: false,
+    createElement: (tag) => makeEl(tag),
+    getElementById: (id) => html.querySelectorAll('*').find((e) => e.getAttribute('id') === id) || null,
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener(type, fn, capture) {
+      if (!capture) return;
+      if (!docCaptureListeners.has(type)) docCaptureListeners.set(type, []);
+      docCaptureListeners.get(type).push(fn);
+    },
+    removeEventListener(type, fn, capture) {
+      if (!capture) return;
+      const list = docCaptureListeners.get(type);
+      if (!list) return;
+      const i = list.indexOf(fn);
+      if (i >= 0) list.splice(i, 1);
+    },
+  };
+  const sandbox = {
+    document: doc,
+    location: { href: 'https://127.0.0.1:2015/', protocol: 'https:', hostname: '127.0.0.1', pathname: '/' },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, periodicSelector: true }), sandbox);
+    assert.equal(inlineParent.getAttribute('data-ag-cs-inline-model-wrap'), '1', 'inline parent is tagged for scoped :has() hover');
+
+    // ArrowDown and ArrowUp open periodic selector
+    for (const key of ['ArrowDown', 'ArrowUp']) {
+      const notPrevented = modelBtn.dispatchEvent({ type: 'keydown', key });
+      assert.equal(notPrevented, false, `${key} should be prevented when opening periodic selector`);
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, `${key} must open periodic selector`);
+      for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
+        fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+      }
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+    }
+
+    // Modifier keys and IME composition pass through without opening periodic selector
+    for (const mod of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { isComposing: true }]) {
+      const notPrevented = modelBtn.dispatchEvent({ type: 'keydown', key: 'Enter', ...mod });
+      assert.equal(notPrevented, true, `Enter with ${JSON.stringify(mod)} must not be intercepted`);
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+    }
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(inlineParent.hasAttribute('data-ag-cs-inline-model-wrap'), false, 'REMOVE_EXPRESSION cleans inline wrap attr');
   } finally {
     for (const id of timers) clearTimeout(id);
   }
