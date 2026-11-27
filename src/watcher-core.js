@@ -26,9 +26,10 @@ const {
   acquireWatcherLock,
 } = require('./lifecycle');
 
+const ROOT_DIR = path.resolve(__dirname, '..');
 const STATE_DIR = (process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR)
   ? path.resolve(process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR)
-  : CDP_STATE_DIR || __dirname;
+  : CDP_STATE_DIR || ROOT_DIR;
 const LOG_FILE = path.join(STATE_DIR, 'watch.log');
 
 function shortTitle(page) {

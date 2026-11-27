@@ -13,8 +13,8 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
 
-const cdp = require(path.join(ROOT_DIR, 'cdp.js'));
-const notifyCore = require(path.join(ROOT_DIR, 'notify-core.js'));
+const cdp = require(path.join(ROOT_DIR, 'src', 'cdp.js'));
+const notifyCore = require(path.join(ROOT_DIR, 'src', 'notify-core.js'));
 
 test('notifyCore.resolveNotifyDataDir prioritizes test override, PLUGIN_DATA, and skips unresolved placeholders', () => {
   const overridden = notifyCore.resolveNotifyDataDir({

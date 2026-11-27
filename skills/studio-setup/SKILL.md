@@ -41,8 +41,8 @@ description: >-
 ### 第二步：定位插件目录并批量写入配置
 
 1. 定位已安装的 `agy-claude-studio` 目录（优先级：`~/.gemini/config/plugins/agy-claude-studio` 或当前工作区）与数据目录 `~/.gemini/antigravity/plugin_data/agy-claude-studio/config.json`。
-2. 使用插件自带的 `cdp.js`（`updateConfigSetting` / `sanitizeConfig` + `writeFileAtomic`）将用户选择的所有偏好安全写入 `config.json`（保留用户已有且本次未涉及的配置项）。
-3. 执行插件目录下的 `node inject.js`（或仅当需要刷新侧边栏时提示），让所有视觉与语言偏好在当前 Antigravity 窗口**零重启热生效**。
+2. 使用插件自带的 `src/cdp.js`（`updateConfigSetting` / `sanitizeConfig` + `writeFileAtomic`）将用户选择的所有偏好安全写入 `config.json`（保留用户已有且本次未涉及的配置项）。
+3. 执行插件目录下的 `node src/inject.js`（或仅当需要刷新侧边栏时提示），让所有视觉与语言偏好在当前 Antigravity 窗口**零重启热生效**。
 
 ### 第三步：输出 3 行速览 + 衔接
 

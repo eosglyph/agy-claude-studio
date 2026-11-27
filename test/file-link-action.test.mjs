@@ -9,8 +9,8 @@ import vm from 'node:vm';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const cdp = require('../cdp.js');
-const runtime = readFileSync(new URL('../ui-runtime.js', import.meta.url), 'utf8');
+const cdp = require('../src/cdp.js');
+const runtime = readFileSync(new URL('../src/ui-runtime.js', import.meta.url), 'utf8');
 const fileMenu = runtime.slice(runtime.indexOf("  const FILE_MENU_CLS ="), runtime.indexOf('  function isOwnPluginNode('));
 
 function makeMenuContext() {

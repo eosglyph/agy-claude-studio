@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const LOCALES_DIR = path.join(ROOT_DIR, 'locales');
-const i18nLocales = require(path.join(ROOT_DIR, 'i18n-locales.js'));
+const i18nLocales = require(path.join(ROOT_DIR, 'src', 'i18n-locales.js'));
 
 const LOCALE_SPECS = [
   { lang: 'zh-CN', label: '简体中文', bundled: true },

@@ -9,8 +9,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { getNotifyConfigApi, saveNotifyConfigApi, startStudioSidecar, registerStudioApis, performStudioSelfUpdate } from '../sidecars/studio/main.mjs';
 
 const require = createRequire(import.meta.url);
-const notify = require('../notify-core.js');
-const scripts = require('../scripts-core.js');
+const notify = require('../src/notify-core.js');
+const scripts = require('../src/scripts-core.js');
 
 async function withDataDir(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-security-'));

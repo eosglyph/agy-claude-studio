@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const cdp = require('../cdp.js');
+const cdp = require('../src/cdp.js');
 
 test('buildInjectExpression and REMOVE_EXPRESSION compile cleanly as valid JS', () => {
   const injectExpr = cdp.buildInjectExpression();

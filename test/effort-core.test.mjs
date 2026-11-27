@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const effortCore = require('../effort-core.js');
+const effortCore = require('../src/effort-core.js');
 
 test('resolveClaudeEffortSteps groups model variants in ascending strength and falls back cleanly', () => {
   const options = [

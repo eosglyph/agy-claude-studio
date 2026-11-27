@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const rippleCore = require('../ripple-core.js');
+const rippleCore = require('../src/ripple-core.js');
 
 test('hash and fractalNoise are deterministic and bounded in [0, 1)', () => {
   for (let i = -20; i < 40; i++) {

@@ -304,7 +304,7 @@ async function main() {
 
   if (shouldPush && isNew) {
     try {
-      const notifyCore = require(path.join(REPO_ROOT, 'notify-core.js'));
+      const notifyCore = require(path.join(REPO_ROOT, 'src', 'notify-core.js'));
       const cfg = notifyCore.readNotifyConfig(dataDir);
       if (cfg.enabled && notifyCore.isChannelConfigured(cfg)) {
         const pushRes = await notifyCore.deliverNotification(cfg, {

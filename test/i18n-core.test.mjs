@@ -7,10 +7,10 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const i18nCore = require('../i18n-core.js');
-const i18nLocales = require('../i18n-locales.js');
-const i18nSync = require('../i18n-sync.js');
-const sidecarCore = require('../sidecar-core.js');
+const i18nCore = require('../src/i18n-core.js');
+const i18nLocales = require('../src/i18n-locales.js');
+const i18nSync = require('../src/i18n-sync.js');
+const sidecarCore = require('../src/sidecar-core.js');
 
 function createMiniDom() {
   const FILTER_ACCEPT = 1;

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const mascotCore = require('../mascot-core.js');
-const crabAssets = require('../crab-assets.js');
+const mascotCore = require('../src/mascot-core.js');
+const crabAssets = require('../src/crab-assets.js');
 
 test('all 19 crab animations have matching body & ink PNG data URIs', () => {
   const keys = Object.keys(crabAssets.CRAB_SHEETS);

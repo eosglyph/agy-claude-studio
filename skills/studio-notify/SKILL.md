@@ -24,7 +24,7 @@ description: >-
    - `其他 → Telegram Bot / 自定义 Webhook`
 2. 告知用户最稳妥的填写方式：
    - **方式 1（推荐）**：直接在右侧栏 **Claude Studio → 设置 → 手机推送** 填入凭据、勾选「开启手机推送」并点击「发送测试」（后续也可在 **工具** 页的折叠卡片里一键开关与改阈值）；
-   - **方式 2（对话代填）**：若用户愿意直接发凭据给你，由你通过 `notify-core.js` 的 `writeNotifyConfig` 安全写入 `PLUGIN_DATA/notify.json`，并调用 `deliverNotification` 立即发一条真实测试消息验证通路。
+   - **方式 2（对话代填）**：若用户愿意直接发凭据给你，由你通过 `src/notify-core.js` 的 `writeNotifyConfig` 安全写入 `PLUGIN_DATA/notify.json`，并调用 `deliverNotification` 立即发一条真实测试消息验证通路。
 3. 顺手确认 3 个实用项：
    - **最短耗时门槛**（`minDurationSec`，默认 `180` 秒 / 3 分钟，短对话不打扰）；
    - **防打扰过滤**：是否仅在后台全空闲时推送（`onlyFullyIdle`，默认开启）、异常报错立即推送（`notifyOnError`，默认开启）、手动停止时不推送（`skipUserCanceled`，默认开启）；

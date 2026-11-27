@@ -943,6 +943,26 @@ namespace AgyClaudeStudio.Installer
                     }
                 }
             }
+            // Clean up legacy flat root files relocated into src/ or retired from pre-src installs
+            string[] legacyFlatRootFiles = new string[]
+            {
+                "cdp.js", "crab-assets.js", "effort-core.js", "i18n-core.js", "i18n-locales.js",
+                "i18n-sync.js", "inject.js", "lifecycle.js", "mascot-core.js", "notify-core.js",
+                "periodic-core.js", "periodic-sync.js", "remove.js", "ripple-core.js",
+                "scripts-core.js", "sidecar-core.js", "style.css", "ui-runtime.js",
+                "usage-core.js", "watcher-core.js",
+                "autostart-off.bat", "autostart-on.bat", "inject.bat", "inject.sh",
+                "launch.bat", "launch.sh", "remove.bat", "remove.sh",
+                "watch.bat", "watch.sh", "watch-hidden.vbs",
+            };
+            for (int i = 0; i < legacyFlatRootFiles.Length; i++)
+            {
+                string stalePath = Path.Combine(installDir, legacyFlatRootFiles[i]);
+                if (File.Exists(stalePath))
+                {
+                    try { File.Delete(stalePath); } catch { }
+                }
+            }
             report(64, "原生插件核心、三栏控制面板、手机推送提醒与内置技能已部署完成");
 
             // Ensure plugin_data/config.json exists with defaults if user had no prior config

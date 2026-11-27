@@ -87,7 +87,7 @@ const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
-const cdp = require(path.join(ROOT_DIR, 'cdp.js'));
+const cdp = require(path.join(ROOT_DIR, 'src', 'cdp.js'));
 
 function createMockCdpServer() {
   const receivedCalls = [];
@@ -353,7 +353,11 @@ test('unified artifact naming, native plugin payload, and version parity stay co
   assert.ok(names.has('skills/studio-translation-protect/SKILL.md'));
   assert.ok(names.has('scripts/notify-stop.mjs'));
   assert.ok(names.has('scripts/fetch-agy-changelog.mjs'));
-  assert.ok(names.has('i18n-sync.js'));
+  assert.ok(names.has('src/cdp.js'));
+  assert.ok(names.has('src/ui-runtime.js'));
+  assert.ok(names.has('src/style.css'));
+  assert.ok(names.has('src/i18n-sync.js'));
+  assert.equal(names.has('launch.bat'), false, 'Retired flat launch scripts must not be bundled');
   assert.ok(names.has('locales/manifest.json'));
   assert.ok(names.has('locales/zh-CN.json'));
   assert.ok(names.has('locales/zh-TW.json'));
@@ -632,12 +636,12 @@ test(
     const mockCdp = createMockCdpServer();
 
     try {
-      fs.mkdirSync(watcherDir, { recursive: true });
+      fs.mkdirSync(path.join(watcherDir, 'src'), { recursive: true });
       fs.writeFileSync(path.join(watcherDir, 'manifest.json'), JSON.stringify(createManifest(cdp.PLUGIN_VERSION), null, 2), 'utf8');
-      fs.writeFileSync(path.join(watcherDir, 'style.css'), fs.readFileSync(path.join(ROOT_DIR, 'style.css')));
+      fs.writeFileSync(path.join(watcherDir, 'src', 'style.css'), fs.readFileSync(path.join(ROOT_DIR, 'src', 'style.css')));
       fs.writeFileSync(path.join(watcherDir, 'config.json'), fs.readFileSync(path.join(ROOT_DIR, 'config.example.json')));
       for (const part of cdp.RUNTIME_PARTS) {
-        fs.writeFileSync(path.join(watcherDir, part), fs.readFileSync(path.join(ROOT_DIR, part)));
+        fs.writeFileSync(path.join(watcherDir, 'src', part), fs.readFileSync(path.join(ROOT_DIR, 'src', part)));
       }
 
       const csc = findCsc();

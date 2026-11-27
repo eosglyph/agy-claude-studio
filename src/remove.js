@@ -1,5 +1,6 @@
 // Stop the background watcher (if running) and remove Claude Studio (agy-claude-studio) from all Antigravity windows.
 const fs = require('fs');
+const path = require('path');
 const {
   PID_FILE,
   LOCK_FILE,
@@ -11,9 +12,11 @@ const {
   REMOVE_EXPRESSION,
 } = require('./cdp');
 
+const ROOT_DIR = path.resolve(__dirname, '..');
+
 function stopWatcherWithResult(opts = {}) {
   const pidFile = opts.pidFile || PID_FILE;
-  const targetDir = opts.targetDir || __dirname;
+  const targetDir = opts.targetDir || ROOT_DIR;
   const killFn = typeof opts.killFn === 'function' ? opts.killFn : (p, sig) => process.kill(p, sig);
   const decision = resolveExistingWatchPidAction(pidFile, targetDir, {
     selfPid: opts.selfPid,

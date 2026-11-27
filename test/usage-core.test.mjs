@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const usageCore = require('../usage-core.js');
+const usageCore = require('../src/usage-core.js');
 
 test('formatCompactTokens matches expected units and rounding', () => {
   assert.equal(usageCore.formatCompactTokens(0), '0');
