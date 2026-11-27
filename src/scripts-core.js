@@ -10,6 +10,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
 
+const { normalizeCliPluginDataDir } = require('./cdp.js');
+
 const MAX_SCRIPTS = 32;
 const MAX_OUTPUT_BYTES = 16 * 1024;
 const MIN_TIMEOUT_SEC = 5;
@@ -21,7 +23,7 @@ function resolveScriptsDataDir(env = process.env, fallbackDir = null) {
     env && typeof env.PLUGIN_DATA === 'string' && env.PLUGIN_DATA.trim()
       ? env.PLUGIN_DATA.trim()
       : '';
-  if (fromEnv) return fromEnv;
+  if (fromEnv && !fromEnv.includes('${')) return normalizeCliPluginDataDir(fromEnv);
   if (fallbackDir && typeof fallbackDir === 'string' && fallbackDir.trim()) {
     return fallbackDir.trim();
   }

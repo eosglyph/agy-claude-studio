@@ -48,24 +48,54 @@ const CONFIG_FILE_ENV = (process.env.AGY_CLAUDE_STUDIO_CONFIG || process.env.AGY
   ? path.resolve(process.env.AGY_CLAUDE_STUDIO_CONFIG || process.env.AGY_CLAUDE_STYLE_CONFIG)
   : '';
 
-function resolvePluginDataDir(env = process.env) {
-  const pluginData = String(env?.AGY_CLAUDE_STUDIO_PLUGIN_DATA || env?.AGY_CLAUDE_STYLE_PLUGIN_DATA || '').trim();
-  if (pluginData && !pluginData.includes('${')) {
-    return path.resolve(pluginData);
+function expandedPath(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  return raw.includes('${') ? '' : raw;
+}
+
+function explicitPluginData(env) {
+  return expandedPath(env?.AGY_CLAUDE_STUDIO_PLUGIN_DATA) || expandedPath(env?.AGY_CLAUDE_STYLE_PLUGIN_DATA);
+}
+
+function executableDataDir(env) {
+  if (String(env?.ANTIGRAVITY_LS_ADDRESS || '').trim() === 'test.invalid') return '';
+  return expandedPath(env?.ANTIGRAVITY_EXECUTABLE_DATA_DIR);
+}
+
+function isCliPluginDataPath(rawPath) {
+  // win32.normalize accepts both separators and resolves dot segments on every platform.
+  const normalized = path.win32.normalize(expandedPath(rawPath));
+  return /(?:^|\\)antigravity-cli\\(?:plugin_data|sidecar_data)(?:\\|$)/i.test(normalized);
+}
+
+function isAntigravityCliHost(env = process.env) {
+  // Identify the host before redirecting data reads to its desktop sibling.
+  return isCliPluginDataPath(explicitPluginData(env) || expandedPath(env?.PLUGIN_DATA) || executableDataDir(env));
+}
+
+function normalizeCliPluginDataDir(resolvedDir, { existsSync = fs.existsSync } = {}) {
+  const resolved = path.resolve(resolvedDir);
+  const dataRoot = path.dirname(resolved);
+  const hostRoot = path.dirname(dataRoot);
+  if (path.basename(dataRoot).toLowerCase() === 'plugin_data' && path.basename(hostRoot).toLowerCase() === 'antigravity-cli') {
+    const desktop = path.join(path.dirname(hostRoot), 'antigravity', 'plugin_data', path.basename(resolved));
+    if (existsSync(desktop)) return desktop;
   }
-  const sidecarData = String(env?.ANTIGRAVITY_EXECUTABLE_DATA_DIR || '').trim();
-  const lsAddr = String(env?.ANTIGRAVITY_LS_ADDRESS || '').trim();
-  if (sidecarData && lsAddr !== 'test.invalid') {
+  return resolved;
+}
+
+function resolvePluginDataDir(env = process.env) {
+  const pluginData = explicitPluginData(env);
+  if (pluginData) return normalizeCliPluginDataDir(pluginData);
+  const sidecarData = executableDataDir(env);
+  if (sidecarData) {
     const resolvedSidecar = path.resolve(sidecarData);
     let cur = resolvedSidecar;
     let prevChild = '';
     for (let depth = 0; depth < 8 && cur && path.dirname(cur) !== cur; depth += 1) {
       const base = path.basename(cur);
-      const isSidecarData = process.platform === 'win32'
-        ? base.toLowerCase() === 'sidecar_data'
-        : base === 'sidecar_data';
-      if (isSidecarData && prevChild) {
-        return path.join(path.dirname(cur), 'plugin_data', prevChild);
+      if (base.toLowerCase() === 'sidecar_data' && prevChild) {
+        return normalizeCliPluginDataDir(path.join(path.dirname(cur), 'plugin_data', prevChild));
       }
       prevChild = base;
       cur = path.dirname(cur);
@@ -2155,6 +2185,9 @@ module.exports = {
   syncRemoteI18nCompat,
   validateConfigSetting,
   writeFileAtomic,
+  isCliPluginDataPath,
+  isAntigravityCliHost,
+  normalizeCliPluginDataDir,
   resolvePluginDataDir,
   atomicWriteFileSync,
   sanitizeConfig,
