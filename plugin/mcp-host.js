@@ -17,6 +17,7 @@ const {
   readAntigravityPluginEnabledState,
   ensureIdeRemoteDebuggingArgv,
   ensureDesktopRemoteDebuggingLaunchers,
+  cleanupLegacyFlatRootFiles,
   exitProcessCleanly,
 } = require('../src/lifecycle');
 const { updateConfigSetting } = require('../src/inject');
@@ -223,6 +224,14 @@ function startMcpPluginHost() {
 
   try {
     fs.mkdirSync(stateDir, { recursive: true });
+  } catch {}
+  try {
+    const cleanupRes = cleanupLegacyFlatRootFiles(PLUGIN_ROOT);
+    if (!cleanupRes.skipped && (cleanupRes.removed.length > 0 || cleanupRes.errors.length > 0)) {
+      appendSafeLog(
+        `Legacy root cleanup: removed=${cleanupRes.removed.length} errors=${cleanupRes.errors.length}`
+      );
+    }
   } catch {}
   const hostLease = registerMcpHost({
     stateDir,

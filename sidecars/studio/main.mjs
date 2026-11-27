@@ -856,13 +856,61 @@ function applyArchiveCopyPlan(files, backupDir) {
   }
 }
 
+/**
+ * Run the newly installed src/inject.js in a fresh Node subprocess so
+ * post-upgrade reinjection never uses stale in-memory require() caches.
+ */
+function runSubprocessReinject(
+  pluginDir = PLUGIN_ROOT_DIR,
+  { timeoutMs = 20000, nodeExecPath = process.execPath } = {}
+) {
+  const rootDir = resolve(String(pluginDir || PLUGIN_ROOT_DIR));
+  const injectScript = join(rootDir, 'src', 'inject.js');
+  if (!existsSync(injectScript)) {
+    return Promise.reject(new Error(`Missing inject script: ${injectScript}`));
+  }
+  return new Promise((resolvePromise, rejectPromise) => {
+    execFile(
+      nodeExecPath,
+      [injectScript],
+      {
+        cwd: rootDir,
+        timeout: timeoutMs,
+        windowsHide: true,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+      },
+      (err, stdout, stderr) => {
+        const out = String(stdout || '');
+        const errOut = String(stderr || '');
+        if (err) {
+          const detail = [err.message, errOut.trim(), out.trim()].filter(Boolean).join(' | ');
+          const wrapped = new Error(detail || 'Subprocess reinject failed');
+          wrapped.code = err.code;
+          wrapped.signal = err.signal;
+          wrapped.stdout = out;
+          wrapped.stderr = errOut;
+          rejectPromise(wrapped);
+          return;
+        }
+        resolvePromise({
+          ok: true,
+          scriptPath: injectScript,
+          stdout: out,
+          stderr: errOut,
+        });
+      }
+    );
+  });
+}
+
 async function performArchiveSelfUpdate({
   pluginDir,
   pluginDataDir,
   targetTag = '',
   fetchFn = typeof fetch === 'function' ? fetch : null,
   execFn = execFileSync,
-  reinjectFn = () => injectOnce({ log: () => {} }),
+  reinjectFn = () => runSubprocessReinject(pluginDir),
   timeoutMs = 30000,
 } = {}) {
   if (!isValidStudioPluginDir(pluginDir)) {
@@ -945,25 +993,9 @@ async function performArchiveSelfUpdate({
     const files = getArchiveCopyPlan(sourceRoot, installRoot, isProtected);
     applyArchiveCopyPlan(files, join(tmpRoot, 'backup'));
 
-    // Remove legacy flat root files when upgrading into the src/-organized layout
-    if (existsSync(join(installRoot, 'src', 'cdp.js'))) {
-      const legacyFlatFiles = [
-        'cdp.js', 'crab-assets.js', 'effort-core.js', 'i18n-core.js', 'i18n-locales.js',
-        'i18n-sync.js', 'inject.js', 'lifecycle.js', 'mascot-core.js', 'notify-core.js',
-        'periodic-core.js', 'periodic-sync.js', 'remove.js', 'ripple-core.js',
-        'scripts-core.js', 'sidecar-core.js', 'style.css', 'ui-runtime.js',
-        'usage-core.js', 'watcher-core.js',
-        'autostart-off.bat', 'autostart-on.bat', 'inject.bat', 'inject.sh',
-        'launch.bat', 'launch.sh', 'remove.bat', 'remove.sh',
-        'watch.bat', 'watch.sh', 'watch-hidden.vbs',
-      ];
-      for (const name of legacyFlatFiles) {
-        const stale = join(installRoot, name);
-        if (!isProtected(stale, false) && existsSync(stale)) {
-          try { rmSync(stale, { force: true }); } catch {}
-        }
-      }
-    }
+    try {
+      lifecycle.cleanupLegacyFlatRootFiles(installRoot);
+    } catch {}
 
     let nextVersion = normalizedTag.replace(/^v/i, '');
     try {
@@ -1004,7 +1036,7 @@ async function performStudioSelfUpdate({
   fetchFn = typeof fetch === 'function' ? fetch : null,
   targetTag = '',
   allowArchive = true,
-  reinjectFn = () => injectOnce({ log: () => {} }),
+  reinjectFn = () => runSubprocessReinject(pluginDir),
 } = {}) {
   const gitState = inspectGitRepoState(pluginDir, execFn);
   if (!gitState.isGitRepo) {
@@ -3083,6 +3115,9 @@ async function startStudioSidecar() {
   if (!process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN?.trim()) {
     throw new Error('Missing Antigravity sidecar UI token');
   }
+  try {
+    lifecycle.cleanupLegacyFlatRootFiles(PLUGIN_ROOT_DIR);
+  } catch {}
   const { Response, SidecarApp } = await import('sidecar_sdk');
   const app = new SidecarApp();
   app.page('/', () => new Response(readFileSync(HTML_PATH, 'utf8'), {
@@ -3172,6 +3207,8 @@ export {
   detectUsageMonitorInstalled,
   compareSemver,
   checkStudioUpdate,
+  runSubprocessReinject,
+  performArchiveSelfUpdate,
   performStudioSelfUpdate,
   syncI18nCompatWhitelist,
   syncI18nPackApi,
