@@ -982,6 +982,8 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
           if (p === '[data-ag-cs-docked-slot]') return c.hasAttribute('data-ag-cs-docked-slot');
           if (p === '[data-ag-cs-dock-hidden]') return c.hasAttribute('data-ag-cs-dock-hidden');
           if (p === '.ag-cs-pinned-dock') return c.classList.contains('ag-cs-pinned-dock');
+          if (p === '.ag-cs-dock-toolbar-btn') return c.classList.contains('ag-cs-dock-toolbar-btn');
+          if (p === '[data-testid="pane-titlebar-toolbar"]') return c.getAttribute('data-testid') === 'pane-titlebar-toolbar';
           if (p === '[data-testid="agent-input-box"] .surface-composer-card') return c.classList.contains('surface-composer-card');
           if (p === '.agy-composer-footer') return c.classList.contains('agy-composer-footer');
           return false;
@@ -1255,14 +1257,36 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
     nestedSplitChild.remove();
 
-    // 6. REMOVE_EXPRESSION tears everything down cleanly including solo/aux-max/hidden attrs
+    // 5e. When pane-titlebar-toolbar exists, collapsing shrinks dock to 0px and mounts a single sparkle button before native actions
+    const titlebarToolbar = chatCol.appendChild(makeEl('div', {
+      attrs: { 'data-testid': 'pane-titlebar-toolbar' },
+      rect: { left: 1200, top: 36, width: 320, height: 28, right: 1520, bottom: 64 },
+    }));
+    const capsuleHost = titlebarToolbar.appendChild(makeEl('div', { className: 'wm-capsule-host' }));
+    const nativeBtnGroup = titlebarToolbar.appendChild(makeEl('div', { className: 'flex items-center gap-1' }));
+    sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(true);
+    assert.equal(dockEl.classList.contains('is-toolbar-collapsed'), true, 'Uses 0px toolbar-collapsed mode when titlebar toolbar exists');
+    assert.equal(split.style.getPropertyValue('--ag-cs-dock-w'), '0px');
+    const tbBtn = titlebarToolbar.querySelector('.ag-cs-dock-toolbar-btn');
+    assert.ok(tbBtn, 'Mounts sparkle expand button in pane-titlebar-toolbar');
+    assert.equal(titlebarToolbar.children[0], capsuleHost, 'Keeps third-party capsule host on the left');
+    assert.equal(titlebarToolbar.children[1], tbBtn, 'Places sparkle button right before native toolbar icons');
+    assert.equal(titlebarToolbar.children[2], nativeBtnGroup);
+    tbBtn.click();
+    assert.equal(dockEl.classList.contains('is-collapsed'), false, 'Clicking toolbar sparkle expands Studio dock');
+    assert.equal(dockEl.classList.contains('is-toolbar-collapsed'), false);
+    assert.equal(titlebarToolbar.querySelector('.ag-cs-dock-toolbar-btn'), null, 'Removes toolbar sparkle button once expanded');
+
+    // 6. REMOVE_EXPRESSION tears everything down cleanly including solo/aux-max/hidden attrs and toolbar button
     chatCol.setAttribute('data-split-overlaid', 'true');
     sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
     assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1');
     sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(true);
     assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
+    assert.ok(titlebarToolbar.querySelector('.ag-cs-dock-toolbar-btn'), 'Toolbar button mounted before remove');
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
     assert.equal(split.querySelector('.ag-cs-pinned-dock'), null);
+    assert.equal(titlebarToolbar.querySelector('.ag-cs-dock-toolbar-btn'), null, 'REMOVE_EXPRESSION removes toolbar sparkle button');
     assert.equal(split.hasAttribute('data-ag-cs-dock-open'), false);
     assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false);
     assert.equal(split.hasAttribute('data-ag-cs-dock-aux-max'), false);

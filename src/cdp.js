@@ -1049,7 +1049,7 @@ const REMOVE_EXPRESSION = `(() => {
     }
   });
   const nodes = document.querySelectorAll(
-    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-pinned-dock, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
+    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
   );
   nodes.forEach((n) => n.remove());
   try {

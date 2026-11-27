@@ -7765,6 +7765,7 @@
     collapseBtn: null,
     expandBtn: null,
     expandLabelEl: null,
+    toolbarBtn: null,
     bodyEl: null,
     resizerEl: null,
     splitEl: null,
@@ -7779,6 +7780,7 @@
     splitTransitionEnd: null,
     width: DOCK_DEFAULT_WIDTH,
     collapsed: false,
+    toolbarCollapsed: false,
     soloMode: false,
     auxMaximized: false,
     lastNonStudioTabId: '',
@@ -8047,9 +8049,15 @@
     detachDockToggleListeners();
     pinnedDock.soloMode = false;
     pinnedDock.auxMaximized = false;
+    pinnedDock.toolbarCollapsed = false;
     pinnedDock.auxCloseAttempted = false;
     pinnedDock.userForcedAuxOpen = false;
     pinnedDock.pendingHostAction = null;
+    if (pinnedDock.toolbarBtn) {
+      try {
+        pinnedDock.toolbarBtn.remove();
+      } catch {}
+    }
     if (pinnedDock.el) {
       try {
         pinnedDock.el.remove();
@@ -8310,25 +8318,104 @@
     pinnedDock.trackRaf = requestAnimationFrame(tick);
   }
 
+  function ensureDockToolbarButton() {
+    if (pinnedDock.toolbarBtn) return pinnedDock.toolbarBtn;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ag-cs-dock-toolbar-btn';
+    btn.setAttribute('data-ag-no-i18n', '1');
+    btn.setAttribute('data-testid', 'ag-cs-dock-expand-btn');
+    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5 14.35 9.65 21.5 12l-7.15 2.35L12 21.5l-2.35-7.15L2.5 12l7.15-2.35Z"/></svg>';
+    const copy = getDockCopy(getLang());
+    btn.setAttribute('title', copy.expandTitle);
+    btn.setAttribute('aria-label', copy.expandTitle);
+    btn.addEventListener?.('click', (ev) => {
+      ev.stopPropagation?.();
+      setPinnedDockCollapsed(false);
+    });
+    pinnedDock.toolbarBtn = btn;
+    return btn;
+  }
+
+  function findDockTitlebarToolbar(split) {
+    if (!split) return null;
+    const root = split.firstElementChild && !split.firstElementChild.classList?.contains?.('ag-cs-pinned-dock')
+      ? split.firstElementChild
+      : split;
+    const list = typeof root.querySelectorAll === 'function'
+      ? Array.from(root.querySelectorAll('[data-testid="pane-titlebar-toolbar"]'))
+      : [];
+    if (!list.length) return null;
+    for (const tb of list) {
+      const r = typeof tb.getBoundingClientRect === 'function' ? tb.getBoundingClientRect() : null;
+      if (!r || (r.width > 0 && r.height > 0)) return tb;
+    }
+    return list[0];
+  }
+
+  function syncDockToolbarButton(split) {
+    if (!split || !pinnedDock.collapsed) {
+      if (pinnedDock.toolbarBtn && pinnedDock.toolbarBtn.parentElement) {
+        try {
+          pinnedDock.toolbarBtn.remove();
+        } catch {}
+      }
+      return false;
+    }
+    const toolbar = findDockTitlebarToolbar(split);
+    if (!toolbar) {
+      if (pinnedDock.toolbarBtn && pinnedDock.toolbarBtn.parentElement) {
+        try {
+          pinnedDock.toolbarBtn.remove();
+        } catch {}
+      }
+      return false;
+    }
+    const btn = ensureDockToolbarButton();
+    const kids = Array.from(toolbar.children || []).filter((ch) => ch !== btn);
+    let refNode = null;
+    for (let i = kids.length - 1; i >= 0; i -= 1) {
+      const ch = kids[i];
+      if (!ch.classList?.contains?.('wm-capsule-host')) {
+        refNode = ch;
+        break;
+      }
+    }
+    if (refNode && typeof toolbar.insertBefore === 'function') {
+      if (btn.parentElement !== toolbar || btn.nextElementSibling !== refNode) {
+        toolbar.insertBefore(btn, refNode);
+      }
+    } else if (btn.parentElement !== toolbar) {
+      toolbar.appendChild(btn);
+    }
+    return true;
+  }
+
   function applyPinnedDockStateToDom(opts = {}) {
     if (!pinnedDock.el || !pinnedDock.splitEl) return;
     const splitRect = typeof pinnedDock.splitEl.getBoundingClientRect === 'function'
       ? pinnedDock.splitEl.getBoundingClientRect()
       : null;
     const splitW = splitRect?.width || 0;
+    const useToolbarCollapsed = syncDockToolbarButton(pinnedDock.splitEl);
+    pinnedDock.toolbarCollapsed = Boolean(pinnedDock.collapsed && useToolbarCollapsed);
     const activeWidth = pinnedDock.collapsed
-      ? DOCK_COLLAPSED_WIDTH
+      ? (useToolbarCollapsed ? 0 : DOCK_COLLAPSED_WIDTH)
       : clampPinnedDockWidth(pinnedDock.width, splitW, pinnedDock.soloMode);
 
     const wasOpen = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-open') === '1';
     const wasSolo = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-solo') === '1';
     const wasAuxMax = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-aux-max') === '1';
     const wasCollapsed = Boolean(pinnedDock.el.classList?.contains?.('is-collapsed'));
+    const wasToolbarCollapsed = Boolean(pinnedDock.el.classList?.contains?.('is-toolbar-collapsed'));
     const prevDockW = pinnedDock.splitEl.style?.getPropertyValue?.('--ag-cs-dock-w') || '';
     const nextDockW = `${activeWidth}px`;
 
     if (wasCollapsed !== Boolean(pinnedDock.collapsed)) {
       pinnedDock.el.classList?.toggle?.('is-collapsed', pinnedDock.collapsed);
+    }
+    if (wasToolbarCollapsed !== pinnedDock.toolbarCollapsed) {
+      pinnedDock.el.classList?.toggle?.('is-toolbar-collapsed', pinnedDock.toolbarCollapsed);
     }
     if (!wasOpen) {
       pinnedDock.splitEl.setAttribute('data-ag-cs-dock-open', '1');
@@ -8372,6 +8459,10 @@
       if (pinnedDock.expandBtn) {
         pinnedDock.expandBtn.setAttribute('title', copy.expandTitle);
         pinnedDock.expandBtn.setAttribute('aria-label', copy.expandTitle);
+      }
+      if (pinnedDock.toolbarBtn) {
+        pinnedDock.toolbarBtn.setAttribute('title', copy.expandTitle);
+        pinnedDock.toolbarBtn.setAttribute('aria-label', copy.expandTitle);
       }
       if (pinnedDock.expandLabelEl) pinnedDock.expandLabelEl.textContent = copy.railLabel;
     }
@@ -10274,7 +10365,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-pinned-dock, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
+        '.ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-studio-css, #ag-claude-style-css'
       )
