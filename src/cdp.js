@@ -951,6 +951,14 @@ const REMOVE_EXPRESSION = `(() => {
     }
     if (root.getAttribute('data-ag-cjk') === '1') root.removeAttribute('data-ag-cjk');
   }
+  document.querySelectorAll('[data-ag-cs-effort], .ag-cs-effort-badge').forEach((el) => {
+    el.removeAttribute('data-ag-cs-effort');
+    el.classList.remove('ag-cs-effort-badge');
+  });
+  document.querySelectorAll('[data-ag-cs-has-effort]').forEach((el) => {
+    el.removeAttribute('data-ag-cs-has-effort');
+    el.style?.removeProperty?.('--ag-cs-effort-cut');
+  });
   document.querySelectorAll('[data-ag-cs-dock-open]').forEach((el) => {
     el.removeAttribute('data-ag-cs-dock-open');
     el.style?.removeProperty?.('--ag-cs-dock-w');
