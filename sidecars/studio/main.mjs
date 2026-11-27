@@ -369,7 +369,13 @@ async function queryHostSideQuestions(preferredConversationId = '') {
   return fallback;
 }
 
-async function openSideQuestionInHost(data = {}) {
+function shouldContinueSideQuestionSearch(res) {
+  if (!res || res.ok) return false;
+  const tag = String(res.reason || res.status || '').trim();
+  return !tag || tag === 'conversation_not_found' || tag === 'not_injected' || tag === 'composer_not_found';
+}
+
+async function openSideQuestionInHost(data = {}, { cdpClient = cdp } = {}) {
   const payload = {
     conversationId: String(data?.conversationId || '').trim(),
     cascadeId: String(data?.cascadeId || '').trim(),
@@ -377,16 +383,16 @@ async function openSideQuestionInHost(data = {}) {
     index: Number.isInteger(data?.index) ? data.index : null,
     forceNew: Boolean(data?.forceNew),
   };
-  const ports = cdp.readActivePorts();
+  const ports = cdpClient.readActivePorts();
   let lastResult = { ok: false, status: 'cdp_unavailable' };
   for (const port of ports) {
     let pages = [];
     try {
-      pages = await cdp.listPages(port);
+      pages = await cdpClient.listPages(port);
     } catch {
       continue;
     }
-    const candidates = pages.filter((p) => p?.webSocketDebuggerUrl && cdp.isAntigravityPageTarget(p));
+    const candidates = pages.filter((p) => p?.webSocketDebuggerUrl && cdpClient.isAntigravityPageTarget(p));
     candidates.sort((a, b) => {
       const aMatch = payload.conversationId && String(a.url || '').includes(payload.conversationId) ? 1 : 0;
       const bMatch = payload.conversationId && String(b.url || '').includes(payload.conversationId) ? 1 : 0;
@@ -395,11 +401,14 @@ async function openSideQuestionInHost(data = {}) {
     for (const p of candidates) {
       let sess = null;
       try {
-        sess = await cdp.CdpSession.connect(p.webSocketDebuggerUrl);
+        sess = await cdpClient.CdpSession.connect(p.webSocketDebuggerUrl);
         const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.openSideQuestion === "function") ? api.openSideQuestion(${JSON.stringify(payload)}) : { ok: false, status: "not_injected" }; })()`;
         const res = await sess.evaluate(expr, false);
         if (res && res.ok) return res;
-        if (res) lastResult = res;
+        if (res) {
+          lastResult = res;
+          if (!shouldContinueSideQuestionSearch(res)) return res;
+        }
       } catch {
         // try next window
       } finally {
@@ -929,7 +938,7 @@ const UPDATE_NOT_APPLIED = Object.freeze({
 });
 
 function requiresBackendRestart(file) {
-  return /^(?:src[\\/].+\.js|plugin[\\/]|sidecars[\\/].+\.m?js|(?:plugin|package)\.json$)/i.test(file);
+  return /^(?:plugin[\\/]|sidecars[\\/].+\.m?js$|src[\\/](?:cdp|lifecycle|watcher-core|scripts-core|notify-core|i18n-sync|sidecar-core)\.js$)/i.test(file);
 }
 
 async function activateUpdate(reinjectFn, filesUpdated, backendChanged) {
@@ -2808,7 +2817,7 @@ function spawnDetachedSafe(cmd, args, options, spawnFn = spawn) {
     let child;
     let timer;
     try {
-      child = spawnFn(cmd, args, { detached: true, stdio: 'ignore', shell: false, ...options, env: buildSafeChildEnv() });
+      child = spawnFn(cmd, args, { detached: true, stdio: 'ignore', shell: false, ...options, env: buildSafeChildEnv(options?.env || process.env) });
       child.once('error', (err) => {
         clearTimeout(timer);
         done({ ok: false, error: err?.code || 'launcher_failed' });
@@ -3263,6 +3272,8 @@ if (isSameEntryPath(invokedPath, currentPath)) {
 
 export {
   buildSafeChildEnv,
+  requiresBackendRestart,
+  openSideQuestionInHost,
   createRemoteLocaleManifestCache,
   spawnDetachedSafe,
   registerStudioApis,

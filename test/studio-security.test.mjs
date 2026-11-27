@@ -6,8 +6,9 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { getNotifyConfigApi, saveNotifyConfigApi, startStudioSidecar, registerStudioApis, performStudioSelfUpdate, runSubprocessReinject, spawnDetachedSafe, createRemoteLocaleManifestCache } from '../sidecars/studio/main.mjs';
+import { getNotifyConfigApi, saveNotifyConfigApi, startStudioSidecar, registerStudioApis, performStudioSelfUpdate, runSubprocessReinject, spawnDetachedSafe, createRemoteLocaleManifestCache, requiresBackendRestart, openSideQuestionInHost } from '../sidecars/studio/main.mjs';
 
 const require = createRequire(import.meta.url);
 const notify = require('../src/notify-core.js');
@@ -276,4 +277,113 @@ test('timed-out scripts stop their child and do not inherit the sidecar UI token
   const size = fs.statSync(pulse).size;
   await delay(300);
   assert.equal(fs.statSync(pulse).size, size, 'descendant stopped making progress');
+}));
+
+test('requiresBackendRestart only flags persistent backend files and UI refreshes status on needsRestart', () => {
+  for (const file of [
+    'plugin/mcp-host.js',
+    'sidecars/studio/main.mjs',
+    'src/cdp.js',
+    'src/lifecycle.js',
+    'src/watcher-core.js',
+    'src/scripts-core.js',
+    'src/notify-core.js',
+    'src/i18n-sync.js',
+    'src/sidecar-core.js',
+  ]) {
+    assert.equal(requiresBackendRestart(file), true, `expected backend restart for ${file}`);
+  }
+  for (const file of [
+    'src/ui-runtime.js',
+    'src/style.css',
+    'src/usage-core.js',
+    'src/effort-core.js',
+    'src/periodic-core.js',
+    'package.json',
+    'plugin.json',
+    'sidecars/studio/index.html',
+  ]) {
+    assert.equal(requiresBackendRestart(file), false, `did not expect backend restart for ${file}`);
+  }
+
+  const studioHtml = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'sidecars', 'studio', 'index.html'), 'utf8');
+  assert.match(
+    studioHtml,
+    /if \(data\.reinjectOk === false \|\| data\.needsRestart === true\) \{\s*showToast\(t\.upgradeNeedsRestart\);\s*await refreshStatus\(\);\s*return;\s*\}/
+  );
+});
+
+test('openSideQuestionInHost stops immediately on draft_present and continues only on miss', async () => {
+  const evaluatedTargets = [];
+  const makeCdp = (responsesByTarget) => ({
+    readActivePorts: () => [9222],
+    async listPages() {
+      return Object.keys(responsesByTarget).map((id) => ({
+        url: `vscode-webview://${id}`,
+        webSocketDebuggerUrl: `ws://127.0.0.1:9222/${id}`,
+      }));
+    },
+    isAntigravityPageTarget: () => true,
+    CdpSession: {
+      async connect(wsUrl) {
+        const id = wsUrl.split('/').pop();
+        return {
+          async evaluate() {
+            evaluatedTargets.push(id);
+            return responsesByTarget[id];
+          },
+          close() {},
+        };
+      },
+    },
+  });
+
+  const draftRes = await openSideQuestionInHost(
+    { conversationId: 'conv-1' },
+    {
+      cdpClient: makeCdp({
+        'win-1': { ok: false, reason: 'draft_present' },
+        'win-2': { ok: true, status: 'opened' },
+      }),
+    }
+  );
+  assert.deepEqual(draftRes, { ok: false, reason: 'draft_present' });
+  assert.deepEqual(evaluatedTargets, ['win-1']);
+
+  evaluatedTargets.length = 0;
+  const fallbackRes = await openSideQuestionInHost(
+    { conversationId: 'conv-2' },
+    {
+      cdpClient: makeCdp({
+        'win-1': { ok: false, reason: 'conversation_not_found' },
+        'win-2': { ok: true, status: 'opened' },
+      }),
+    }
+  );
+  assert.deepEqual(fallbackRes, { ok: true, status: 'opened' });
+  assert.deepEqual(evaluatedTargets, ['win-1', 'win-2']);
+});
+
+test('spawnDetachedSafe preserves caller options.env while stripping Sidecar credentials', async () => withDataDir(async (root) => {
+  const script = path.join(root, 'env-check.cjs');
+  const outPath = path.join(root, 'detached-env.json');
+  fs.writeFileSync(script, `
+    require('node:fs').writeFileSync(${JSON.stringify(outPath)}, JSON.stringify({
+      custom: process.env.CUSTOM_SAFE_VAR || null,
+      sidecar: Object.keys(process.env).filter(k => /^ANTIGRAVITY_SIDECAR_/i.test(k)),
+    }));
+  `);
+  const res = await spawnDetachedSafe(process.execPath, [script], {
+    cwd: root,
+    env: {
+      ...process.env,
+      CUSTOM_SAFE_VAR: 'kept-value',
+      ANTIGRAVITY_SIDECAR_UI_TOKEN: 'secret-should-strip',
+    },
+  });
+  assert.equal(res.ok, true);
+  for (let i = 0; i < 100 && !fs.existsSync(outPath); i++) await delay(20);
+  const recorded = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+  assert.equal(recorded.custom, 'kept-value');
+  assert.deepEqual(recorded.sidecar, []);
 }));

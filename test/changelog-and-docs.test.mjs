@@ -4,10 +4,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { execFileSync } from 'node:child_process';
+
 import {
   parseLatestReleases,
   buildReleaseContentHash,
   buildTranslationCacheKey,
+  translateLineDetailed,
+  translateViaMyMemory,
   translateReleasesWithCache,
 } from '../scripts/fetch-agy-changelog.mjs';
 
@@ -135,5 +139,82 @@ test('release.yml enforces strict version parity across tag, package/plugin mani
   assert.match(workflow, /src\/cdp\.js/);
   assert.match(workflow, /installer\/common\/CdpClient\.cs/);
   assert.match(workflow, /installer\/setup\/Program\.cs/);
+  assert.match(workflow, /FallbackVersion/);
   assert.match(workflow, /installer\/macos\/Common\/CdpClient\.swift/);
+
+  // Execute the embedded version gate script from release.yml against real repo files
+  const match = workflow.match(/node --input-type=module - "\$VERSION" <<'EOF'\r?\n([\s\S]*?)\r?\n\s*EOF/);
+  assert.ok(match, 'release.yml must contain embedded node version check script');
+  const script = match[1].replace(/^ {10}/gm, '');
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8'));
+  execFileSync(process.execPath, ['--input-type=module', '-', pkg.version], {
+    cwd: ROOT_DIR,
+    input: script,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  assert.throws(() => {
+    execFileSync(process.execPath, ['--input-type=module', '-', '9.9.9'], {
+      cwd: ROOT_DIR,
+      input: script,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  });
+});
+
+test('parseLatestReleases distinguishes standalone category headings from normal sentences', () => {
+  const sample = [
+    'Antigravity App',
+    'v2.36.0',
+    'Latest',
+    'November 26, 2026',
+    'Fixes(2)',
+    'Fixed bug A.',
+    'Fixed bug B.',
+    'v2.35.9',
+    'November 24, 2026',
+    'Performance improved.',
+    'Improvements',
+    'Faster startup.',
+  ].join('\n');
+
+  const releases = parseLatestReleases(sample, 2);
+  assert.equal(releases.length, 2);
+  assert.equal(releases[0].headline, '');
+  assert.deepEqual(releases[0].bullets, ['【修复 (2)】', 'Fixed bug A.', 'Fixed bug B.']);
+  assert.equal(releases[1].headline, 'Performance improved.');
+  assert.deepEqual(releases[1].bullets, ['Improvements', 'Faster startup.']);
+});
+
+test('translateViaMyMemory uses requested targetLang and rejects non-200 responseStatus', async () => {
+  const requestedUrls = [];
+  const mockFetchOk = async (url) => {
+    requestedUrls.push(url);
+    if (url.includes('translate.googleapis.com')) {
+      return { ok: false, status: 503 };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { responseStatus: 200, responseData: { translatedText: '日本語のテスト' } };
+      },
+    };
+  };
+
+  const jaRes = await translateLineDetailed('Fixed crash.', 'ja', { fetchFn: mockFetchOk });
+  assert.equal(jaRes.failed, false);
+  assert.equal(jaRes.text, '日本語のテスト');
+  assert.ok(requestedUrls.some((u) => u.includes('api.mymemory.translated.net') && u.includes('langpair=en|ja')));
+
+  await assert.rejects(
+    () =>
+      translateViaMyMemory('Fixed crash.', 'ja', async () => ({
+        ok: true,
+        status: 200,
+        async json() {
+          return { responseStatus: 429, responseData: { translatedText: 'MYMEMORY WARNING' } };
+        },
+      })),
+    /mymemory_status_429/
+  );
 });

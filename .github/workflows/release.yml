@@ -74,12 +74,18 @@ jobs:
           import fs from 'node:fs';
 
           const tagVer = process.argv[2];
+          const csSetup = fs.readFileSync('installer/setup/Program.cs', 'utf8');
+          const csSetupFallback = csSetup.match(/const string FallbackVersion = "([^"]+)"/)?.[1];
+          const csSetupExtraVers = [...csSetup.matchAll(/"(\d+\.\d+\.\d+)"/g)]
+            .map((m) => m[1])
+            .filter((v) => v !== csSetupFallback);
+          const csSetupVer = csSetupExtraVers.length === 0 ? csSetupFallback : `drift:${csSetupExtraVers.join(',')}`;
           const checks = [
             ['package.json', JSON.parse(fs.readFileSync('package.json', 'utf8')).version],
             ['plugin.json', JSON.parse(fs.readFileSync('plugin.json', 'utf8')).version],
             ['src/cdp.js', fs.readFileSync('src/cdp.js', 'utf8').match(/const PLUGIN_VERSION = '([^']+)'/)?.[1]],
             ['installer/common/CdpClient.cs', fs.readFileSync('installer/common/CdpClient.cs', 'utf8').match(/GetString\(raw, "version", "([^"]+)"\)/)?.[1]],
-            ['installer/setup/Program.cs', fs.readFileSync('installer/setup/Program.cs', 'utf8').match(/SetValue\("DisplayVersion", version \?\? "([^"]+)"/)?.[1]],
+            ['installer/setup/Program.cs', csSetupVer],
             ['installer/macos/Common/CdpClient.swift', fs.readFileSync('installer/macos/Common/CdpClient.swift', 'utf8').match(/raw\["version"\]\?\.stringValue \?\? "([^"]+)"/)?.[1]],
           ];
 

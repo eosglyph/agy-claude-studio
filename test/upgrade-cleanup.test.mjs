@@ -258,6 +258,7 @@ test('v2.2.3 overlay, restart cleanup and next archive update use the installed 
     assert.deepEqual(JSON.parse(restart).removed, ['inject.sh']);
     assert.equal(fs.existsSync(markerPath), false);
     fs.writeFileSync(path.join(releaseSrc, 'package.json'), JSON.stringify({ version: '2.2.5' }));
+    fs.writeFileSync(path.join(releaseSrc, 'src', 'ui-runtime.js'), '// ui-only update v2.2.5\n', 'utf8');
     const tarFile = path.join(tmpDir, 'v2.2.5.tar.gz');
     execFileSync('tar', ['-czf', tarFile, '-C', tmpDir, 'agy-claude-studio-2.2.4']);
     const tarBuf = fs.readFileSync(tarFile);
@@ -280,13 +281,34 @@ test('v2.2.3 overlay, restart cleanup and next archive update use the installed 
 
     assert.equal(updRes.filesUpdated, true);
     assert.equal(updRes.reinjectOk, true);
-    assert.equal(updRes.needsRestart, true);
-    assert.match(updRes.reinjectError, /updated plugin backend/);
+    assert.equal(updRes.needsRestart, false);
+    assert.equal(updRes.reinjectError, '');
     assert.equal(fs.existsSync(path.join(pluginDir, 'inject.sh')), false);
     assert.equal(fs.readFileSync(path.join(pluginDir, 'launch.bat'), 'utf8'), 'user-edited');
     assert.equal(fs.existsSync(path.join(pluginDir, 'src', 'cdp.js')), true);
     assert.equal(fs.existsSync(markerPath), true);
     assert.match(fs.readFileSync(markerPath, 'utf8'), /^subprocess-ran:\d+$/);
+
+    // Next archive update that modifies a persistent backend file (src/cdp.js) must require restart
+    fs.writeFileSync(path.join(releaseSrc, 'package.json'), JSON.stringify({ version: '2.2.6' }));
+    fs.writeFileSync(path.join(releaseSrc, 'src', 'cdp.js'), 'module.exports = { PLUGIN_VERSION: "2.2.6" };\n', 'utf8');
+    const tarFile2 = path.join(tmpDir, 'v2.2.6.tar.gz');
+    execFileSync('tar', ['-czf', tarFile2, '-C', tmpDir, 'agy-claude-studio-2.2.4']);
+    const tarBuf2 = fs.readFileSync(tarFile2);
+    const updResBackend = await studioMain.performStudioSelfUpdate({
+      pluginDir,
+      pluginDataDir,
+      targetTag: 'v2.2.6',
+      fetchFn: async () => ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => tarBuf2.buffer.slice(tarBuf2.byteOffset, tarBuf2.byteOffset + tarBuf2.byteLength),
+      }),
+    });
+    assert.equal(updResBackend.ok, true);
+    assert.equal(updResBackend.reinjectOk, true);
+    assert.equal(updResBackend.needsRestart, true);
+    assert.match(updResBackend.reinjectError, /updated plugin backend/);
     const failed = await studioMain.performStudioSelfUpdate({ ...updateOptions, reinjectFn() { throw Error('activation failed'); } });
     assert.equal(failed.ok, true);
     assert.equal(failed.filesUpdated, true);
