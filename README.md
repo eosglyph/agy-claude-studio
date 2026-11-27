@@ -326,6 +326,26 @@ Click **Restore Native** in the **Claude Studio** panel, toggle `Claude Studio` 
 
 </details>
 
+<details>
+<summary><b>5. Windows Non-TUN / Process-Level Proxy Setup Tips</b></summary>
+
+If you run Windows without TUN mode or a system-wide proxy and instead inject process-level proxy variables via a launcher script when starting Antigravity:
+
+1. **Initial Launch Shortcut**: Point your `Antigravity (Claude Studio).lnk` shortcut to your process-level proxy launcher (make sure it forwards `%*` arguments) and include `--remote-debugging-port=0` in the shortcut arguments.
+2. **Recommended Environment Variables** (using local proxy `127.0.0.1:7890` as an example):
+   ```bat
+   set HTTP_PROXY=http://127.0.0.1:7890
+   set HTTPS_PROXY=http://127.0.0.1:7890
+   set NODE_USE_ENV_PROXY=1
+   set NO_PROXY=localhost,127.0.0.1,::1
+   ```
+   - `NODE_USE_ENV_PROXY=1` enables Node.js 22+ built-in `fetch` to honor proxy variables, allowing sidecar **self-update checks**, **Gemini 4 Periodic Table sync**, and **on-demand language pack downloads** to route through your proxy;
+   - `NO_PROXY=localhost,127.0.0.1,::1` keeps local CDP debugging and `language_server` loopback traffic direct;
+   - You can also set `ALL_PROXY` if your environment uses SOCKS5.
+3. **Automatic Proxy Retention on Sidecar Relaunch**: When relaunching Antigravity from the right-side **Claude Studio** panel, the plugin automatically forwards `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, and `NODE_USE_ENV_PROXY` into the relaunched `Antigravity.exe` process and cleans up the temporary relaunch script upon completion or failure. Users on TUN mode or direct connections experience zero behavior change.
+
+</details>
+
 ---
 
 ## Development & Testing
