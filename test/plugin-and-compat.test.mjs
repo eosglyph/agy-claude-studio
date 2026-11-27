@@ -3982,3 +3982,128 @@ test('/btw draft protection preserves non-empty drafts, handles restore errors w
     for (const id of timers) clearTimeout(id);
   }
 });
+
+test('Environment container worktree detection discovers .repo & worktree/* layouts, selects active branch, and scopes actions safely', async () => {
+  const { inspectWorkspaceGitMeta, performEnvironmentActionApi } = await import('../sidecars/studio/main.mjs');
+
+  const tmpRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-env-container-')));
+  try {
+    const containerRoot = path.join(tmpRoot, 'project-container');
+    const repoGit = path.join(containerRoot, '.repo', '.git');
+    const wtMainGit = path.join(repoGit, 'worktrees', 'main');
+    const wtDevGit = path.join(repoGit, 'worktrees', 'dev');
+    const wtOutsideGit = path.join(repoGit, 'worktrees', 'escaped');
+    const wtMainDir = path.join(containerRoot, 'worktree', 'main');
+    const wtDevDir = path.join(containerRoot, 'worktree', 'dev');
+    const notesDir = path.join(containerRoot, 'notes');
+    const outsideWtDir = path.join(tmpRoot, 'outside-wt');
+
+    for (const d of [wtMainGit, wtDevGit, wtOutsideGit, wtMainDir, wtDevDir, notesDir, outsideWtDir]) {
+      fs.mkdirSync(d, { recursive: true });
+    }
+
+    fs.writeFileSync(path.join(repoGit, 'config'), '[remote "origin"]\n\turl = git@github.com:eosglyph/agy-claude-studio.git\n');
+
+    fs.writeFileSync(path.join(wtMainGit, 'commondir'), '../..\n');
+    fs.writeFileSync(path.join(wtMainGit, 'HEAD'), 'ref: refs/heads/main\n');
+    fs.writeFileSync(path.join(wtMainGit, 'gitdir'), `${path.join(wtMainDir, '.git')}\n`);
+    fs.writeFileSync(path.join(wtMainGit, 'index'), 'idx-main');
+    fs.writeFileSync(path.join(wtMainDir, '.git'), `gitdir: ${wtMainGit}\n`);
+
+    fs.writeFileSync(path.join(wtDevGit, 'commondir'), '../..\n');
+    fs.writeFileSync(path.join(wtDevGit, 'HEAD'), 'ref: refs/heads/dev\n');
+    fs.writeFileSync(path.join(wtDevGit, 'gitdir'), `${path.join(wtDevDir, '.git')}\n`);
+    fs.writeFileSync(path.join(wtDevGit, 'index'), 'idx-dev');
+    fs.writeFileSync(path.join(wtDevDir, '.git'), `gitdir: ${wtDevGit}\n`);
+
+    // External worktree registered in .repo/.git/worktrees but physically outside containerRoot
+    fs.writeFileSync(path.join(wtOutsideGit, 'commondir'), '../..\n');
+    fs.writeFileSync(path.join(wtOutsideGit, 'HEAD'), 'ref: refs/heads/feat/outside\n');
+    fs.writeFileSync(path.join(wtOutsideGit, 'gitdir'), `${path.join(outsideWtDir, '.git')}\n`);
+    fs.writeFileSync(path.join(outsideWtDir, '.git'), `gitdir: ${wtOutsideGit}\n`);
+
+    // Make dev clearly newer than main
+    const older = new Date('2026-11-27T09:00:00Z');
+    const newer = new Date('2026-11-27T11:00:00Z');
+    fs.utimesSync(path.join(wtMainGit, 'HEAD'), older, older);
+    fs.utimesSync(path.join(wtMainGit, 'index'), older, older);
+    fs.utimesSync(path.join(wtDevGit, 'HEAD'), newer, newer);
+    fs.utimesSync(path.join(wtDevGit, 'index'), newer, newer);
+
+    // Stale wsMeta says "main", container inspection must override with active worktree "dev"
+    const meta = inspectWorkspaceGitMeta(containerRoot, { branchName: 'main' });
+    assert.equal(meta.isWorktree, true);
+    assert.equal(meta.branch, 'dev');
+    assert.equal(meta.worktreeName, 'dev');
+    assert.equal(fs.realpathSync.native(meta.worktreePath), fs.realpathSync.native(wtDevDir));
+    assert.equal(meta.repoWebUrl, 'https://github.com/eosglyph/agy-claude-studio');
+    assert.equal(meta.isGitHub, true);
+    assert.equal(meta.worktrees.length, 2, 'Deduplicates .repo and worktree/* entries and excludes outside worktrees');
+    assert.equal(meta.worktrees[0].branch, 'dev');
+    assert.equal(meta.worktrees[0].active, true);
+    assert.equal(meta.worktrees[0].relPath, 'worktree/dev');
+    assert.equal(meta.worktrees[1].branch, 'main');
+    assert.equal(meta.worktrees[1].active, false);
+
+    // Equal timestamps tie-break: feature branch > dev > main
+    const wtFeatGit = path.join(repoGit, 'worktrees', 'feat-ui');
+    const wtFeatDir = path.join(containerRoot, 'worktrees', 'feat-ui');
+    fs.mkdirSync(wtFeatGit, { recursive: true });
+    fs.mkdirSync(wtFeatDir, { recursive: true });
+    fs.writeFileSync(path.join(wtFeatGit, 'commondir'), '../..\n');
+    fs.writeFileSync(path.join(wtFeatGit, 'HEAD'), 'ref: refs/heads/feat/branch-tooltip\n');
+    fs.writeFileSync(path.join(wtFeatDir, '.git'), `gitdir: ${wtFeatGit}\n`);
+    for (const g of [wtMainGit, wtDevGit, wtFeatGit]) {
+      fs.utimesSync(path.join(g, 'HEAD'), newer, newer);
+      if (fs.existsSync(path.join(g, 'index'))) fs.utimesSync(path.join(g, 'index'), newer, newer);
+    }
+    const metaTie = inspectWorkspaceGitMeta(containerRoot);
+    assert.equal(metaTie.branch, 'feat/branch-tooltip');
+    assert.equal(metaTie.worktrees.length, 3);
+    assert.equal(metaTie.worktrees[0].relPath, 'worktrees/feat-ui');
+
+    // performEnvironmentActionApi permits child worktrees inside containerRoot, blocks arbitrary subdirs & external worktrees
+    const spawned = [];
+    const fakeSpawn = (cmd, args, opts) => {
+      spawned.push({ cmd, args, opts });
+      const handlers = new Map();
+      const child = {
+        once(ev, fn) { handlers.set(ev, fn); },
+        unref() {},
+      };
+      setImmediate(() => handlers.get('exit')?.(0));
+      return child;
+    };
+
+    const childWtTerm = await performEnvironmentActionApi(
+      { action: 'terminal', path: wtDevDir },
+      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: 'win32' }
+    );
+    assert.equal(childWtTerm.ok, true);
+    assert.equal(fs.realpathSync.native(spawned[0].opts.cwd), fs.realpathSync.native(wtDevDir));
+
+    const blockedNotes = await performEnvironmentActionApi(
+      { action: 'reveal', path: notesDir },
+      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: 'win32' }
+    );
+    assert.equal(blockedNotes.ok, false);
+    assert.equal(blockedNotes.error, 'path_not_allowed');
+
+    const blockedOutside = await performEnvironmentActionApi(
+      { action: 'reveal', path: outsideWtDir },
+      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: 'win32' }
+    );
+    assert.equal(blockedOutside.ok, false);
+    assert.equal(blockedOutside.error, 'path_not_allowed');
+
+    // Verify Studio HTML dark branch tooltip markup and inline script syntax
+    const html = fs.readFileSync(new URL('../sidecars/studio/index.html', import.meta.url), 'utf8');
+    assert.match(html, /id="cd-env-branch-tooltip"/);
+    assert.match(html, /function showBranchTooltip\(/);
+    const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+    assert.ok(scriptMatch && scriptMatch[1], 'Studio HTML contains inline script');
+    new vm.Script(scriptMatch[1]);
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
