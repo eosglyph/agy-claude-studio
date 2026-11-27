@@ -2931,6 +2931,7 @@ test('compactPreset continue mode and persistent /btw side-question restore & co
       addEventListener() {},
       removeEventListener() {},
       getBoundingClientRect: () => ({ left: 10, top: 8, width: 60, height: 22, right: 70, bottom: 30 }),
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
       matches(sel) {
         return sel.split(',').some((s) => {
           const t = s.trim();
@@ -3794,6 +3795,7 @@ test('/btw draft protection preserves non-empty drafts, handles restore errors w
       addEventListener() {},
       removeEventListener() {},
       getBoundingClientRect: () => ({ left: 10, top: 8, width: 60, height: 22, right: 70, bottom: 30 }),
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
       closest(sel) {
         const sels = sel.split(',').map((s) => s.trim());
         let cur = this;
@@ -4030,15 +4032,37 @@ test('Environment container worktree detection discovers .repo & worktree/* layo
     fs.utimesSync(path.join(wtDevGit, 'HEAD'), newer, newer);
     fs.utimesSync(path.join(wtDevGit, 'index'), newer, newer);
 
-    // Stale wsMeta says "main", container inspection must override with active worktree "dev"
-    const meta = inspectWorkspaceGitMeta(containerRoot, { branchName: 'main' });
+    // Explicit branchName matching a worktree must stay on that branch (inferredRecent: false)
+    const metaExplicit = inspectWorkspaceGitMeta(containerRoot, { branchName: 'main' });
+    assert.equal(metaExplicit.isWorktree, true);
+    assert.equal(metaExplicit.branch, 'main');
+    assert.equal(metaExplicit.worktreeName, 'main');
+    assert.equal(metaExplicit.inferredRecent, false);
+    assert.equal(fs.realpathSync.native(metaExplicit.worktreePath), fs.realpathSync.native(wtMainDir));
+
+    // Subdirectory cwd inside main worktree must still resolve to main (inferredRecent: false)
+    const wtMainSubdir = path.join(wtMainDir, 'src');
+    fs.mkdirSync(wtMainSubdir, { recursive: true });
+    const metaSubdir = inspectWorkspaceGitMeta(containerRoot, { cwd: wtMainSubdir, branchName: 'unmatched-branch' });
+    assert.equal(metaSubdir.branch, 'main');
+    assert.equal(metaSubdir.inferredRecent, false);
+    assert.equal(fs.realpathSync.native(metaSubdir.worktreePath), fs.realpathSync.native(wtMainDir));
+    assert.equal(metaExplicit.repoWebUrl, 'https://github.com/eosglyph/agy-claude-studio');
+    assert.equal(metaExplicit.isGitHub, true);
+    assert.equal(metaExplicit.worktrees.length, 2, 'Deduplicates .repo and worktree/* entries and excludes outside worktrees');
+    assert.equal(metaExplicit.worktrees[0].branch, 'main');
+    assert.equal(metaExplicit.worktrees[0].active, true);
+    assert.equal(metaExplicit.worktrees[0].relPath, 'worktree/main');
+    assert.equal(metaExplicit.worktrees[1].branch, 'dev');
+    assert.equal(metaExplicit.worktrees[1].active, false);
+
+    // Without matching branchName/cwd, mtime heuristic selects newer dev (inferredRecent: true)
+    const meta = inspectWorkspaceGitMeta(containerRoot, { branchName: 'unmatched-branch' });
     assert.equal(meta.isWorktree, true);
     assert.equal(meta.branch, 'dev');
     assert.equal(meta.worktreeName, 'dev');
+    assert.equal(meta.inferredRecent, true);
     assert.equal(fs.realpathSync.native(meta.worktreePath), fs.realpathSync.native(wtDevDir));
-    assert.equal(meta.repoWebUrl, 'https://github.com/eosglyph/agy-claude-studio');
-    assert.equal(meta.isGitHub, true);
-    assert.equal(meta.worktrees.length, 2, 'Deduplicates .repo and worktree/* entries and excludes outside worktrees');
     assert.equal(meta.worktrees[0].branch, 'dev');
     assert.equal(meta.worktrees[0].active, true);
     assert.equal(meta.worktrees[0].relPath, 'worktree/dev');
@@ -4169,6 +4193,7 @@ test('Sticky dock selects active conversation Studio iframe, syncs active conver
       dispatchEvent() { return true; },
       focus() {},
       getBoundingClientRect() { return this._rect; },
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
       matches(sel) {
         for (const part of sel.split(',').map((s) => s.trim())) {
           if (part === '[data-testid="agent-input-box"] .surface-composer-card' && classes.has('surface-composer-card') && this.closest('[data-testid="agent-input-box"]')) return true;
@@ -4228,10 +4253,12 @@ test('Sticky dock selects active conversation Studio iframe, syncs active conver
   const card = makeEl('div', { class: 'surface-composer-card' });
   const ed = makeEl('div', { contenteditable: 'true' });
 
-  // Simulate Lexical editor with an existing /compact chip + preset text
+  // Simulate Lexical editor with an existing /compact chip + built-in preset text
+  const builtinCleanPreset =
+    'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.';
   let lexChildren = [
     { type: 'beautifulMention', trigger: '/', value: 'compact' },
-    { type: 'text', text: ' drop finished noise' },
+    { type: 'text', text: ` ${builtinCleanPreset}` },
   ];
   let lexClearCount = 0;
   let lexStickyClears = 0;
@@ -4396,6 +4423,434 @@ test('Sticky dock selects active conversation Studio iframe, syncs active conver
     const headIdx = renderFnMatch[0].indexOf("head.className = 'cd-btw-head'");
     const emptyIdx = renderFnMatch[0].indexOf('if (items.length === 0)');
     assert.ok(headIdx > 0 && emptyIdx > headIdx, 'Unified .cd-btw-head must render for both empty and non-empty /btw states');
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('Slash draft protection, Dock multi-view & unbound sync, and multi-window conversation ownership verification', async () => {
+  const cdp = await import('../src/cdp.js');
+  const timers = new Set();
+  const cid1 = '11111111-1111-4111-8111-111111111111';
+  const cid2 = '22222222-2222-4222-8222-222222222222';
+  const foreignCid = '99999999-9999-4999-8999-999999999999';
+
+  const makeEl = (tag, attrs = {}) => {
+    const attrMap = new Map(Object.entries(attrs));
+    const classes = new Set(String(attrs.class || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const props = new Map();
+    return {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      children,
+      childNodes: children,
+      parentElement: null,
+      parentNode: null,
+      isConnected: true,
+      _rect: { left: 0, top: 0, right: 1200, bottom: 800, width: 1200, height: 800 },
+      _text: '',
+      get textContent() {
+        return this._text || children.map((c) => c.textContent || '').join('');
+      },
+      set textContent(v) {
+        this._text = String(v || '');
+        children.length = 0;
+      },
+      style: {
+        setProperty(k, v) { props.set(k, String(v)); },
+        getPropertyValue(k) { return props.get(k) || ''; },
+        removeProperty(k) { props.delete(k); },
+      },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined) f = !classes.has(c); if (f) classes.add(c); else classes.delete(c); return f; },
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      getAttribute(k) { return attrMap.has(k) ? attrMap.get(k) : null; },
+      setAttribute(k, v) { attrMap.set(k, String(v)); },
+      hasAttribute(k) { return attrMap.has(k); },
+      removeAttribute(k) { attrMap.delete(k); },
+      append(...nodes) { for (const n of nodes) this.appendChild(n); },
+      appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      insertBefore(c, ref) { c.parentElement = this; c.parentNode = this; const i = ref ? children.indexOf(ref) : -1; if (i >= 0) children.splice(i, 0, c); else children.push(c); return c; },
+      remove() { if (this.parentElement) { const i = this.parentElement.children.indexOf(this); if (i >= 0) this.parentElement.children.splice(i, 1); this.parentElement = null; } },
+      addEventListener() {},
+      removeEventListener() {},
+      focus() {},
+      getBoundingClientRect() { return this._rect; },
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
+      matches(sel) {
+        return sel.split(',').map((s) => s.trim()).some((part) => {
+          if (part === '[data-testid="conversation-view"]') return this.getAttribute('data-testid') === 'conversation-view';
+          if (part === '[data-testid="agent-input-box"]') return this.getAttribute('data-testid') === 'agent-input-box';
+          if (part === '.surface-composer-card') return classes.has('surface-composer-card');
+          if (part === '[data-testid="sidecar-iframe-slot"]') return this.getAttribute('data-testid') === 'sidecar-iframe-slot';
+          if (part === '[data-testid="aux-pane-split"]') return this.getAttribute('data-testid') === 'aux-pane-split';
+          if (part === '[data-aux-pane-open]') return this.hasAttribute('data-aux-pane-open');
+          if (part === '[data-side-panel-strip]') return this.hasAttribute('data-side-panel-strip');
+          if (part === '[contenteditable="true"]') return this.getAttribute('contenteditable') === 'true';
+          if (part === '[data-lexical-decorator="true"]') return this.getAttribute('data-lexical-decorator') === 'true';
+          if (part === '[data-chip]') return this.hasAttribute('data-chip');
+          return false;
+        });
+      },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches && cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const parts = sel.split(',').map((s) => s.trim());
+        const walk = (n) => {
+          for (const c of n.children) {
+            const matched = parts.some((p) => {
+              if (p === 'iframe[src*="agy-claude-studio--studio"]') return c.tagName === 'IFRAME' && String(c.getAttribute('src') || '').includes('agy-claude-studio--studio');
+              if (p === '[data-testid="agent-input-box"] .surface-composer-card') return c.classList.contains('surface-composer-card') && Boolean(c.closest('[data-testid="agent-input-box"]'));
+              if (p === '[data-testid="agent-input-box"] [contenteditable="true"]') return c.getAttribute('contenteditable') === 'true' && Boolean(c.closest('[data-testid="agent-input-box"]'));
+              return c.matches(p);
+            });
+            if (matched) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+  };
+
+  const docEl = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body');
+  docEl.append(head, body);
+
+  const split = makeEl('div', { 'data-testid': 'aux-pane-split' });
+  const auxPane = makeEl('div', { 'data-aux-pane-open': 'false' });
+  const strip = makeEl('div', { 'data-side-panel-strip': '', 'data-active-tab-id': '' });
+
+  // Hidden cached conversation-view first in DOM (cid1)
+  const cvHidden = makeEl('div', { 'data-testid': 'conversation-view', 'data-cascade-id': cid1, 'data-visible': 'false' });
+  // Active visible conversation-view second in DOM (cid2)
+  const cvActive = makeEl('div', { 'data-testid': 'conversation-view', 'data-cascade-id': cid2, 'data-visible': 'true' });
+  const box = makeEl('div', { 'data-testid': 'agent-input-box' });
+  const card = makeEl('div', { class: 'surface-composer-card' });
+  const ed = makeEl('div', { contenteditable: 'true' });
+
+  let lexChildren = [];
+  const stickyCmd = { type: 'CLEAR_DISMISSED_STICKY_MENTION_COMMAND' };
+  const lexRoot = {
+    clear() { lexChildren = []; ed.textContent = ''; },
+    select() {},
+  };
+  const nodeMap = new Map([['root', lexRoot]]);
+  const lexEditor = {
+    _commands: new Map([[stickyCmd, [new Set()]]]),
+    _editorState: { _nodeMap: nodeMap },
+    _pendingEditorState: { _nodeMap: nodeMap },
+    getEditorState() {
+      return {
+        toJSON: () => ({
+          root: { children: lexChildren.length ? [{ type: 'paragraph', children: lexChildren }] : [] },
+        }),
+      };
+    },
+    dispatchCommand() { return true; },
+    update(fn) { fn(); },
+  };
+  ed.__lexicalEditor = lexEditor;
+
+  card.appendChild(ed);
+  box.appendChild(card);
+  cvActive.appendChild(box);
+  split.append(cvHidden, cvActive, auxPane, strip);
+
+  const postedMsgs = [];
+  const overlay = makeEl('div');
+  const slot = makeEl('div', {
+    'data-testid': 'sidecar-iframe-slot',
+    'data-sidecar-id': 'agy-claude-studio/studio',
+    'data-sidecar-url': `http://127.0.0.1:4332/agy-claude-studio--studio?token=t&conversationId=${cid2}`,
+    'data-visible': 'false',
+  });
+  const iframe = makeEl('iframe', {
+    src: `http://127.0.0.1:4332/agy-claude-studio--studio?token=t&conversationId=${cid2}`,
+  });
+  iframe.contentWindow = {
+    postMessage(msg, targetOrigin) {
+      postedMsgs.push({ msg, targetOrigin });
+    },
+  };
+  slot.appendChild(iframe);
+  overlay.appendChild(slot);
+  body.append(split, overlay);
+
+  const dispatches = [];
+  const rootEl = makeEl('div', { id: 'root' });
+  rootEl.__reactContainer$test = {
+    memoizedProps: {
+      value: {
+        store: {
+          getState: () => ({
+            conversation: { convoState: { cascadeId: cid2 } },
+            sidePanelV2: { conversationPanes: { [cid2]: { tabs: [], closedTabs: [] } } },
+            trajectorySummaries: { summaries: { [foreignCid]: { stepCount: 1 } } },
+          }),
+          dispatch(action) { dispatches.push(action); },
+        },
+      },
+    },
+  };
+  body.appendChild(rootEl);
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    createElement: (t) => makeEl(t),
+    querySelector: (s) => docEl.querySelector(s),
+    querySelectorAll: (s) => docEl.querySelectorAll(s),
+    getElementById: (id) => (id === 'root' ? rootEl : null),
+    addEventListener() {},
+    removeEventListener() {},
+    execCommand(cmd, _ui, val) {
+      if (cmd === 'insertText') { ed.textContent = String(val || ''); return true; }
+      return true;
+    },
+  };
+
+  const sandbox = {
+    document: doc,
+    location: { href: `https://127.0.0.1:2015/c/${cid2}`, protocol: 'https:', hostname: '127.0.0.1', pathname: `/c/${cid2}` },
+    URL,
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    const res = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio', mascot: false }), sandbox);
+    assert.equal(res.status, 'ok');
+    await new Promise((r) => setTimeout(r, 40));
+
+    // 1. Multi-view active conversation: must pick cid2 (visible) over cid1 (hidden first DOM view), with exact HTTP origin
+    assert.ok(
+      postedMsgs.some((m) => m.msg?.type === 'ag-cs:active-conversation' && m.msg.conversationId === cid2 && m.targetOrigin === 'http://127.0.0.1:4332'),
+      'Dock must sync active visible conversation cid2 using exact targetOrigin'
+    );
+    assert.equal(
+      postedMsgs.some((m) => m.msg?.conversationId === cid1),
+      false,
+      'Dock must never treat hidden cached conversation-view cid1 as active'
+    );
+
+    // 2. Switching to new empty conversation without conversationId sends explicit unbound: true message
+    cvActive.removeAttribute('data-cascade-id');
+    sandbox.location.pathname = '/';
+    rootEl.__reactContainer$test.memoizedProps.value.store.getState = () => ({
+      conversation: { convoState: { cascadeId: '' } },
+      sidePanelV2: { conversationPanes: {} },
+    });
+    sandbox.window.__agClaudeStudio.syncNow?.();
+    await new Promise((r) => setTimeout(r, 40));
+    assert.ok(
+      postedMsgs.some((m) => m.msg?.type === 'ag-cs:active-conversation' && m.msg.conversationId === '' && m.msg.unbound === true),
+      'Switching to new empty conversation must post explicit unbound: true message'
+    );
+
+    // Restore cid2 for slash/ownership tests
+    cvActive.setAttribute('data-cascade-id', cid2);
+    sandbox.location.pathname = `/c/${cid2}`;
+    rootEl.__reactContainer$test.memoizedProps.value.store.getState = () => ({
+      conversation: { convoState: { cascadeId: cid2 } },
+      sidePanelV2: { conversationPanes: { [cid2]: { tabs: [], closedTabs: [] } } },
+      trajectorySummaries: { summaries: { [foreignCid]: { stepCount: 1 } } },
+    });
+
+    // 3. Multi-window ownership verification: foreignCid must return conversation_not_found without dispatching
+    const foreignState = sandbox.window.__agClaudeStudio.getSideQuestionsState(foreignCid);
+    assert.equal(foreignState.ok, false);
+    assert.equal(foreignState.reason, 'conversation_not_found');
+    assert.equal(foreignState.action, 'conversation_not_found');
+
+    const foreignOpen = sandbox.window.__agClaudeStudio.openSideQuestion({ conversationId: foreignCid, cascadeId: 'sq-foreign' });
+    assert.equal(foreignOpen.ok, false);
+    assert.equal(foreignOpen.reason, 'conversation_not_found');
+    assert.equal(foreignOpen.action, 'conversation_not_found');
+    assert.equal(dispatches.length, 0, 'Must never dispatch sideQuestion actions for unowned conversation');
+
+    // 4. Draft protection matrix on /btw
+    const draftCases = [
+      {
+        name: 'plain text /btw draft',
+        nodes: [{ type: 'text', text: '/btw unfinished question' }],
+        domText: '/btw unfinished question',
+      },
+      {
+        name: 'slash + user extra text',
+        nodes: [
+          { type: 'beautifulMention', trigger: '/', value: 'compact' },
+          { type: 'text', text: ' keep my custom instructions' },
+        ],
+        domText: 'compact keep my custom instructions',
+      },
+      {
+        name: 'slash + @file + text',
+        nodes: [
+          { type: 'beautifulMention', trigger: '/', value: 'compact' },
+          { type: 'contextScopeItemMention', trigger: '@', value: 'src/ui-runtime.js', data: { data: '{"recipe":"file"}' } },
+          { type: 'text', text: ' focus here' },
+        ],
+        domText: 'compact @src/ui-runtime.js focus here',
+      },
+      {
+        name: '@file with recipe metadata',
+        nodes: [
+          { type: 'contextScopeItemMention', trigger: '@', value: 'src/cdp.js', data: { data: '{"recipe":"file","uri":"file:///src/cdp.js"}' } },
+        ],
+        domText: '@src/cdp.js',
+      },
+    ];
+    for (const dc of draftCases) {
+      lexChildren = dc.nodes;
+      ed.textContent = dc.domText;
+      const r = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+      assert.equal(r.ok, false, `${dc.name} must be protected`);
+      assert.equal(r.reason, 'draft_present', `${dc.name} reason must be draft_present`);
+      assert.equal(r.action, 'draft_present', `${dc.name} action must be draft_present`);
+      assert.equal(ed.textContent, dc.domText, `${dc.name} must not be cleared`);
+    }
+
+    // 5. Lexical unavailable with existing text must preserve draft instead of blindly clearing
+    ed.__lexicalEditor = null;
+    ed.textContent = '/compact custom draft';
+    const noLexRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    assert.equal(noLexRes.ok, false);
+    assert.equal(noLexRes.reason, 'draft_present');
+    assert.equal(ed.textContent, '/compact custom draft');
+
+    // 6. IME / uncommitted DOM text while Lexical snapshot is empty must protect draft
+    ed.__lexicalEditor = lexEditor;
+    lexChildren = [];
+    ed.textContent = 'zhongwen';
+    const imeDraftRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    assert.equal(imeDraftRes.ok, false);
+    assert.equal(imeDraftRes.reason, 'draft_present');
+    assert.equal(imeDraftRes.action, 'draft_present');
+    assert.equal(ed.textContent, 'zhongwen');
+
+    // 7. Standalone /compact when execCommand('insertText') returns false must return ok: false without faking DOM
+    lexChildren = [{ type: 'beautifulMention', trigger: '/', value: 'compact' }];
+    ed.textContent = 'compact';
+    const origExec = doc.execCommand;
+    doc.execCommand = (cmd) => (cmd === 'insertText' ? false : true);
+    const failedInsertRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    doc.execCommand = origExec;
+    assert.equal(failedInsertRes.ok, false, 'failed execCommand must not report ok: true');
+    assert.notEqual(ed.textContent, '/btw', 'failed execCommand must not fake /btw in DOM');
+
+    // 7b. When execCommand is absent and beforeinput is cancelled, fallback must NOT fake DOM text or return ok: true
+    lexChildren = [{ type: 'beautifulMention', trigger: '/', value: 'compact' }];
+    ed.textContent = 'compact';
+    const origDispatch = ed.dispatchEvent;
+    doc.execCommand = undefined;
+    ed.dispatchEvent = () => false;
+    const cancelledFallbackRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    ed.dispatchEvent = origDispatch;
+    doc.execCommand = origExec;
+    assert.equal(cancelledFallbackRes.ok, false, 'cancelled beforeinput fallback must return ok: false');
+    assert.notEqual(ed.textContent, '/btw', 'cancelled beforeinput fallback must not write /btw into DOM');
+
+    // 7c. Composition flag protects draft on BOTH /btw and /compact
+    lexChildren = [];
+    ed.textContent = '';
+    ed._agCsComposing = true;
+    const composingBtw = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    assert.equal(composingBtw.ok, false);
+    assert.equal(composingBtw.reason, 'draft_present');
+    const composingCompact = sandbox.window.__agClaudeStudio.fillCompactCommand(box);
+    assert.equal(Boolean(composingCompact?.ok ?? composingCompact), false);
+    ed._agCsComposing = false;
+
+    // 8. Owned conversation with empty items requesting explicit cascadeId/tabId/index (including invalid non-integer index) returns side_question_not_found with 0 dispatches and untouched editor
+    dispatches.length = 0;
+    lexChildren = [];
+    ed.textContent = 'keep-me';
+    for (const reqOpts of [
+      { conversationId: cid2, cascadeId: 'sq-missing' },
+      { conversationId: cid2, tabId: 'side_question__missing' },
+      { conversationId: cid2, index: 99 },
+      { conversationId: cid2, index: 1.5 },
+      { conversationId: cid2, index: -1 },
+    ]) {
+      const missingSq = sandbox.window.__agClaudeStudio.openSideQuestion(reqOpts);
+      assert.equal(missingSq.ok, false);
+      assert.equal(missingSq.reason, 'side_question_not_found');
+      assert.equal(missingSq.action, 'side_question_not_found');
+    }
+    assert.equal(dispatches.length, 0, 'unknown/invalid side question target must trigger 0 dispatches');
+    assert.equal(ed.textContent, 'keep-me', 'invalid restore request must not mutate editor');
+
+    // 9. agent-input-box with its own data-cascade-id is resolved directly
+    const cidBox = '33333333-3333-4333-8333-333333333333';
+    cvActive.removeAttribute('data-cascade-id');
+    box.setAttribute('data-cascade-id', cidBox);
+    lexChildren = [];
+    ed.textContent = '';
+    const boxCidRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cidBox });
+    assert.equal(boxCidRes.ok, true, 'agent-input-box own data-cascade-id must be resolved');
+    box.removeAttribute('data-cascade-id');
+    cvActive.setAttribute('data-cascade-id', cid2);
+
+    // 10. Dual-visible conversation views (cid1 & cid2 both visible) with route/store at cid2 -> selects cid2
+    cvHidden.setAttribute('data-visible', 'true');
+    cvActive.setAttribute('data-visible', 'true');
+    postedMsgs.length = 0;
+    sandbox.location.pathname = `/c/${cid2}`;
+    sandbox.window.__agClaudeStudio.syncNow?.();
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(
+      postedMsgs.some((m) => m.msg?.conversationId === cid1),
+      false,
+      'Dual-visible views must not blindly pick first DOM node cid1 when route/store is cid2'
+    );
+
+    // 11. Single visible view clears data-cascade-id (even WITHOUT an input box mounted yet!) while stale route/store still holds cid2 and hidden view holds cid1 -> sends unbound: true
+    cvHidden.setAttribute('data-visible', 'false');
+    cvActive.removeAttribute('data-cascade-id');
+    box.remove();
+    postedMsgs.length = 0;
+    sandbox.window.__agClaudeStudio.syncNow?.();
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(
+      postedMsgs.some((m) => m.msg?.conversationId === cid1 || m.msg?.conversationId === cid2),
+      false,
+      'Empty active visible view without input box must never leak hidden cid1 or stale cid2'
+    );
+    assert.ok(
+      postedMsgs.some((m) => m.msg?.type === 'ag-cs:active-conversation' && m.msg.conversationId === '' && m.msg.unbound === true),
+      'Empty active visible view without input box must send unbound: true even when stale route/store still has cid2'
+    );
+    cvActive.appendChild(box);
   } finally {
     for (const id of timers) clearTimeout(id);
   }

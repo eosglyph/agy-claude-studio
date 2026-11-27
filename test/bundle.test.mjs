@@ -713,6 +713,14 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
       get childElementCount() { return children.length; },
       appendChild(ch) { ch.parentElement = this; ch.parentNode = this; children.push(ch); return ch; },
       removeChild(ch) { const i = children.indexOf(ch); if (i >= 0) children.splice(i, 1); ch.parentElement = null; ch.parentNode = null; return ch; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') this.id = String(v); if (k === 'class') this.className = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -1014,6 +1022,14 @@ test('bottom-right context ring navigates directly to quotas or breakdown tab ba
       get firstChild() { return children[0] || null; },
       getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -1289,6 +1305,14 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -1604,6 +1628,14 @@ test('Q&A takeover card, side-question panel, and running tasks clear Clawd masc
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -1874,6 +1906,14 @@ test('ring and popover stay live despite static trajectorySummaries and non-root
       get firstChild() { return children[0] || null; },
       getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -2206,6 +2246,14 @@ test('syncTurnBadges mounts exactly one #T badge on the final agent-response of 
       get lastElementChild() { return children[children.length - 1] || null; },
       appendChild(ch) { ch.parentElement = this; ch.parentNode = this; children.push(ch); return ch; },
       removeChild(ch) { const i = children.indexOf(ch); if (i >= 0) children.splice(i, 1); ch.parentElement = null; ch.parentNode = null; return ch; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrMap.set(k, String(v)); if (k === 'id') this.id = String(v); if (k === 'class') this.className = String(v); },
       getAttribute(k) { return attrMap.has(k) ? attrMap.get(k) : null; },
@@ -2503,6 +2551,14 @@ test('streaming Turn 2 response does not hijack #T1 badge, observer ignores exte
       get firstChild() { return children[0] || null; },
       getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); if (k === 'class') node.className = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -2792,6 +2848,14 @@ test('virtualized 20-turn chat with thinking Turn 21 never leaks #T11 or #T20 on
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); if (k === 'class') node.className = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -3164,6 +3228,14 @@ test('remote (cloud) conversation populates Token HUD, top bar, turn badges, and
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); if (k === 'class') node.className = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -3562,6 +3634,14 @@ test('fallback to createAgentStateProviderForConvo when getCascadeTrajectory thr
       appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
       insertBefore(c, ref) { c.parentElement = this; c.parentNode = this; const i = ref ? children.indexOf(ref) : -1; if (i >= 0) children.splice(i, 0, c); else children.push(c); return c; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -3815,6 +3895,14 @@ test('hudBottomBar triggers quota fetch in context mode, low-context triggers /c
       appendChild(ch) { ch.parentElement = ch.parentNode = el; children.push(ch); return ch; },
       insertBefore(ch, ref) { ch.parentElement = ch.parentNode = el; const i = ref ? children.indexOf(ref) : -1; if (i >= 0) children.splice(i, 0, ch); else children.push(ch); return ch; },
       removeChild(ch) { const i = children.indexOf(ch); if (i >= 0) children.splice(i, 1); ch.parentElement = ch.parentNode = null; return ch; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (el.parentElement) el.parentElement.removeChild(el); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -4119,6 +4207,14 @@ test('unmountRipple tolerates zero-size .agy-home (field=null) and copy honestly
       appendChild(ch) { ch.parentElement = ch.parentNode = el; children.push(ch); return ch; },
       insertBefore(ch, ref) { ch.parentElement = ch.parentNode = el; const i = ref ? children.indexOf(ref) : -1; if (i >= 0) children.splice(i, 0, ch); else children.push(ch); return ch; },
       removeChild(ch) { const i = children.indexOf(ch); if (i >= 0) children.splice(i, 1); ch.parentElement = ch.parentNode = null; return ch; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (el.parentElement) el.parentElement.removeChild(el); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -4382,6 +4478,14 @@ test('inject expression enters sidecar-lite mode on plugin://swarm-- iframe with
       append(...nodes) {
         for (const n of nodes) this.appendChild(n);
         return this;
+      },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
       },
       remove() {
         if (!this.parentNode) return;
@@ -4921,6 +5025,14 @@ test('stale async fetchActiveConvo response is discarded when reused composer ca
       get firstChild() { return children[0] || null; },
       getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -5167,7 +5279,7 @@ test('model selector partitions sparkle+name from effort pill, suppresses native
           return on;
         },
       },
-      animate() { return { cancel() {} }; },
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
       get className() { return [...classes].join(' '); },
       set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((x) => classes.add(x)); },
       get isConnected() { let p = this; while (p) { if (p === html) return true; p = p.parentElement; } return false; },
@@ -5193,6 +5305,14 @@ test('model selector partitions sparkle+name from effort pill, suppresses native
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (el.parentElement) el.parentElement.removeChild(el); },
       contains(other) { let c = other; while (c) { if (c === el) return true; c = c.parentElement; } return false; },
       getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
@@ -5379,11 +5499,15 @@ test('model selector partitions sparkle+name from effort pill, suppresses native
     assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false, 'clicking effort badge must not open periodic selector');
     assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true, 'clicking effort badge opens effort popover');
 
-    // 3b. When effortSlider: false and periodicSelector: true, clicking effort badge is also intercepted (not leaked to native menu)
+    // 3b. When effortSlider: false and periodicSelector: true, model trigger (including effort span) passes through to native menu, while sparkle button opens periodic selector
     sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSlider: false, periodicSelector: true });
     effortSpan.dispatchEvent({ type: 'click', button: 0 });
-    assert.equal(nativeMenuOpens, 0, 'effortSlider: false must not leak effort badge click to native menu');
-    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'effortSlider: false falls back to opening periodic selector');
+    assert.equal(nativeMenuOpens, 1, 'effortSlider: false must pass model trigger click through to native menu');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false, 'effortSlider: false must not open periodic selector from native model trigger');
+    const sparkleAfterOff = footer.querySelector('.ag-cs-periodic-trigger');
+    assert.ok(sparkleAfterOff, 'sparkle trigger remains available when periodicSelector is true');
+    sparkleAfterOff.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'sparkle trigger still opens periodic selector when effortSlider is false');
     for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
       fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
     }
@@ -5392,18 +5516,18 @@ test('model selector partitions sparkle+name from effort pill, suppresses native
     sandbox.window.__agClaudeStudio.withNativeModelMenuBypass(modelBtn, () => {
       modelBtn.dispatchEvent({ type: 'click', button: 0 });
     });
-    assert.equal(nativeMenuOpens, 1, 'programmatic bypass reaches native model button click handler');
+    assert.equal(nativeMenuOpens, 2, 'programmatic bypass reaches native model button click handler');
     assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
 
     // 5. Disabling periodicSelector removes sparkle trigger and restores native menu, while keeping effort badge independent
     sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSlider: true, periodicSelector: false });
     assert.equal(footer.querySelector('.ag-cs-periodic-trigger'), null, 'sparkle trigger removed when periodicSelector is false');
     labelWrap.dispatchEvent({ type: 'click', button: 0 });
-    assert.equal(nativeMenuOpens, 2, 'native model menu works normally when periodicSelector is false');
+    assert.equal(nativeMenuOpens, 3, 'native model menu works normally when periodicSelector is false');
     assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
 
     effortSpan.dispatchEvent({ type: 'click', button: 0 });
-    assert.equal(nativeMenuOpens, 2, 'effort badge remains independent when periodicSelector is false');
+    assert.equal(nativeMenuOpens, 3, 'effort badge remains independent when periodicSelector is false');
     assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true);
 
     // 6. Model without effort badge clears data-ag-cs-has-effort and --ag-cs-effort-cut
@@ -5523,6 +5647,14 @@ test('inline model trigger tags data-ag-cs-inline-model-wrap without *:has(), op
         c.isConnected = false;
         return c;
       },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() {
         if (this.parentElement) {
           this.parentElement.removeChild(this);
@@ -5577,6 +5709,7 @@ test('inline model trigger tags data-ag-cs-inline-model-wrap without *:has(), op
         return out;
       },
       getBoundingClientRect: () => ({ left: 100, top: 200, width: 120, height: 26, right: 220, bottom: 226 }),
+      animate: () => ({ cancel() {}, finished: Promise.resolve() }),
     };
     return el;
   };
@@ -5635,7 +5768,8 @@ test('inline model trigger tags data-ag-cs-inline-model-wrap without *:has(), op
   sandbox.globalThis = sandbox;
 
   try {
-    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, periodicSelector: true }), sandbox);
+    const injectRes = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, periodicSelector: true }), sandbox);
+    assert.equal(injectRes.status, 'ok', JSON.stringify(injectRes));
     assert.equal(inlineParent.getAttribute('data-ag-cs-inline-model-wrap'), '1', 'inline parent is tagged for scoped :has() hover');
 
     // ArrowDown and ArrowUp open periodic selector idempotently, and repeat: true never toggles it closed
@@ -5714,8 +5848,13 @@ test('composerRestyle=false and effortSliderStyle=off preserve native footer, gl
     'Glass rules must not style native send button when composerRestyle is off'
   );
   assert.ok(
+    css.includes('html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"]) [data-testid="model-selector-trigger"]'),
+    'Model selector trigger override must be scoped to active composer/effort features (not periodic-only)'
+  );
+  assert.equal(
     css.includes('html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"]'),
-    'Model selector trigger override must be scoped to active composer/effort/periodic features'
+    false,
+    'Model selector trigger override must not apply when composerRestyle=false and effortSliderStyle=off'
   );
   assert.ok(
     css.includes('html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort]'),
@@ -5762,8 +5901,16 @@ test('composerRestyle=false and effortSliderStyle=off preserve native footer, gl
       getBoundingClientRect: opts.rect || (() => ({ left: 40, top: 200, right: 200, bottom: 226, width: 160, height: 26 })),
       appendChild(c) { c.parentElement = el; children.push(c); return c; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (el.parentElement) el.parentElement.removeChild(el); },
-      animate() { return { cancel() {}, onfinish: null }; },
+      animate() { return { cancel() {}, finished: Promise.resolve(), onfinish: null }; },
       addEventListener() {},
       removeEventListener() {},
       contains(target) {
@@ -5964,6 +6111,388 @@ test('composerRestyle=false and effortSliderStyle=off preserve native footer, gl
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
     assert.equal(html.hasAttribute('data-ag-cs-effort-slider'), false);
     assert.equal(html.hasAttribute('data-ag-cs-periodic'), false);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('effort hot-switch to off cancels pending rAF and leaves zero fake text/ARIA residue; periodic+off passes native trigger through', async () => {
+  const timers = new Set();
+  const rafQueue = [];
+  const docCaptureListeners = new Map();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const props = new Map();
+    const listeners = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      children,
+      parentElement: null,
+      isConnected: true,
+      disabled: false,
+      get textContent() { return this._text || children.map((c) => c.textContent).join(''); },
+      set textContent(v) { this._text = String(v || ''); children.length = 0; },
+      _html: '',
+      get innerHTML() { return this._html; },
+      set innerHTML(html) {
+        this._html = String(html || '');
+        children.length = 0;
+        const stack = [this];
+        const tagRe = /<(\/?)(div|button|span|svg|path)\b([^>]*)>/gi;
+        let m;
+        while ((m = tagRe.exec(this._html)) !== null) {
+          const isClose = m[1] === '/';
+          const tagName = m[2].toLowerCase();
+          const attrStr = m[3] || '';
+          const selfClose = /\/\s*$/.test(attrStr) || tagName === 'path';
+          if (isClose) {
+            if (stack.length > 1) stack.pop();
+            continue;
+          }
+          const parsedAttrs = {};
+          let parsedClass = '';
+          const attrRe = /([a-zA-Z0-9_-]+)="([^"]*)"/g;
+          let am;
+          while ((am = attrRe.exec(attrStr)) !== null) {
+            if (am[1] === 'class') parsedClass = am[2];
+            else parsedAttrs[am[1]] = am[2];
+          }
+          const child = makeEl(tagName, { className: parsedClass, attrs: parsedAttrs });
+          stack[stack.length - 1].appendChild(child);
+          if (!selfClose) stack.push(child);
+        }
+      },
+      _rect: { left: 100, top: 600, right: 260, bottom: 626, width: 160, height: 26 },
+      style: {
+        setProperty(k, v) { props.set(k, String(v)); },
+        getPropertyValue(k) { return props.get(k) || ''; },
+        removeProperty(k) { props.delete(k); },
+      },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, force) {
+          if (force === undefined) {
+            if (classes.has(c)) { classes.delete(c); return false; }
+            classes.add(c); return true;
+          }
+          if (force) classes.add(c); else classes.delete(c);
+          return Boolean(force);
+        },
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get childElementCount() { return children.length; },
+      appendChild(c) {
+        if (c.parentElement) {
+          const i = c.parentElement.children.indexOf(c);
+          if (i >= 0) c.parentElement.children.splice(i, 1);
+        }
+        c.parentElement = this;
+        children.push(c);
+        return c;
+      },
+      insertBefore(c, ref) {
+        if (c.parentElement) {
+          const i = c.parentElement.children.indexOf(c);
+          if (i >= 0) c.parentElement.children.splice(i, 1);
+        }
+        c.parentElement = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+        }
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      removeEventListener(ev, fn) {
+        const a = listeners.get(ev);
+        if (a) { const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); }
+      },
+      dispatchEvent(ev) {
+        const e = {
+          target: this,
+          button: 0,
+          key: '',
+          defaultPrevented: false,
+          propagationStopped: false,
+          preventDefault() { this.defaultPrevented = true; },
+          stopPropagation() { this.propagationStopped = true; },
+          stopImmediatePropagation() { this.propagationStopped = true; },
+          ...ev,
+        };
+        const cap = docCaptureListeners.get(e.type) || [];
+        for (const fn of [...cap]) {
+          fn(e);
+          if (e.propagationStopped) break;
+        }
+        if (!e.propagationStopped) {
+          for (const fn of [...(listeners.get(e.type) || [])]) fn(e);
+        }
+        return !e.defaultPrevented;
+      },
+      getBoundingClientRect() { return this._rect; },
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
+      matches(sel) {
+        return sel.split(',').map((s) => s.trim()).some((s) => {
+          if (s === '*') return true;
+          if (s === 'span') return el.tagName === 'SPAN';
+          if (s === 'button') return el.tagName === 'BUTTON';
+          if (s === '[data-testid="agent-input-box"] .surface-composer-card') return classes.has('surface-composer-card') && Boolean(this.closest('[data-testid="agent-input-box"]'));
+          if (s === '.ag-cs-effort-popover') return classes.has('ag-cs-effort-popover');
+          if (s === '.ag-cs-codex-track') return classes.has('ag-cs-codex-track');
+          if (s === '.ag-cs-codex-seg') return classes.has('ag-cs-codex-seg');
+          if (s === '.ag-cs-effort-track') return classes.has('ag-cs-effort-track');
+          if (s === '.ag-cs-effort-tick') return classes.has('ag-cs-effort-tick');
+          if (s === '.ag-cs-effort-step') return classes.has('ag-cs-effort-step');
+          if (s === '[data-step-idx="2"]') return attrs.get('data-step-idx') === '2';
+          if (s === '[data-step-idx="0"]') return attrs.get('data-step-idx') === '0';
+          if (s === '[data-testid="model-selector-trigger"]') return attrs.get('data-testid') === 'model-selector-trigger';
+          if (s === '[data-testid="model-selector-trigger"] .ag-cs-effort-badge') return classes.has('ag-cs-effort-badge') && Boolean(this.parentElement?.closest('[data-testid="model-selector-trigger"]'));
+          if (s === '[data-testid="model-selector-trigger"] [data-ag-cs-effort]') return attrs.has('data-ag-cs-effort') && Boolean(this.parentElement?.closest('[data-testid="model-selector-trigger"]'));
+          if (s === '.ag-cs-effort-badge') return classes.has('ag-cs-effort-badge');
+          if (s === '[data-ag-cs-effort]') return attrs.has('data-ag-cs-effort');
+          if (s === '.ag-cs-periodic-trigger') return classes.has('ag-cs-periodic-trigger');
+          if (s === '.surface-composer-card') return classes.has('surface-composer-card');
+          if (s === '[data-testid="agent-input-box"]') return attrs.get('data-testid') === 'agent-input-box';
+          if (s === '.no-focus-agent-input') return classes.has('no-focus-agent-input');
+          return false;
+        });
+      },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (c.matches(sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const html = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body', { className: 'theme-dark' });
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const inputBox = makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } });
+  const card = makeEl('div', { className: 'surface-composer-card' });
+  const footer = makeEl('div', { className: 'agy-composer-footer' });
+  const modelWrap = makeEl('div', { className: 'no-focus-agent-input' });
+  const modelBtn = makeEl('button', {
+    attrs: { 'data-testid': 'model-selector-trigger', 'aria-label': 'GPT-5.3-Codex Medium' },
+  });
+  const labelSpan = makeEl('span');
+  labelSpan.textContent = 'GPT-5.3-Codex';
+  const effortSpan = makeEl('span');
+  effortSpan.textContent = ' Medium';
+  modelBtn.appendChild(labelSpan);
+  modelBtn.appendChild(effortSpan);
+  modelWrap.appendChild(modelBtn);
+  footer.appendChild(modelWrap);
+  card.appendChild(footer);
+  inputBox.appendChild(card);
+  body.appendChild(inputBox);
+
+  let nativeMenuClicks = 0;
+  let nativeKeydowns = 0;
+  modelBtn.addEventListener('click', () => { nativeMenuClicks += 1; });
+  modelBtn.addEventListener('keydown', () => { nativeKeydowns += 1; });
+
+  const setModelCalls = [];
+  const options = [
+    { label: 'GPT-5.3-Codex Low', value: 'codex-low' },
+    { label: 'GPT-5.3-Codex Medium', value: 'codex-med' },
+    { label: 'GPT-5.3-Codex High', value: 'codex-high' },
+    { label: 'GPT-5.3-Codex Extra High', value: 'codex-xhigh' },
+  ];
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      selectedModel: options[1],
+      modelOptions: options,
+      setSelectedModel(opt) {
+        setModelCalls.push(opt.value);
+        this.selectedModel = opt;
+        effortSpan.textContent = ' ' + opt.label.replace(/^GPT-5\.3-Codex\s+/, '');
+      },
+    },
+    return: null,
+  };
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    hidden: false,
+    readyState: 'complete',
+    createElement: (t) => makeEl(t),
+    getElementById: () => null,
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener(ev, fn, cap) {
+      if (cap) {
+        if (!docCaptureListeners.has(ev)) docCaptureListeners.set(ev, []);
+        docCaptureListeners.get(ev).push(fn);
+      }
+    },
+    removeEventListener(ev, fn, cap) {
+      if (cap && docCaptureListeners.has(ev)) {
+        const a = docCaptureListeners.get(ev);
+        const i = a.indexOf(fn);
+        if (i >= 0) a.splice(i, 1);
+      }
+    },
+  };
+
+  const sandbox = {
+    window: null,
+    globalThis: null,
+    document: doc,
+    navigator: { language: 'en-US' },
+    location: { pathname: '/' },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => {
+      const id = rafQueue.length + 1;
+      rafQueue.push({ id, fn, cancelled: false });
+      return id;
+    },
+    cancelAnimationFrame: (id) => {
+      const item = rafQueue.find((r) => r.id === id);
+      if (item) item.cancelled = true;
+    },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  const flushRaf = () => {
+    const batch = rafQueue.splice(0, rafQueue.length);
+    for (const item of batch) {
+      if (!item.cancelled) item.fn(Date.now());
+    }
+  };
+
+  try {
+    // 1. periodicSelector: true + effortSliderStyle: 'chatgpt' keeps partitioned behavior
+    const mountRes = vm.runInNewContext(
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, periodicSelector: true, effortSliderStyle: 'chatgpt', mascot: false }),
+      sandbox
+    );
+    assert.equal(mountRes.status, 'ok');
+    labelSpan.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'model name opens periodic selector when effortSliderStyle is chatgpt');
+    assert.equal(nativeMenuClicks, 0);
+    docCaptureListeners.get('keydown').forEach((fn) => fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} }));
+
+    // 2. Without setSelectedModel, interacting with an effort step must NOT fake host span text or aria-label
+    const savedSetter = modelBtn.__reactFiber$test.memoizedProps.setSelectedModel;
+    delete modelBtn.__reactFiber$test.memoizedProps.setSelectedModel;
+    effortSpan.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true, 'popover opens without setter');
+    const noSetterTrack = body.querySelector('.ag-cs-codex-track');
+    assert.ok(noSetterTrack, 'codex track renders in popover');
+    noSetterTrack.dispatchEvent({ type: 'keydown', key: 'ArrowRight' });
+    assert.equal(setModelCalls.length, 0, 'no setter means 0 model setter calls');
+    assert.equal(effortSpan.textContent, ' Medium', 'must not fake host effort span text when setSelectedModel is absent');
+    assert.equal(modelBtn.getAttribute('aria-label'), 'GPT-5.3-Codex Medium', 'must not fake modelBtn aria-label when setSelectedModel is absent');
+    modelBtn.__reactFiber$test.memoizedProps.setSelectedModel = savedSetter;
+    docCaptureListeners.get('keydown').forEach((fn) => fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} }));
+
+    // 3. Select step in both claude and chatgpt styles, verify setter & rAF cancellation, force-run stale callbacks, and verify zero residue
+    for (const styleMode of ['claude', 'chatgpt']) {
+      setModelCalls.length = 0;
+      rafQueue.length = 0;
+      sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, periodicSelector: true, effortSliderStyle: styleMode, mascot: false });
+      effortSpan.dispatchEvent({ type: 'click', button: 0 });
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true, `${styleMode} popover opens`);
+      const pop = body.querySelector('.ag-cs-effort-popover');
+      assert.ok(pop, `${styleMode} popover exists`);
+      if (styleMode === 'chatgpt') {
+        const track = pop.querySelector('.ag-cs-codex-track');
+        assert.ok(track, 'chatgpt track exists');
+        track.dispatchEvent({ type: 'keydown', key: 'ArrowRight' });
+      } else {
+        const tick = pop.querySelectorAll('.ag-cs-effort-tick')[2];
+        assert.ok(tick, 'claude tick exists');
+        tick.dispatchEvent({ type: 'click', button: 0 });
+      }
+      assert.equal(setModelCalls.length, 1, `${styleMode} step interaction invokes setSelectedModel once`);
+      assert.ok(rafQueue.length >= 1, `${styleMode} commitSelection queues badge rAF`);
+      const capturedRafs = [...rafQueue];
+      sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, periodicSelector: true, effortSliderStyle: 'off', mascot: false });
+      assert.ok(capturedRafs.some((r) => r.cancelled), `${styleMode} -> off cancels pending badge rAF`);
+      // Force-invoke stale rAF callbacks to verify generation + off guard
+      for (const item of capturedRafs) item.fn(Date.now());
+      assert.equal(effortSpan.hasAttribute('data-ag-cs-effort'), false, `${styleMode} -> off strips data-ag-cs-effort even after stale rAF`);
+      assert.equal(effortSpan.classList.contains('ag-cs-effort-badge'), false, `${styleMode} -> off strips badge class even after stale rAF`);
+      assert.equal(modelBtn.hasAttribute('data-ag-cs-has-effort'), false, `${styleMode} -> off strips data-ag-cs-has-effort even after stale rAF`);
+      assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '', `${styleMode} -> off strips --ag-cs-effort-cut even after stale rAF`);
+      assert.equal(modelBtn.getAttribute('aria-label'), 'GPT-5.3-Codex Medium', `${styleMode} -> off keeps native aria-label untouched`);
+    }
+
+    // 4. periodicSelector: true + effortSliderStyle: 'off' passes mouse & keyboard on native trigger through, while sparkle opens periodic
+    const prevClicks = nativeMenuClicks;
+    const prevKeys = nativeKeydowns;
+    modelBtn.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(nativeMenuClicks, prevClicks + 1, 'native model trigger click passes through when effortSliderStyle is off');
+    for (const key of ['Enter', ' ', 'ArrowDown', 'ArrowUp']) {
+      modelBtn.dispatchEvent({ type: 'keydown', key });
+    }
+    assert.equal(nativeKeydowns, prevKeys + 4, 'native model trigger keyboard events pass through when effortSliderStyle is off');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false, 'native trigger must not open periodic selector when effortSliderStyle is off');
+
+    const sparkle = footer.querySelector('.ag-cs-periodic-trigger');
+    assert.ok(sparkle, 'sparkle trigger exists');
+    sparkle.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'sparkle trigger opens periodic selector when effortSliderStyle is off');
   } finally {
     for (const id of timers) clearTimeout(id);
   }
