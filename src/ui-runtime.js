@@ -7024,6 +7024,14 @@
   }
 
   function openStudioPane(opts = {}) {
+    if (getEffectivePinRightPane() === 'studio' && pinnedDock.el && pinnedDock.el.isConnected && findLiveStudioSlot()) {
+      if (pinnedDock.collapsed) {
+        setPinnedDockCollapsed(false);
+        return { ok: true, status: 'dock_expanded' };
+      }
+      syncPinnedStudioDockPosition();
+      return { ok: true, status: 'already_docked' };
+    }
     return openRightSidecarPane('studio', opts);
   }
 
@@ -7037,6 +7045,11 @@
     const key = String(convoKey || '');
     if (!key) return;
     if (lastPinnedPaneTarget === target && lastPinnedPaneConvoKey === key) return;
+    if (target === 'studio' && findLiveStudioSlot()) {
+      lastPinnedPaneTarget = target;
+      lastPinnedPaneConvoKey = key;
+      return;
+    }
     const res = openRightSidecarPane(target, { forceSwitch: true });
     if (res.ok) {
       lastPinnedPaneTarget = target;
@@ -7051,6 +7064,7 @@
   const DOCK_MIN_WIDTH = 250;
   const DOCK_MAX_WIDTH = 480;
   const DOCK_MIN_SPLIT_WIDTH = 900;
+  const DOCK_MIN_SOLO_SPLIT_WIDTH = 560;
   const DOCK_COLLAPSED_WIDTH = 28;
 
   const pinnedDock = {
@@ -7064,6 +7078,7 @@
     resizerEl: null,
     splitEl: null,
     slotEl: null,
+    hiddenSlotEl: null,
     overlayEl: null,
     resizeObserver: null,
     posRaf: 0,
@@ -7073,6 +7088,17 @@
     splitTransitionEnd: null,
     width: DOCK_DEFAULT_WIDTH,
     collapsed: false,
+    soloMode: false,
+    lastNonStudioTabId: '',
+    prevActiveTabId: '',
+    prevAuxOpen: false,
+    bounceAt: 0,
+    userToggledAuxAt: 0,
+    internalToggleClick: false,
+    auxCloseAttempted: false,
+    userForcedAuxOpen: false,
+    toggleClickListener: null,
+    toggleKeyListener: null,
     dragging: false,
     dragMove: null,
     dragUp: null,
@@ -7103,19 +7129,74 @@
     return { badge: '常驻', collapseTitle: '收起常驻 Claude Studio', expandTitle: '展开常驻 Claude Studio', railLabel: 'Studio' };
   }
 
-  function clampPinnedDockWidth(rawWidth, splitWidth) {
+  function clampPinnedDockWidth(rawWidth, splitWidth, soloMode = false) {
+    const reservedOther = soloMode ? 340 : 340 + 308;
     const maxAllowed = Number.isFinite(splitWidth) && splitWidth > 0
-      ? Math.max(DOCK_MIN_WIDTH, Math.min(DOCK_MAX_WIDTH, Math.floor(splitWidth - 340 - 308)))
+      ? Math.max(DOCK_MIN_WIDTH, Math.min(DOCK_MAX_WIDTH, Math.floor(splitWidth - reservedOther)))
       : DOCK_MAX_WIDTH;
     return Math.max(DOCK_MIN_WIDTH, Math.min(maxAllowed, Math.round(rawWidth || DOCK_DEFAULT_WIDTH)));
   }
 
-  function releaseDockedStudioSlot() {
+  function measureSoloHeadRightPadding() {
+    const toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+    if (!toggleBtn) return 44;
+    let cluster = toggleBtn.parentElement;
+    if (cluster && cluster.parentElement && /\babsolute\b/.test(String(cluster.parentElement.className || ''))) {
+      cluster = cluster.parentElement;
+    }
+    const r = typeof cluster?.getBoundingClientRect === 'function' ? cluster.getBoundingClientRect() : null;
+    if (r && r.width > 0) {
+      return Math.max(40, Math.min(112, Math.ceil(r.width) + 8));
+    }
+    const hasMaximize = Boolean(document.querySelector('[data-testid="toggle-maximize-pane"]'));
+    return hasMaximize ? 76 : 44;
+  }
+
+  function findNonStudioTabButton(strip, preferredTabId) {
+    if (!strip) return null;
+    const spec = RIGHT_PANE_TARGETS.studio;
+    let firstMatch = null;
+    for (const btn of strip.querySelectorAll('button')) {
+      if (btn.getAttribute('data-testid') === 'side-panel-new-tab-button') continue;
+      let tabId = btn.getAttribute('data-tab-id') || '';
+      let sidecarId = '';
+      if (!tabId) {
+        try {
+          const fk = Object.keys(btn).find((k) => k.startsWith('__reactFiber'));
+          let f = fk ? btn[fk] : null;
+          for (let i = 0; i < 6 && f; i++, f = f.return) {
+            const tab = f?.memoizedProps?.tab;
+            if (tab && tab.id) {
+              tabId = String(tab.id);
+              sidecarId = String(tab.content?.sidecarView?.sidecarId || '');
+              break;
+            }
+          }
+        } catch {}
+      }
+      if (!tabId) continue;
+      if (tabId === spec.tabId || sidecarId === spec.sidecarId) continue;
+      const label = (btn.textContent || '').trim();
+      if (!btn.getAttribute('aria-label') && spec.labelRe.test(label)) continue;
+      if (preferredTabId && tabId === preferredTabId) return btn;
+      if (!firstMatch) firstMatch = btn;
+    }
+    return firstMatch;
+  }
+
+  function releaseDockedStudioSlot({ keepHidden = false } = {}) {
     if (pinnedDock.slotEl) {
       try {
         pinnedDock.slotEl.removeAttribute('data-ag-cs-docked-slot');
+        if (!keepHidden) pinnedDock.slotEl.removeAttribute('data-ag-cs-dock-hidden');
       } catch {}
       pinnedDock.slotEl = null;
+    }
+    if (!keepHidden && pinnedDock.hiddenSlotEl) {
+      try {
+        pinnedDock.hiddenSlotEl.removeAttribute('data-ag-cs-dock-hidden');
+      } catch {}
+      pinnedDock.hiddenSlotEl = null;
     }
     if (pinnedDock.overlayEl) {
       try {
@@ -7125,6 +7206,24 @@
         pinnedDock.overlayEl.style?.removeProperty?.('--ag-cs-dock-slot-height');
       } catch {}
       pinnedDock.overlayEl = null;
+    }
+  }
+
+  function hideStudioSlotWhileCollapsed() {
+    const found = findLiveStudioSlot();
+    if (pinnedDock.hiddenSlotEl && pinnedDock.hiddenSlotEl !== found?.slot) {
+      try {
+        pinnedDock.hiddenSlotEl.removeAttribute('data-ag-cs-dock-hidden');
+      } catch {}
+      pinnedDock.hiddenSlotEl = null;
+    }
+    if (found?.slot) {
+      try {
+        if (found.slot.getAttribute('data-ag-cs-dock-hidden') !== '1') {
+          found.slot.setAttribute('data-ag-cs-dock-hidden', '1');
+        }
+      } catch {}
+      pinnedDock.hiddenSlotEl = found.slot;
     }
   }
 
@@ -7171,7 +7270,9 @@
       }
       try {
         pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-open');
+        pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-solo');
         pinnedDock.splitEl.style?.removeProperty?.('--ag-cs-dock-w');
+        pinnedDock.splitEl.style?.removeProperty?.('--ag-cs-dock-solo-pr');
       } catch {}
       pinnedDock.splitEl = null;
     }
@@ -7179,11 +7280,54 @@
     pinnedDock.splitTransitionEnd = null;
   }
 
+  function ensureDockToggleListeners() {
+    if (!pinnedDock.toggleClickListener && typeof document.addEventListener === 'function') {
+      pinnedDock.toggleClickListener = (ev) => {
+        if (pinnedDock.internalToggleClick) return;
+        const target = ev?.target;
+        const toggleBtn = typeof target?.closest === 'function' ? target.closest('[data-testid="toggle-aux-sidebar"]') : null;
+        if (toggleBtn) {
+          const curAux = document.querySelector('[data-aux-pane-open]');
+          const wasOpen = curAux ? curAux.getAttribute('data-aux-pane-open') === 'true' : false;
+          pinnedDock.userToggledAuxAt = wasOpen ? 0 : Date.now();
+          pinnedDock.auxCloseAttempted = false;
+        }
+      };
+      document.addEventListener('click', pinnedDock.toggleClickListener, true);
+    }
+    if (!pinnedDock.toggleKeyListener && typeof document.addEventListener === 'function') {
+      pinnedDock.toggleKeyListener = (ev) => {
+        if ((ev?.ctrlKey || ev?.metaKey) && ev?.shiftKey && String(ev?.key || '').toLowerCase() === 'b') {
+          const curAux = document.querySelector('[data-aux-pane-open]');
+          const wasOpen = curAux ? curAux.getAttribute('data-aux-pane-open') === 'true' : false;
+          pinnedDock.userToggledAuxAt = wasOpen ? 0 : Date.now();
+          pinnedDock.auxCloseAttempted = false;
+        }
+      };
+      document.addEventListener('keydown', pinnedDock.toggleKeyListener, true);
+    }
+  }
+
+  function detachDockToggleListeners() {
+    if (pinnedDock.toggleClickListener && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('click', pinnedDock.toggleClickListener, true);
+      pinnedDock.toggleClickListener = null;
+    }
+    if (pinnedDock.toggleKeyListener && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('keydown', pinnedDock.toggleKeyListener, true);
+      pinnedDock.toggleKeyListener = null;
+    }
+  }
+
   function teardownPinnedStudioDock() {
     stopDockDrag();
     stopDockTracking();
     releaseDockedStudioSlot();
     detachDockSplitListeners();
+    detachDockToggleListeners();
+    pinnedDock.soloMode = false;
+    pinnedDock.auxCloseAttempted = false;
+    pinnedDock.userForcedAuxOpen = false;
     if (pinnedDock.el) {
       try {
         pinnedDock.el.remove();
@@ -7203,7 +7347,8 @@
   function syncPinnedStudioDockPosition() {
     if (destroyed || !pinnedDock.el || !pinnedDock.el.isConnected) return;
     if (pinnedDock.collapsed) {
-      releaseDockedStudioSlot();
+      releaseDockedStudioSlot({ keepHidden: true });
+      hideStudioSlotWhileCollapsed();
       return;
     }
     const found = findLiveStudioSlot();
@@ -7213,6 +7358,12 @@
     }
     if (pinnedDock.slotEl && pinnedDock.slotEl !== found.slot) {
       releaseDockedStudioSlot();
+    }
+    if (pinnedDock.hiddenSlotEl && pinnedDock.hiddenSlotEl !== found.slot) {
+      try {
+        pinnedDock.hiddenSlotEl.removeAttribute('data-ag-cs-dock-hidden');
+      } catch {}
+      pinnedDock.hiddenSlotEl = null;
     }
     const bodyRect = typeof pinnedDock.bodyEl?.getBoundingClientRect === 'function'
       ? pinnedDock.bodyEl.getBoundingClientRect()
@@ -7234,6 +7385,10 @@
       found.overlay.style.setProperty('--ag-cs-dock-slot-width', `${width}px`);
       found.overlay.style.setProperty('--ag-cs-dock-slot-height', `${height}px`);
     }
+    if (found.slot.hasAttribute('data-ag-cs-dock-hidden')) {
+      found.slot.removeAttribute('data-ag-cs-dock-hidden');
+    }
+    pinnedDock.hiddenSlotEl = null;
     if (found.slot.getAttribute('data-ag-cs-docked-slot') !== '1') {
       found.slot.setAttribute('data-ag-cs-docked-slot', '1');
     }
@@ -7281,17 +7436,27 @@
     const splitW = splitRect?.width || 0;
     const activeWidth = pinnedDock.collapsed
       ? DOCK_COLLAPSED_WIDTH
-      : clampPinnedDockWidth(pinnedDock.width, splitW);
+      : clampPinnedDockWidth(pinnedDock.width, splitW, pinnedDock.soloMode);
 
     pinnedDock.el.classList?.toggle?.('is-collapsed', pinnedDock.collapsed);
     pinnedDock.splitEl.setAttribute('data-ag-cs-dock-open', '1');
+    if (pinnedDock.soloMode) {
+      pinnedDock.splitEl.setAttribute('data-ag-cs-dock-solo', '1');
+      pinnedDock.splitEl.style?.setProperty?.('--ag-cs-dock-solo-pr', `${measureSoloHeadRightPadding()}px`);
+    } else {
+      pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-solo');
+      pinnedDock.splitEl.style?.removeProperty?.('--ag-cs-dock-solo-pr');
+    }
     pinnedDock.splitEl.style?.setProperty?.('--ag-cs-dock-w', `${activeWidth}px`);
 
     const lang = getLang();
     if (pinnedDock.lastLang !== lang) {
       pinnedDock.lastLang = lang;
       const copy = getDockCopy(lang);
-      if (pinnedDock.badgeEl) pinnedDock.badgeEl.textContent = copy.badge;
+      if (pinnedDock.badgeEl) {
+        pinnedDock.badgeEl.setAttribute('title', copy.badge);
+        pinnedDock.badgeEl.setAttribute('aria-label', copy.badge);
+      }
       if (pinnedDock.collapseBtn) {
         pinnedDock.collapseBtn.setAttribute('title', copy.collapseTitle);
         pinnedDock.collapseBtn.setAttribute('aria-label', copy.collapseTitle);
@@ -7304,7 +7469,8 @@
     }
 
     if (pinnedDock.collapsed) {
-      releaseDockedStudioSlot();
+      releaseDockedStudioSlot({ keepHidden: true });
+      hideStudioSlotWhileCollapsed();
     } else {
       syncPinnedStudioDockPosition();
       trackDockTransition(240);
@@ -7344,7 +7510,7 @@
       pinnedDock.dragMove = (moveEv) => {
         if (!pinnedDock.dragging) return;
         const delta = startX - Number(moveEv.clientX || 0);
-        const nextW = clampPinnedDockWidth(startW + delta, splitW);
+        const nextW = clampPinnedDockWidth(startW + delta, splitW, pinnedDock.soloMode);
         if (nextW !== pinnedDock.width) {
           pinnedDock.width = nextW;
           pinnedDock.splitEl?.style?.setProperty?.('--ag-cs-dock-w', `${nextW}px`);
@@ -7376,6 +7542,7 @@
     title.textContent = 'Claude Studio';
     const badge = document.createElement('span');
     badge.className = 'ag-cs-dock-badge';
+    badge.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8"/><path d="M9.5 4v6L6.5 13.5V15h11v-1.5L14.5 10V4"/><path d="M12 15v6"/></svg>';
     titleWrap.append(spark, title, badge);
 
     const collapseBtn = document.createElement('button');
@@ -7433,13 +7600,7 @@
     const activeTabId = strip?.getAttribute('data-active-tab-id') || '';
     const isStudioActiveTab = activeTabId === RIGHT_PANE_TARGETS.studio.tabId;
 
-    if (!inConvo || !split || !isAuxOpen || !activeTabId || isStudioActiveTab) {
-      teardownPinnedStudioDock();
-      return;
-    }
-
-    const splitRect = typeof split.getBoundingClientRect === 'function' ? split.getBoundingClientRect() : null;
-    if (splitRect && splitRect.width > 0 && splitRect.width < DOCK_MIN_SPLIT_WIDTH) {
+    if (!inConvo || !split) {
       teardownPinnedStudioDock();
       return;
     }
@@ -7449,6 +7610,121 @@
       teardownPinnedStudioDock();
       return;
     }
+
+    ensureDockToggleListeners();
+
+    const now = Date.now();
+    const prevTab = pinnedDock.prevActiveTabId;
+    const prevAuxOpen = pinnedDock.prevAuxOpen;
+    if (activeTabId && !isStudioActiveTab) {
+      pinnedDock.lastNonStudioTabId = activeTabId;
+      pinnedDock.auxCloseAttempted = false;
+      pinnedDock.bounceAt = 0;
+    }
+    if (!isAuxOpen) {
+      pinnedDock.auxCloseAttempted = false;
+      pinnedDock.userForcedAuxOpen = false;
+      if (prevAuxOpen) pinnedDock.userToggledAuxAt = 0;
+    }
+    pinnedDock.prevActiveTabId = activeTabId;
+    pinnedDock.prevAuxOpen = isAuxOpen;
+
+    const recentUserAuxToggle = now - pinnedDock.userToggledAuxAt < 1500;
+    if (isAuxOpen && !prevAuxOpen && recentUserAuxToggle) {
+      pinnedDock.userForcedAuxOpen = true;
+      pinnedDock.userToggledAuxAt = 0;
+    }
+
+    // If user explicitly re-entered Claude Studio (e.g. via Plugins -> Claude Studio)
+    // while the pinned dock was collapsed, expand the pinned dock instead of yielding.
+    const reenteredStudio = isAuxOpen && isStudioActiveTab && (
+      (prevTab && prevTab !== RIGHT_PANE_TARGETS.studio.tabId) ||
+      (!prevAuxOpen && !recentUserAuxToggle)
+    );
+    if (reenteredStudio && pinnedDock.collapsed) {
+      pinnedDock.collapsed = false;
+      try {
+        localStorage.setItem(DOCK_COLLAPSED_KEY, '0');
+      } catch {}
+    }
+
+    let soloMode = !isAuxOpen || isStudioActiveTab;
+    if (isAuxOpen && isStudioActiveTab && strip) {
+      const otherTabBtn = findNonStudioTabButton(strip, pinnedDock.lastNonStudioTabId);
+      const newTabBtn = strip.querySelector('[data-testid="side-panel-new-tab-button"]');
+      const wasBlankNewTab = /^newTab__/i.test(pinnedDock.lastNonStudioTabId);
+
+      if (!prevAuxOpen && !recentUserAuxToggle && !pinnedDock.userForcedAuxOpen) {
+        // Right sidebar was CLOSED and user clicked Plugins -> Claude Studio (or auto-boot opened Studio):
+        // stay in pinned solo mode and quietly close the native right sidebar back so it does not pop open.
+        const toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+        if (toggleBtn && typeof toggleBtn.click === 'function' && !pinnedDock.auxCloseAttempted) {
+          pinnedDock.auxCloseAttempted = true;
+          pinnedDock.internalToggleClick = true;
+          try {
+            toggleBtn.click();
+          } catch {}
+          pinnedDock.internalToggleClick = false;
+          const nextAuxOpen = auxPane ? auxPane.getAttribute('data-aux-pane-open') === 'true' : false;
+          pinnedDock.prevAuxOpen = nextAuxOpen;
+          if (!nextAuxOpen) pinnedDock.auxCloseAttempted = false;
+        }
+      } else if (otherTabBtn && typeof otherTabBtn.click === 'function') {
+        // Right sidebar was already open (or user toggled it open) and another non-Studio tab exists ->
+        // bounce back to keep 3-column mode intact without showing a duplicate Studio tab.
+        if (now - pinnedDock.bounceAt >= 250) {
+          pinnedDock.bounceAt = now;
+          try {
+            otherTabBtn.click();
+          } catch {}
+          const refreshedTabId = strip.getAttribute('data-active-tab-id') || '';
+          if (refreshedTabId && refreshedTabId !== RIGHT_PANE_TARGETS.studio.tabId) {
+            pinnedDock.lastNonStudioTabId = refreshedTabId;
+            pinnedDock.prevActiveTabId = refreshedTabId;
+            soloMode = false;
+          }
+        }
+      } else if (pinnedDock.userForcedAuxOpen || recentUserAuxToggle || (prevAuxOpen && wasBlankNewTab)) {
+        // User explicitly toggled open the right native aux pane (or was viewing the blank new tab):
+        // never swallow the right blank panel; open Antigravity's native New Tab if available.
+        soloMode = false;
+        if (newTabBtn && typeof newTabBtn.click === 'function' && now - pinnedDock.bounceAt >= 250) {
+          pinnedDock.bounceAt = now;
+          try {
+            newTabBtn.click();
+          } catch {}
+          const refreshedTabId = strip.getAttribute('data-active-tab-id') || '';
+          if (refreshedTabId && refreshedTabId !== RIGHT_PANE_TARGETS.studio.tabId) {
+            pinnedDock.lastNonStudioTabId = refreshedTabId;
+            pinnedDock.prevActiveTabId = refreshedTabId;
+          }
+        }
+      } else {
+        // Native aux pane only holds a redundant Studio tab (e.g. last other tab was just closed):
+        // quietly close the native aux container once so the top-right toggle button stays accurate.
+        const toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+        if (toggleBtn && typeof toggleBtn.click === 'function' && !pinnedDock.auxCloseAttempted) {
+          pinnedDock.auxCloseAttempted = true;
+          pinnedDock.internalToggleClick = true;
+          try {
+            toggleBtn.click();
+          } catch {}
+          pinnedDock.internalToggleClick = false;
+          const nextAuxOpen = auxPane ? auxPane.getAttribute('data-aux-pane-open') === 'true' : false;
+          pinnedDock.prevAuxOpen = nextAuxOpen;
+          if (!nextAuxOpen) pinnedDock.auxCloseAttempted = false;
+        }
+      }
+    }
+
+    const minRequiredWidth = soloMode ? DOCK_MIN_SOLO_SPLIT_WIDTH : DOCK_MIN_SPLIT_WIDTH;
+    const splitRect = typeof split.getBoundingClientRect === 'function' ? split.getBoundingClientRect() : null;
+    if (splitRect && splitRect.width > 0 && splitRect.width < minRequiredWidth) {
+      teardownPinnedStudioDock();
+      return;
+    }
+
+    pinnedDock.soloMode = soloMode;
 
     const dockEl = ensurePinnedDockElement();
     if (pinnedDock.splitEl !== split) {
@@ -9292,7 +9568,7 @@
       characterData: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class'],
+      attributeFilter: ['class', 'data-aux-pane-open', 'data-active-tab-id'],
     });
     for (const [evName, handler] of DOC_LISTENERS) {
       document.addEventListener(evName, handler, true);
@@ -9664,6 +9940,7 @@
         hasCrab: Boolean(crabState.root && crabState.root.isConnected),
         hasPinnedDock: Boolean(pinnedDock.el && pinnedDock.el.isConnected),
         pinnedDockCollapsed: Boolean(pinnedDock.collapsed),
+        pinnedDockSolo: Boolean(pinnedDock.soloMode),
         hasSmoothCaret: Boolean(document.querySelector('.ag-cs-smooth-caret')),
         hasEffortPopover: Boolean(openEffortPop && openEffortPop.isConnected),
         hasContextPopover: Boolean(openPopover && openPopover.isConnected),

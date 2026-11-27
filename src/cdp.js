@@ -951,12 +951,15 @@ const REMOVE_EXPRESSION = `(() => {
     }
     if (root.getAttribute('data-ag-cjk') === '1') root.removeAttribute('data-ag-cjk');
   }
-  document.querySelectorAll('[data-ag-cs-dock-open]').forEach((el) => {
+  document.querySelectorAll('[data-ag-cs-dock-open], [data-ag-cs-dock-solo]').forEach((el) => {
     el.removeAttribute('data-ag-cs-dock-open');
+    el.removeAttribute('data-ag-cs-dock-solo');
     el.style?.removeProperty?.('--ag-cs-dock-w');
+    el.style?.removeProperty?.('--ag-cs-dock-solo-pr');
   });
-  document.querySelectorAll('[data-ag-cs-docked-slot]').forEach((slot) => {
+  document.querySelectorAll('[data-ag-cs-docked-slot], [data-ag-cs-dock-hidden]').forEach((slot) => {
     slot.removeAttribute('data-ag-cs-docked-slot');
+    slot.removeAttribute('data-ag-cs-dock-hidden');
     const ov = slot.parentElement;
     if (ov?.style?.removeProperty) {
       ov.style.removeProperty('--ag-cs-dock-slot-left');
