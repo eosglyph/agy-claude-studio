@@ -1595,67 +1595,112 @@ async function discoverRunningHostExecutable({ platform = process.platform, exec
   return { found: false, kind: '', executablePath: '', appBundlePath: '' };
 }
 
+const WINDOWS_RELAUNCH_PROXY_ENV_KEYS = Object.freeze([
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'ALL_PROXY',
+  'NO_PROXY',
+  'NODE_USE_ENV_PROXY',
+]);
+const WINDOWS_RELAUNCH_PROXY_ENV_KEY_SET = new Set(WINDOWS_RELAUNCH_PROXY_ENV_KEYS);
+
+function extractProcessProxyEnv(env = {}) {
+  const exact = Object.create(null);
+  const fallback = Object.create(null);
+  if (!env || typeof env !== 'object') return {};
+
+  for (const [rawKey, rawVal] of Object.entries(env)) {
+    const canonicalKey = String(rawKey || '').toUpperCase();
+    if (!WINDOWS_RELAUNCH_PROXY_ENV_KEY_SET.has(canonicalKey)) continue;
+    if (typeof rawVal !== 'string' || rawVal.trim().length === 0) continue;
+    if (/[\r\n\0]/.test(rawVal)) continue;
+
+    if (rawKey === canonicalKey) {
+      exact[canonicalKey] = rawVal;
+    } else if (!(canonicalKey in fallback)) {
+      fallback[canonicalKey] = rawVal;
+    }
+  }
+
+  const out = {};
+  for (const key of WINDOWS_RELAUNCH_PROXY_ENV_KEYS) {
+    if (key in exact) {
+      out[key] = exact[key];
+    } else if (key in fallback) {
+      out[key] = fallback[key];
+    }
+  }
+  return out;
+}
+
 function psSingleQuote(val) {
   return `'${String(val ?? '').replace(/'/g, "''")}'`;
 }
 
-function buildWindowsRelaunchInnerScript(executablePath, stalePortFiles = [], kind = 'desktop') {
+function buildWindowsRelaunchInnerScript(executablePath, stalePortFiles = [], kind = 'desktop', env = null) {
   const procName = kind === 'ide' ? 'Antigravity IDE' : 'Antigravity';
   const portLiterals = (Array.isArray(stalePortFiles) ? stalePortFiles : [])
     .map((p) => String(p || '').trim())
     .filter(Boolean)
     .map(psSingleQuote)
     .join(', ');
+  const proxyEnv = extractProcessProxyEnv(env);
+  const proxyEnvLines = Object.entries(proxyEnv).map(
+    ([key, val]) => `    [System.Environment]::SetEnvironmentVariable(${psSingleQuote(key)}, ${psSingleQuote(val)}, 'Process')`
+  );
+  const proxyEnvBlock = proxyEnvLines.length > 0 ? `${proxyEnvLines.join('\n')}\n` : '';
 
   return `
-Start-Sleep -Milliseconds 480
-$exe = ${psSingleQuote(executablePath)}
-$procName = ${psSingleQuote(procName)}
-$staleList = @(${portLiterals})
-$mySid = (Get-Process -Id $PID).SessionId
+try {
+  Start-Sleep -Milliseconds 480
+  $exe = ${psSingleQuote(executablePath)}
+  $procName = ${psSingleQuote(procName)}
+  $staleList = @(${portLiterals})
+  $mySid = (Get-Process -Id $PID).SessionId
 
-if (-not $exe -or -not (Test-Path -LiteralPath $exe)) {
-  $livePath = Get-Process -Name $procName -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySid -and $_.Path } | Select-Object -First 1 -ExpandProperty Path
-  if ($livePath) { $exe = [string]$livePath }
-}
-
-$findTargets = {
-  @(Get-Process -Name $procName -ErrorAction SilentlyContinue | Where-Object {
-    $_.SessionId -eq $mySid -and (-not $_.Path -or -not $exe -or [string]::Equals($_.Path, $exe, [System.StringComparison]::OrdinalIgnoreCase))
-  })
-}
-
-$initial = & $findTargets
-foreach ($p in $initial) {
-  try {
-    if ($p.MainWindowHandle -ne 0) { [void]$p.CloseMainWindow() }
-  } catch {}
-}
-Start-Sleep -Milliseconds 850
-
-$remaining = & $findTargets
-foreach ($p in $remaining) {
-  try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
-}
-
-for ($i = 0; $i -lt 30; $i++) {
-  if ((& $findTargets).Count -eq 0) { break }
-  Start-Sleep -Milliseconds 200
-}
-
-foreach ($fp in $staleList) {
-  if ($fp -and (Test-Path -LiteralPath $fp)) {
-    try { Remove-Item -LiteralPath $fp -Force -ErrorAction SilentlyContinue } catch {}
+  if (-not $exe -or -not (Test-Path -LiteralPath $exe)) {
+    $livePath = Get-Process -Name $procName -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySid -and $_.Path } | Select-Object -First 1 -ExpandProperty Path
+    if ($livePath) { $exe = [string]$livePath }
   }
-}
 
-if ($exe -and (Test-Path -LiteralPath $exe)) {
-  $workDir = Split-Path -Parent $exe
-  Start-Process -FilePath $exe -ArgumentList '--remote-debugging-port=0' -WorkingDirectory $workDir
-}
+  $findTargets = {
+    @(Get-Process -Name $procName -ErrorAction SilentlyContinue | Where-Object {
+      $_.SessionId -eq $mySid -and (-not $_.Path -or -not $exe -or [string]::Equals($_.Path, $exe, [System.StringComparison]::OrdinalIgnoreCase))
+    })
+  }
 
-if ($PSCommandPath -and (Test-Path -LiteralPath $PSCommandPath)) {
-  Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+  $initial = & $findTargets
+  foreach ($p in $initial) {
+    try {
+      if ($p.MainWindowHandle -ne 0) { [void]$p.CloseMainWindow() }
+    } catch {}
+  }
+  Start-Sleep -Milliseconds 850
+
+  $remaining = & $findTargets
+  foreach ($p in $remaining) {
+    try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
+  }
+
+  for ($i = 0; $i -lt 30; $i++) {
+    if ((& $findTargets).Count -eq 0) { break }
+    Start-Sleep -Milliseconds 200
+  }
+
+  foreach ($fp in $staleList) {
+    if ($fp -and (Test-Path -LiteralPath $fp)) {
+      try { Remove-Item -LiteralPath $fp -Force -ErrorAction SilentlyContinue } catch {}
+    }
+  }
+
+  if ($exe -and (Test-Path -LiteralPath $exe)) {
+    $workDir = Split-Path -Parent $exe
+${proxyEnvBlock}    Start-Process -FilePath $exe -ArgumentList '--remote-debugging-port=0' -WorkingDirectory $workDir
+  }
+} finally {
+  if ($PSCommandPath -and (Test-Path -LiteralPath $PSCommandPath)) {
+    Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+  }
 }
 `.trim();
 }
@@ -1684,6 +1729,7 @@ async function triggerDesktopHostRelaunch({
   existsFn = fs.existsSync,
   writeFileFn = fs.writeFileSync,
   mkdirFn = fs.mkdirSync,
+  unlinkFn = fs.unlinkSync,
   allowInTest = false,
 } = {}) {
   if (
@@ -1715,7 +1761,8 @@ async function triggerDesktopHostRelaunch({
     const innerScript = buildWindowsRelaunchInnerScript(
       hostInfo.executablePath,
       cleanStaleFiles,
-      hostInfo.kind
+      hostInfo.kind,
+      cleanEnv
     );
     const resolvedTempDir = String(tempDir || env?.TEMP || env?.TMP || os.tmpdir()).trim();
     mkdirFn(resolvedTempDir, { recursive: true });
@@ -1724,25 +1771,32 @@ async function triggerDesktopHostRelaunch({
     writeFileFn(relaunchPs1Path, `\uFEFF${innerScript}\r\n`, 'utf8');
 
     const runner = execFileFn || runLauncherExecFile;
-    await runner(
-      'powershell.exe',
-      [
-        '-Sta',
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        WIN_OUT_OF_JOB_DISPATCH_PS,
-      ],
-      {
-        timeoutMs: 6000,
-        env: {
-          ...cleanEnv,
-          AGY_RELAUNCH_PS1: relaunchPs1Path,
-        },
-      }
-    );
+    try {
+      await runner(
+        'powershell.exe',
+        [
+          '-Sta',
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          WIN_OUT_OF_JOB_DISPATCH_PS,
+        ],
+        {
+          timeoutMs: 6000,
+          env: {
+            ...cleanEnv,
+            AGY_RELAUNCH_PS1: relaunchPs1Path,
+          },
+        }
+      );
+    } catch (err) {
+      try {
+        unlinkFn(relaunchPs1Path);
+      } catch {}
+      throw err;
+    }
     return {
       ok: true,
       relaunching: true,
@@ -1844,6 +1898,7 @@ const LEGACY_FLAT_ROOT_SHA256 = Object.freeze({
     '97383e33448fa6b37d23251c7221ec4e1c0eefaa1c383552e8f81ef851f26c31',
   ]),
   'lifecycle.js': Object.freeze([
+    '8bc2bbe3855480d827c12487e38e804b2fe9722d9c56efe2ef7963226a6cd317',
     '3e9370e5b42003948fa659fb78cc337a3625b24b9aa9042311cd01a1e175e43a',
   ]),
   'mascot-core.js': Object.freeze([
@@ -2041,6 +2096,8 @@ module.exports = {
   patchWindowsRunRegistryCommand,
   patchLinuxDesktopEntryText,
   ensureDesktopRemoteDebuggingLaunchers,
+  WINDOWS_RELAUNCH_PROXY_ENV_KEYS,
+  extractProcessProxyEnv,
   buildSanitizedDesktopRelaunchEnv,
   resolveDesktopHostExecutable,
   buildWindowsRelaunchInnerScript,
