@@ -4107,3 +4107,296 @@ test('Environment container worktree detection discovers .repo & worktree/* layo
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
 });
+
+test('Sticky dock selects active conversation Studio iframe, syncs active conversation via postMessage, and replaces existing slash tokens cleanly', async () => {
+  const cdp = require('../src/cdp.js');
+  const timers = new Set();
+
+  function makeEl(tag, attrs = {}) {
+    const attrMap = new Map(Object.entries(attrs));
+    const classes = new Set((attrs.class || '').split(/\s+/).filter(Boolean));
+    const listeners = new Map();
+    const styleProps = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      children: [],
+      isConnected: true,
+      _text: '',
+      _rect: { left: 0, top: 0, right: 1200, bottom: 800, width: 1200, height: 800 },
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        contains: (c) => classes.has(c),
+        toggle: (c, f) => (f === undefined ? (classes.has(c) ? classes.delete(c) : classes.add(c)) : f ? classes.add(c) : classes.delete(c)),
+      },
+      style: {
+        setProperty(k, v) { styleProps.set(k, String(v)); },
+        getPropertyValue(k) { return styleProps.get(k) || ''; },
+        removeProperty(k) { styleProps.delete(k); },
+      },
+      get textContent() {
+        if (this.children.length > 0) return this.children.map((c) => c.textContent).join('');
+        return this._text;
+      },
+      set textContent(v) {
+        this._text = String(v ?? '');
+        this.children = [];
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((x) => classes.add(x)); },
+      get src() { return attrMap.get('src') || ''; },
+      set src(v) { attrMap.set('src', String(v)); },
+      getAttribute(k) { return attrMap.has(k) ? attrMap.get(k) : null; },
+      setAttribute(k, v) { attrMap.set(k, String(v)); if (k === 'class') this.className = v; },
+      removeAttribute(k) { attrMap.delete(k); },
+      hasAttribute(k) { return attrMap.has(k); },
+      appendChild(c) { c.parentElement = this; this.children.push(c); return c; },
+      append(...nodes) { nodes.forEach((n) => this.appendChild(n)); },
+      remove() {
+        if (this.parentElement) {
+          this.parentElement.children = this.parentElement.children.filter((x) => x !== this);
+          this.parentElement = null;
+        }
+        this.isConnected = false;
+      },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      removeEventListener() {},
+      dispatchEvent() { return true; },
+      focus() {},
+      getBoundingClientRect() { return this._rect; },
+      matches(sel) {
+        for (const part of sel.split(',').map((s) => s.trim())) {
+          if (part === '[data-testid="agent-input-box"] .surface-composer-card' && classes.has('surface-composer-card') && this.closest('[data-testid="agent-input-box"]')) return true;
+          if (part === '[data-testid="agent-input-box"] [contenteditable="true"]' && this.getAttribute('contenteditable') === 'true' && this.closest('[data-testid="agent-input-box"]')) return true;
+          if (part === '[data-testid="conversation-view"]' && this.getAttribute('data-testid') === 'conversation-view') return true;
+          if (part === '[data-testid="agent-input-box"]' && this.getAttribute('data-testid') === 'agent-input-box') return true;
+          if (part === '.surface-composer-card' && classes.has('surface-composer-card')) return true;
+          if (part === '[contenteditable="true"]' && this.getAttribute('contenteditable') === 'true') return true;
+          if (part === '[data-testid="sidecar-iframe-slot"]' && this.getAttribute('data-testid') === 'sidecar-iframe-slot') return true;
+          if (part === '[data-testid="aux-pane-split"]' && this.getAttribute('data-testid') === 'aux-pane-split') return true;
+          if (part === '[data-aux-pane-open]' && this.hasAttribute('data-aux-pane-open')) return true;
+          if (part === '[data-side-panel-strip]' && this.hasAttribute('data-side-panel-strip')) return true;
+          if (part === '[data-lexical-decorator]' && this.hasAttribute('data-lexical-decorator')) return true;
+          if (part === '[data-lexical-decorator="true"]' && this.getAttribute('data-lexical-decorator') === 'true') return true;
+          if (part === '[data-chip]' && this.hasAttribute('data-chip')) return true;
+          if (part === 'iframe[src*="agy-claude-studio--studio"]' && this.tagName === 'IFRAME' && this.src.includes('agy-claude-studio--studio')) return true;
+        }
+        return false;
+      },
+      closest(sel) {
+        for (let cur = this; cur; cur = cur.parentElement) {
+          if (cur.matches(sel)) return cur;
+        }
+        return null;
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const ch of n.children) {
+            if (ch.matches(sel)) out.push(ch);
+            walk(ch);
+          }
+        };
+        walk(this);
+        return out;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+    };
+    return el;
+  }
+
+  const cid1 = '11111111-1111-4111-8111-111111111111';
+  const cid2 = '22222222-2222-4222-8222-222222222222';
+  const cid3 = '33333333-3333-4333-8333-333333333333';
+
+  const body = makeEl('body');
+  const head = makeEl('head');
+  const docEl = makeEl('html');
+  docEl.append(head, body);
+
+  const split = makeEl('div', { 'data-testid': 'aux-pane-split' });
+  split._rect = { left: 0, top: 0, right: 1400, bottom: 900, width: 1400, height: 900 };
+  const auxPane = makeEl('div', { 'data-aux-pane-open': 'false' });
+  const strip = makeEl('div', { 'data-side-panel-strip': '', 'data-active-tab-id': '' });
+  const cv = makeEl('div', { 'data-testid': 'conversation-view', 'data-cascade-id': cid2 });
+  const box = makeEl('div', { 'data-testid': 'agent-input-box' });
+  const card = makeEl('div', { class: 'surface-composer-card' });
+  const ed = makeEl('div', { contenteditable: 'true' });
+
+  // Simulate Lexical editor with an existing /compact chip + preset text
+  let lexChildren = [
+    { type: 'beautifulMention', trigger: '/', value: 'compact' },
+    { type: 'text', text: ' drop finished noise' },
+  ];
+  let lexClearCount = 0;
+  let lexStickyClears = 0;
+  const stickyCmd = { type: 'CLEAR_DISMISSED_STICKY_MENTION_COMMAND' };
+  const lexRoot = {
+    clear() {
+      lexClearCount += 1;
+      lexChildren = [];
+      ed.textContent = '';
+    },
+    select() {},
+  };
+  const nodeMap = new Map([['root', lexRoot]]);
+  ed.__lexicalEditor = {
+    _commands: new Map([[stickyCmd, [new Set()]]]),
+    _editorState: { _nodeMap: nodeMap },
+    _pendingEditorState: { _nodeMap: nodeMap },
+    getEditorState() {
+      return {
+        toJSON: () => ({
+          root: { children: lexChildren.length ? [{ type: 'paragraph', children: lexChildren }] : [] },
+        }),
+      };
+    },
+    dispatchCommand(cmd) {
+      if (cmd === stickyCmd) lexStickyClears += 1;
+      return true;
+    },
+    update(fn) { fn(); },
+  };
+  const compactChipEl = makeEl('span', { 'data-lexical-decorator': 'true' });
+  compactChipEl.textContent = 'compact';
+  const presetTextEl = makeEl('span');
+  presetTextEl.textContent = ' drop finished noise';
+  ed.append(compactChipEl, presetTextEl);
+
+  card.appendChild(ed);
+  box.appendChild(card);
+  cv.appendChild(box);
+  split.append(cv, auxPane, strip);
+
+  // Two Studio sidecar slots in DOM: convo1 cached first, convo2 second
+  const overlay = makeEl('div');
+  overlay._rect = { left: 0, top: 0, right: 1400, bottom: 900, width: 1400, height: 900 };
+  const postedMsgs = { iframe1: [], iframe2: [] };
+  const slot1 = makeEl('div', {
+    'data-testid': 'sidecar-iframe-slot',
+    'data-sidecar-id': 'agy-claude-studio/studio',
+    'data-sidecar-url': `plugin://agy-claude-studio--studio-4332/?token=t&conversationId=${cid1}`,
+    'data-visible': 'false',
+  });
+  const iframe1 = makeEl('iframe', {
+    src: `plugin://agy-claude-studio--studio-4332/?token=t&conversationId=${cid1}`,
+  });
+  iframe1.contentWindow = { postMessage(msg) { postedMsgs.iframe1.push(msg); } };
+  slot1.appendChild(iframe1);
+
+  const slot2 = makeEl('div', {
+    'data-testid': 'sidecar-iframe-slot',
+    'data-sidecar-id': 'agy-claude-studio/studio',
+    'data-sidecar-url': `plugin://agy-claude-studio--studio-4332/?token=t&conversationId=${cid2}`,
+    'data-visible': 'false',
+  });
+  const iframe2 = makeEl('iframe', {
+    src: `plugin://agy-claude-studio--studio-4332/?token=t&conversationId=${cid2}`,
+  });
+  iframe2.contentWindow = { postMessage(msg) { postedMsgs.iframe2.push(msg); } };
+  slot2.appendChild(iframe2);
+  overlay.append(slot1, slot2);
+  body.append(split, overlay);
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    createElement: (t) => {
+      const n = makeEl(t);
+      n._rect = { left: 1080, top: 70, right: 1390, bottom: 880, width: 310, height: 810 };
+      return n;
+    },
+    querySelector: (sel) => docEl.querySelector(sel),
+    querySelectorAll: (sel) => docEl.querySelectorAll(sel),
+    getElementById: () => null,
+    addEventListener() {},
+    removeEventListener() {},
+    execCommand(cmd, _ui, val) {
+      if (cmd === 'insertText') {
+        ed.textContent = String(val || '');
+        return true;
+      }
+      return true;
+    },
+  };
+
+  const sandbox = {
+    document: doc,
+    location: { href: `https://127.0.0.1:2015/c/${cid2}`, protocol: 'https:', hostname: '127.0.0.1', pathname: `/c/${cid2}` },
+    URL,
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio', mascot: false }), sandbox);
+    await new Promise((r) => setTimeout(r, 40));
+
+    // 1. Sticky dock must pin convo2's slot (not cached convo1's slot)
+    assert.equal(slot2.getAttribute('data-ag-cs-docked-slot'), '1', 'Active conversation2 Studio slot must be docked');
+    assert.equal(slot1.getAttribute('data-ag-cs-docked-slot'), null, 'Cached conversation1 Studio slot must NOT be docked');
+
+    // 2. Switching to convo3 (which has no dedicated iframe yet) notifies fallback iframe via postMessage
+    cv.setAttribute('data-cascade-id', cid3);
+    sandbox.location.pathname = `/c/${cid3}`;
+    sandbox.window.__agClaudeStudio.syncNow?.();
+    await new Promise((r) => setTimeout(r, 40));
+    const allPosted = [...postedMsgs.iframe1, ...postedMsgs.iframe2];
+    assert.ok(
+      allPosted.some((m) => m?.type === 'ag-cs:active-conversation' && m.conversationId === cid3),
+      'Fallback docked iframe must be notified of active conversation change via postMessage'
+    );
+
+    // 3. Replacing an existing /compact slash token with /btw clears Lexical cleanly and writes /btw
+    cv.setAttribute('data-cascade-id', cid2);
+    sandbox.location.pathname = `/c/${cid2}`;
+    const replaceCompactRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    assert.equal(replaceCompactRes.ok, true, 'fillBtwCommand must replace existing /compact slash token');
+    assert.ok(lexClearCount >= 1, 'Lexical root.clear() must be invoked to remove existing slash decorator');
+    assert.ok(lexStickyClears >= 1, 'CLEAR_DISMISSED_STICKY_MENTION_COMMAND must be dispatched');
+    assert.equal(ed.textContent, '/btw');
+
+    // 4. Non-slash @file mention chip is still protected as draft_present
+    lexChildren = [
+      { type: 'contextScopeItemMention', trigger: '@', value: 'src/cdp.js' },
+      { type: 'text', text: ' check this file' },
+    ];
+    ed.textContent = '';
+    const fileChip = makeEl('span', { 'data-lexical-decorator': 'true' });
+    fileChip.textContent = '@src/cdp.js';
+    ed.appendChild(fileChip);
+    const keepFileDraftRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    assert.equal(keepFileDraftRes.ok, false);
+    assert.equal(keepFileDraftRes.reason, 'draft_present', 'Non-slash @file mention draft must still be preserved');
+
+    // 5. Verify Studio HTML renders unified /btw header & handles active-conversation postMessage + draft_present toast
+    const html = fs.readFileSync(new URL('../sidecars/studio/index.html', import.meta.url), 'utf8');
+    assert.match(html, /msg\.type !== 'ag-cs:active-conversation'/);
+    assert.match(html, /if \(reason === 'draft_present'\)/);
+    const renderFnMatch = html.match(/function renderLiveBtwBlock\(c\) \{[\s\S]*?\n    \}/);
+    assert.ok(renderFnMatch, 'renderLiveBtwBlock exists');
+    const headIdx = renderFnMatch[0].indexOf("head.className = 'cd-btw-head'");
+    const emptyIdx = renderFnMatch[0].indexOf('if (items.length === 0)');
+    assert.ok(headIdx > 0 && emptyIdx > headIdx, 'Unified .cd-btw-head must render for both empty and non-empty /btw states');
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});

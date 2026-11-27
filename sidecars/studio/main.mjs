@@ -354,10 +354,10 @@ async function queryHostSideQuestions(preferredConversationId = '') {
         const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.getSideQuestionsState === "function") ? api.getSideQuestionsState(${JSON.stringify(reqId)}) : null; })()`;
         const res = await sess.evaluate(expr, false);
         if (res && res.ok) {
-          if ((Array.isArray(res.items) && res.items.length > 0) || !reqId || res.conversationId === reqId) {
+          if (!reqId ? (Array.isArray(res.items) && res.items.length > 0) : res.conversationId === reqId) {
             return res;
           }
-          fallback = res;
+          if (!fallback.ok) fallback = res;
         }
       } catch {
         // try next target
@@ -371,7 +371,7 @@ async function queryHostSideQuestions(preferredConversationId = '') {
 
 function shouldContinueSideQuestionSearch(res) {
   if (!res || res.ok) return false;
-  const tag = String(res.reason || res.status || '').trim();
+  const tag = String(res.reason || res.action || res.status || '').trim();
   return !tag || tag === 'conversation_not_found' || tag === 'not_injected' || tag === 'composer_not_found';
 }
 
@@ -1990,11 +1990,12 @@ async function getLiveTasksApi({
         sumRes?.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
           ? sumRes.data.trajectorySummaries
           : {};
-      const activeConvoId = sideQ?.conversationId || reqConvoId || '';
+      const sideQMatchesReq = !reqConvoId || !sideQ?.conversationId || sideQ.conversationId === reqConvoId;
+      const activeConvoId = reqConvoId || sideQ?.conversationId || '';
       return {
         ...fallback,
         sideQuestionConvoId: activeConvoId,
-        sideQuestions: mergeSideQuestionItems(sideQ?.items, activeConvoId, summaries),
+        sideQuestions: mergeSideQuestionItems(sideQMatchesReq ? sideQ?.items : [], activeConvoId, summaries),
       };
     }
     return {
@@ -2124,8 +2125,9 @@ async function getLiveTasksApi({
     );
   }
 
-  const activeConvoId = sideQ?.conversationId || reqConvoId || running.find((r) => !r.isSideQuestion)?.id || recent[0]?.id || '';
-  const mergedSideQuestions = mergeSideQuestionItems(sideQ?.items, activeConvoId, summaries);
+  const sideQMatchesReq = !reqConvoId || !sideQ?.conversationId || sideQ.conversationId === reqConvoId;
+  const activeConvoId = reqConvoId || sideQ?.conversationId || running.find((r) => !r.isSideQuestion)?.id || recent[0]?.id || '';
+  const mergedSideQuestions = mergeSideQuestionItems(sideQMatchesReq ? sideQ?.items : [], activeConvoId, summaries);
 
   return {
     ok: true,
