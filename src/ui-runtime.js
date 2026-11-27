@@ -81,6 +81,10 @@
     return val === 'obsidian-dark' || val === 'claude-dark';
   }
 
+  function isExplicitLightPalette(val) {
+    return val === 'obsidian' || val === 'claude';
+  }
+
   function normalizePaletteId(val) {
     if (
       val === 'claude' ||
@@ -102,10 +106,10 @@
     const ui = uiText(lang);
     const p = normalizePaletteId(val);
     if (p === 'claude-dark') return ui.optClaudeDark || 'Claude (Dark)';
-    if (p === 'claude') return 'Claude';
+    if (p === 'claude') return ui.optClaude || 'Claude (Light)';
     if (p === 'obsidian-dark') return ui.optObsidianDark || 'Obsidian (Dark)';
     if (p === 'host') return ui.optHost || 'Host';
-    return ui.optObsidian || 'Obsidian';
+    return ui.optObsidian || 'Obsidian (Light)';
   }
 
   function isUsageStatsEnabled() {
@@ -362,7 +366,9 @@
   }
 
   function isDarkTheme() {
-    if (isExplicitDarkPalette(getEffectivePalette())) return true;
+    const p = getEffectivePalette();
+    if (isExplicitDarkPalette(p)) return true;
+    if (isExplicitLightPalette(p)) return false;
     const b = document.body?.classList;
     const h = document.documentElement?.classList;
     if (b?.contains('theme-light') || b?.contains('light-theme') || b?.contains('light')) return false;

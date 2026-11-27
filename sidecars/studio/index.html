@@ -103,6 +103,68 @@
       --toast-fg: #f4f5f8;
       --shadow-sm: none;
     }
+    :root[data-palette="claude"] {
+      color-scheme: light !important;
+      --background: #fafafa !important;
+      --foreground: #161616 !important;
+      --muted-foreground: #70696b !important;
+      --card: #ffffff !important;
+      --border: #e9e9e9 !important;
+      --bg: #fafafa;
+      --fg: #161616;
+      --muted-fg: #70696b;
+      --card-bg: #ffffff;
+      --card-elev: #f4f4f4;
+      --border-col: #dedede;
+      --divider-col: #e9e9e9;
+      --control-bg: rgba(22, 22, 22, 0.04);
+      --control-hover: rgba(22, 22, 22, 0.075);
+      --select-bg: #ffffff;
+      --tab-active-bg: #ffffff;
+      --input-bg: #ffffff;
+      --badge-bg: rgba(217, 119, 87, 0.12);
+      --brand-accent: #d97757;
+      --brand-accent-hover: #c6613f;
+      --brand-accent-soft: rgba(217, 119, 87, 0.12);
+      --switch-off: rgba(22, 22, 22, 0.16);
+      --ok: #1f9d4c;
+      --ok-soft: rgba(31, 157, 76, 0.1);
+      --warn-bg: rgba(210, 153, 34, 0.09);
+      --toast-bg: rgba(22, 22, 22, 0.94);
+      --toast-fg: #ffffff;
+      --shadow-sm: none;
+    }
+    :root[data-palette="obsidian"] {
+      color-scheme: light !important;
+      --background: #f7f9ff !important;
+      --foreground: #131416 !important;
+      --muted-foreground: #646871 !important;
+      --card: #ffffff !important;
+      --border: #e3e6ef !important;
+      --bg: #f7f9ff;
+      --fg: #131416;
+      --muted-fg: #646871;
+      --card-bg: #ffffff;
+      --card-elev: #f0f1f4;
+      --border-col: #d4d8e3;
+      --divider-col: #e3e6ef;
+      --control-bg: rgba(19, 20, 22, 0.04);
+      --control-hover: rgba(19, 20, 22, 0.075);
+      --select-bg: #ffffff;
+      --tab-active-bg: #ffffff;
+      --input-bg: #ffffff;
+      --badge-bg: rgba(77, 107, 254, 0.12);
+      --brand-accent: #4d6bfe;
+      --brand-accent-hover: #3b56d9;
+      --brand-accent-soft: rgba(77, 107, 254, 0.12);
+      --switch-off: rgba(19, 20, 22, 0.16);
+      --ok: #1f9d4c;
+      --ok-soft: rgba(31, 157, 76, 0.1);
+      --warn-bg: rgba(210, 153, 34, 0.09);
+      --toast-bg: rgba(19, 20, 22, 0.94);
+      --toast-fg: #fbfcff;
+      --shadow-sm: none;
+    }
     :root[data-palette="claude-dark"] {
       color-scheme: dark !important;
       --background: #1f1f1f !important;
@@ -165,6 +227,8 @@
       --toast-fg: #f4f9ff;
       --shadow-sm: none;
     }
+    :root[data-palette="claude"] body,
+    :root[data-palette="obsidian"] body,
     :root[data-palette="claude-dark"] body,
     :root[data-palette="obsidian-dark"] body {
       background: var(--bg) !important;
@@ -2212,7 +2276,6 @@
     .cd-role-pill.is-btw {
       background: color-mix(in srgb, var(--brand-accent) 14%, transparent);
       color: var(--brand-accent);
-      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
     }
     .cd-live-item.is-clickable {
       cursor: pointer;
@@ -2996,37 +3059,37 @@
   <script>
     const PALETTE_OPTS = {
       'zh-CN': [
-        ['obsidian', '黑曜石'],
+        ['obsidian', '黑曜石（浅色）'],
         ['obsidian-dark', '黑曜石（深色）'],
-        ['claude', 'Claude 暖灰'],
+        ['claude', 'Claude 暖灰（浅色）'],
         ['claude-dark', 'Claude 暖灰（深色）'],
         ['host', '跟随宿主'],
       ],
       'zh-TW': [
-        ['obsidian', '黑曜石'],
+        ['obsidian', '黑曜石（淺色）'],
         ['obsidian-dark', '黑曜石（深色）'],
-        ['claude', 'Claude 暖灰'],
+        ['claude', 'Claude 暖灰（淺色）'],
         ['claude-dark', 'Claude 暖灰（深色）'],
         ['host', '跟隨宿主'],
       ],
       yue: [
-        ['obsidian', '黑曜石'],
+        ['obsidian', '黑曜石（淺色）'],
         ['obsidian-dark', '黑曜石（深色）'],
-        ['claude', 'Claude 暖灰'],
+        ['claude', 'Claude 暖灰（淺色）'],
         ['claude-dark', 'Claude 暖灰（深色）'],
         ['host', '跟隨宿主'],
       ],
       en: [
-        ['obsidian', 'Obsidian'],
+        ['obsidian', 'Obsidian (Light)'],
         ['obsidian-dark', 'Obsidian (Dark)'],
-        ['claude', 'Claude'],
+        ['claude', 'Claude (Light)'],
         ['claude-dark', 'Claude (Dark)'],
         ['host', 'Host Native'],
       ],
       ja: [
-        ['obsidian', 'Obsidian'],
+        ['obsidian', 'Obsidian（ライト）'],
         ['obsidian-dark', 'Obsidian（ダーク）'],
-        ['claude', 'Claude'],
+        ['claude', 'Claude（ライト）'],
         ['claude-dark', 'Claude（ダーク）'],
         ['host', 'ホスト標準'],
       ],
@@ -3253,7 +3316,7 @@
           language: ['界面语言', '切换全局界面语言，自动保留代码与对话原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           pluginPageTranslate: ['插件市场一键翻译', '在插件市场列表与详情页顶部嵌入谷歌翻译，点击即可翻译并支持切回原文（不消耗模型额度）'],
           homeLayout: ['首页布局', '新会话首页样式：用量看板 / 经典居中 / 原生', [['studio', '用量看板'], ['classic', '经典居中'], ['off', '原生首页']]],
-          palette: ['主题配色', '默认随 Antigravity 浅/深外观自动切换，也可直接选用深色模式', PALETTE_OPTS['zh-CN']],
+          palette: ['主题配色', '直接选用浅色/深色主题（跨宿主明暗生效），或选跟随宿主保留原生配色', PALETTE_OPTS['zh-CN']],
           glassEffect: ['毛玻璃质感', '为输入框与浮层添加磨砂高光边框、看图悬浮胶囊及聚焦柔光环'],
           logoInk: ['Logo 颜色', '左上角应用图标与首页标志显示为主色调或纯文字色', [['accent', '主题强调色'], ['foreground', '跟随文字色']]],
           sidebarRestyle: ['侧边栏美化', '套用 Claude 风格侧栏行高与悬停高亮'],
@@ -3420,7 +3483,7 @@
           language: ['介面語言', '切換全域介面語言，自動保留程式碼與對話原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           pluginPageTranslate: ['外掛市場一鍵翻譯', '在外掛市場列表與詳情頁頂部嵌入 Google 翻譯，點擊即可翻譯並切回原文（不消耗模型額度）'],
           homeLayout: ['首頁版面', '新對話首頁樣式：用量看板 / 經典置中 / 原生', [['studio', '用量看板'], ['classic', '經典置中'], ['off', '原生首頁']]],
-          palette: ['主題配色', '預設隨 Antigravity 淺/深外觀自動切換，亦可直接選用深色模式', PALETTE_OPTS['zh-TW']],
+          palette: ['主題配色', '直接選用淺色/深色主題（跨宿主明暗生效），或選跟隨宿主保留原生配色', PALETTE_OPTS['zh-TW']],
           glassEffect: ['毛玻璃質感', '為輸入框與浮層加上磨砂高光邊框、看圖懸浮膠囊及聚焦柔光環'],
           logoInk: ['Logo 顏色', '左上角應用圖示與首頁標誌顯示為主色調或純文字色', [['accent', '主題強調色'], ['foreground', '跟隨文字色']]],
           sidebarRestyle: ['側邊欄美化', '套用 Claude 風格側欄行高與懸停高亮'],
@@ -3587,7 +3650,7 @@
           language: ['介面語言', '切換全介面語言，自動保留代碼同對話原文', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           pluginPageTranslate: ['外掛市場一鍵翻譯', '喺外掛市場列表同詳情頁頂部嵌入 Google 翻譯，撳一下就譯得仲可以切返原文（唔扣模型額度）'],
           homeLayout: ['首頁版面', '新對話首頁樣式：用量看板 / 經典置中 / 原生', [['studio', '用量看板'], ['classic', '經典置中'], ['off', '原生首頁']]],
-          palette: ['主題配色', '預設跟 Antigravity 淺/深外觀自動切換，亦可以直接揀深色模式', PALETTE_OPTS.yue],
+          palette: ['主題配色', '直接揀淺色/深色主題（跨宿主明暗生效），或者揀跟隨宿主保留原生配色', PALETTE_OPTS.yue],
           glassEffect: ['毛玻璃質感', '幫輸入框同浮層加磨砂高光邊框、睇圖懸浮膠囊同聚焦柔光環'],
           logoInk: ['Logo 顏色', '左上角應用圖示同首頁標誌顯示為主色調定純文字色', [['accent', '主題強調色'], ['foreground', '跟隨文字色']]],
           sidebarRestyle: ['側邊欄美化', '套用 Claude 風格側欄行高同懸停高亮'],
@@ -3754,7 +3817,7 @@
           language: ['Interface Language', 'Global UI localization while keeping code and chat intact', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           pluginPageTranslate: ['Marketplace Google Translate', 'Embed an on-demand Google Translate pill on Plugin Marketplace list & detail pages (zero model tokens)'],
           homeLayout: ['Home Layout', 'New-chat home style: Usage Dashboard / Classic / Native', [['studio', 'Usage Dashboard'], ['classic', 'Classic'], ['off', 'Native']]],
-          palette: ['Color Palette', 'Follows Antigravity light/dark appearance by default, or pick an explicit dark palette', PALETTE_OPTS.en],
+          palette: ['Color Palette', 'Pick an explicit light or dark palette regardless of host theme, or keep Host Native', PALETTE_OPTS.en],
           glassEffect: ['Frosted Glass Effect', 'Frosted surfaces with 1px specular borders, floating media pills & focus halos'],
           logoInk: ['Logo Color', 'Tint the top-left app icon and home mark with accent color or text color', [['accent', 'Accent Color'], ['foreground', 'Text Color']]],
           sidebarRestyle: ['Claude Sidebar Style', 'Apply Claude-style sidebar row height and hover highlight'],
@@ -3921,7 +3984,7 @@
           language: ['表示言語', 'コードと本文を保護しつつ UI 全体を 5 言語化', [['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['yue', '粵語'], ['en', 'English'], ['ja', '日本語']]],
           pluginPageTranslate: ['マーケットプレイス翻訳', 'プラグイン市場の一覧・詳細ページ上部に Google 翻訳ボタンを配置（クリック時のみ翻訳・トークン消費なし）'],
           homeLayout: ['ホームレイアウト', '新規チャット画面：使用量ダッシュボード / クラシック / 標準', [['studio', '使用量ボード'], ['classic', 'クラシック'], ['off', '標準']]],
-          palette: ['テーマ配色', '既定では Antigravity の明暗外観に連動し、ダーク配色を直接選ぶこともできます', PALETTE_OPTS.ja],
+          palette: ['テーマ配色', 'ホストの明暗に関係なくライト／ダーク配色を直接指定、またはホスト標準を維持', PALETTE_OPTS.ja],
           glassEffect: ['すりガラス質感', '入力欄・浮遊パネルのすりガラス＆高光枠、画像プレビューカプセル、フォーカス光輪'],
           logoInk: ['ロゴの色', '左上のアプリアイコンとホームロゴをアクセント色または文字色で表示', [['accent', 'アクセント色'], ['foreground', '文字色']]],
           sidebarRestyle: ['サイドバー最適化', 'Claude 風の行高とホバーハイライトを適用'],
@@ -4354,6 +4417,10 @@
       return palette === 'claude-dark' || palette === 'obsidian-dark';
     }
 
+    function isExplicitLightPalette(palette) {
+      return palette === 'claude' || palette === 'obsidian';
+    }
+
     function syncHostThemeAttr(overrideBg) {
       if (typeof overrideBg === 'string' && overrideBg.trim()) {
         lastHostThemeBg = overrideBg.trim();
@@ -4362,6 +4429,11 @@
       if (isExplicitDarkPalette(palette)) {
         document.documentElement.setAttribute('data-palette', palette);
         document.documentElement.setAttribute('data-theme', 'dark');
+        return;
+      }
+      if (isExplicitLightPalette(palette)) {
+        document.documentElement.setAttribute('data-palette', palette);
+        document.documentElement.setAttribute('data-theme', 'light');
         return;
       }
       document.documentElement.removeAttribute('data-palette');
@@ -5939,7 +6011,7 @@
           btwRunningState: 'Running',
           btwOpenState: 'Open',
           btwClosedState: 'Closed',
-          liveBtwRole: '/btw',
+          liveBtwRole: 'Side',
           liveBtwParent: (t) => `from ${t}`,
           btwUntitled: 'Side Question Thread',
           btwJumpTip: 'Click to jump back to this side question',
@@ -6000,7 +6072,7 @@
           btwRunningState: '実行中',
           btwOpenState: '表示中',
           btwClosedState: '閉じた状態',
-          liveBtwRole: '/btw',
+          liveBtwRole: '副',
           liveBtwParent: (t) => `親: ${t}`,
           btwUntitled: 'サイド質問スレッド',
           btwJumpTip: 'クリックしてこのサイド質問へ移動',
@@ -6068,7 +6140,7 @@
         btwRunningState: isTrad ? '運行中' : '运行中',
         btwOpenState: isTrad ? '已開啟' : '已打开',
         btwClosedState: isTrad ? '已關閉' : '已关闭',
-        liveBtwRole: '/btw',
+        liveBtwRole: '旁',
         liveBtwParent: (t) => (isTrad ? `來自 ${t}` : `来自 ${t}`),
         btwUntitled: isTrad ? '旁支提問' : '旁支提问',
         btwJumpTip: isTrad ? '點擊跳回此旁支提問' : '点击跳转回此旁支提问',

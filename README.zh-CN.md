@@ -262,7 +262,7 @@ npm run remove                        # 停止守护并无损还原原生界面
 | --- | --- | --- | --- | --- |
 | 基础设置 | `language` | `'zh-CN'` \| `'zh-TW'` \| `'yue'` \| `'en'` \| `'ja'` | `'zh-CN'` | 界面与控制面板语言（繁中、粤语与日语按需拉取） |
 | 基础设置 | `homeLayout` | `'studio'` \| `'classic'` \| `'off'` | `'studio'` | 新会话首页布局 |
-| 基础设置 | `palette` | `'claude'` \| `'claude-dark'` \| `'obsidian'` \| `'obsidian-dark'` \| `'host'` | `'claude'` | 纯色主题配色（自动随外观或直达深色） |
+| 基础设置 | `palette` | `'claude'` \| `'claude-dark'` \| `'obsidian'` \| `'obsidian-dark'` \| `'host'` | `'claude'` | 显式浅色/深色主题配色（跨宿主明暗生效），或 `'host'` 跟随宿主原生外观 |
 | 界面微调 | `glassEffect` | `boolean` | `true` | 独立毛玻璃质感与失焦柔和环境光 |
 | 界面微调 | `sidebarRestyle` / `sidebarCompact` | `boolean` | `true` | 侧边栏重塑与紧凑间距 |
 | 界面微调 | `composerRestyle` / `placeholderStyle` | `boolean` / `'studio'` \| `'host'` | `true` / `'studio'` | 极简输入框与引导文案风格 |
