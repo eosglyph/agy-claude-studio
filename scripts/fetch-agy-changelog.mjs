@@ -83,6 +83,8 @@ function cleanBulletLine(raw) {
   return line;
 }
 
+const CATEGORY_HEADING_RE = /^(?:Improvements|Fixes|Features|Changes|Security|Performance)(?:(?:\s*\(\d+\))?:?$|\s*\(\d+\))/i;
+
 function parseLatestReleases(text, limit = 2) {
   const start = text.indexOf('Antigravity App\nv');
   if (start < 0) return [];
@@ -90,6 +92,7 @@ function parseLatestReleases(text, limit = 2) {
   const lines = slice.split('\n').map((l) => l.trim()).filter(Boolean);
   const releases = [];
   let current = null;
+  let seenCategory = false;
   for (let i = 1; i < lines.length; i += 1) {
     const line = lines[i];
     if (/^Antigravity (CLI|IDE|SDK)/.test(line)) break;
@@ -97,6 +100,7 @@ function parseLatestReleases(text, limit = 2) {
       if (current) releases.push(current);
       if (releases.length >= limit) break;
       current = { version: line, date: '', headline: '', bullets: [] };
+      seenCategory = false;
       continue;
     }
     if (!current) continue;
@@ -105,7 +109,14 @@ function parseLatestReleases(text, limit = 2) {
       current.date = line;
       continue;
     }
-    if (!current.headline && !/^(Improvements|Fixes|Features|Changes|Security|Performance)\b/i.test(line)) {
+    if (CATEGORY_HEADING_RE.test(line)) {
+      seenCategory = true;
+      if (current.bullets.length < 16) {
+        current.bullets.push(cleanBulletLine(line));
+      }
+      continue;
+    }
+    if (!current.headline && !seenCategory) {
       current.headline = line;
       continue;
     }
@@ -129,9 +140,9 @@ function formatDateZh(enDate) {
   return `${m[3]}-${String(mo).padStart(2, '0')}-${String(Number(m[2])).padStart(2, '0')}`;
 }
 
-async function translateViaGoogle(text, targetLang) {
+async function translateViaGoogle(text, targetLang, fetchFn = fetch) {
   const url = `${GOOGLE_TRANSLATE_URL}?client=gtx&sl=en&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
-  const res = await fetch(url, {
+  const res = await fetchFn(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
     signal: AbortSignal.timeout(8000),
   });
@@ -143,22 +154,25 @@ async function translateViaGoogle(text, targetLang) {
   return out;
 }
 
-async function translateViaMyMemory(text, targetLang) {
-  const mmLang = targetLang === 'zh-TW' ? 'zh-TW' : 'zh-CN';
+async function translateViaMyMemory(text, targetLang, fetchFn = fetch) {
+  const mmLang = String(targetLang || 'zh-CN').trim() || 'zh-CN';
   const trimmed = text.length > 460 ? text.slice(0, 460) : text;
   const url = `${MYMEMORY_TRANSLATE_URL}?q=${encodeURIComponent(trimmed)}&langpair=en|${encodeURIComponent(mmLang)}`;
-  const res = await fetch(url, {
+  const res = await fetchFn(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) throw new Error(`mymemory_http_${res.status}`);
   const data = await res.json();
+  if (Number(data?.responseStatus) !== 200) {
+    throw new Error(`mymemory_status_${data?.responseStatus ?? 'unknown'}`);
+  }
   const out = String(data?.responseData?.translatedText || '').trim();
   if (!out || /MYMEMORY WARNING/i.test(out)) throw new Error('mymemory_quota');
   return out;
 }
 
-async function translateLineDetailed(line, targetLang) {
+async function translateLineDetailed(line, targetLang, { fetchFn = fetch } = {}) {
   if (!line || !/[A-Za-z]{2,}/.test(line)) return { text: line, failed: false };
   // Preserve leading Chinese category prefix such as 【修复 (1)】
   const prefixMatch = line.match(/^(【[^】]+】)\s*/);
@@ -170,11 +184,11 @@ async function translateLineDetailed(line, targetLang) {
     .replace(/\bwhile a turn is running\b/gi, 'while a conversation turn is running')
     .replace(/\bduring a turn\b/gi, 'during a conversation turn');
   try {
-    const zh = await translateViaGoogle(body, targetLang);
+    const zh = await translateViaGoogle(body, targetLang, fetchFn);
     return { text: prefix + zh, failed: false };
   } catch {
     try {
-      const zh = await translateViaMyMemory(body, targetLang);
+      const zh = await translateViaMyMemory(body, targetLang, fetchFn);
       return { text: prefix + zh, failed: false };
     } catch {
       return { text: line, failed: true };
@@ -369,6 +383,8 @@ export {
   buildTranslationCacheKey,
   translateLine,
   translateLineDetailed,
+  translateViaGoogle,
+  translateViaMyMemory,
   translateReleasesWithCache,
 };
 

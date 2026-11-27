@@ -325,7 +325,12 @@ test('unified artifact naming, native plugin payload, and version parity stay co
 
   assert.equal(cdp.PLUGIN_VERSION, pkg.version);
   assert.equal(csClient.match(/GetString\(raw, "version", "([^"]+)"\)/)?.[1], pkg.version);
-  assert.equal(csSetup.match(/SetValue\("DisplayVersion", version \?\? "([^"]+)"/)?.[1], pkg.version);
+  const csSetupFallback = csSetup.match(/const string FallbackVersion = "([^"]+)"/)?.[1];
+  assert.equal(csSetupFallback, pkg.version);
+  assert.match(csSetup, /SetValue\("DisplayVersion", version \?\? FallbackVersion/);
+  assert.match(csSetup, /return InstallerCore\.FallbackVersion;/);
+  const csSetupExtraVers = [...csSetup.matchAll(/"(\d+\.\d+\.\d+)"/g)].map((m) => m[1]).filter((v) => v !== pkg.version);
+  assert.deepEqual(csSetupExtraVers, []);
   assert.equal(swiftClient.match(/raw\["version"\]\?\.stringValue \?\? "([^"]+)"/)?.[1], pkg.version);
 
   assert.equal(normalizeVersion('v2.1.0'), '2.1.0');

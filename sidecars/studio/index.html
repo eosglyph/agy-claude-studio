@@ -5449,6 +5449,7 @@
         lastUpdateCheck = { hasUpdate: false, currentVersion: nextVer };
         if (data.reinjectOk === false || data.needsRestart === true) {
           showToast(t.upgradeNeedsRestart);
+          await refreshStatus();
           return;
         }
         showToast(t.upgradeReloading(nextVer));

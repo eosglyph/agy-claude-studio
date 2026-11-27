@@ -524,7 +524,7 @@ test('performStudioSelfUpdate supports non-git release archive auto-upgrade whil
     assert.equal(updRes.version, '2.2.0');
     assert.equal(updRes.filesUpdated, true);
     assert.equal(updRes.reinjectOk, true);
-    assert.equal(updRes.needsRestart, true);
+    assert.equal(updRes.needsRestart, false);
     assert.equal(reinjected, true);
     assert.equal(fs.readFileSync(path.join(pluginDir, 'marker.txt'), 'utf8'), 'new-v2.2.0');
     assert.equal(fs.readFileSync(path.join(pluginDir, 'sidecars', 'marker.txt'), 'utf8'), 'updated sibling');

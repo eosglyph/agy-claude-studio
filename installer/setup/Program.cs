@@ -76,6 +76,7 @@ namespace AgyClaudeStudio.Installer
 
     internal static class InstallerCore
     {
+        internal const string FallbackVersion = "2.2.3";
         private const string UninstallRegSubKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeStudio";
         private const string LegacyStyleUninstallRegSubKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeStyle";
         private const string LauncherLnkName = "Antigravity (Claude Studio).lnk";
@@ -852,7 +853,7 @@ namespace AgyClaudeStudio.Installer
                     ? iconPath
                     : uninstallerExePath;
                 key.SetValue("DisplayName", "Claude Studio (Antigravity 原生插件)", RegistryValueKind.String);
-                key.SetValue("DisplayVersion", version ?? "2.2.3", RegistryValueKind.String);
+                key.SetValue("DisplayVersion", version ?? FallbackVersion, RegistryValueKind.String);
                 key.SetValue("Publisher", "Claude Studio", RegistryValueKind.String);
                 key.SetValue("InstallLocation", installDir, RegistryValueKind.String);
                 key.SetValue("DisplayIcon", displayIcon + ",0", RegistryValueKind.String);
@@ -1675,7 +1676,7 @@ namespace AgyClaudeStudio.Installer
             {
                 using (Stream zipStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("AGY_PAYLOAD.zip"))
                 {
-                    if (zipStream == null) return "2.2.3";
+                    if (zipStream == null) return InstallerCore.FallbackVersion;
                     using (ZipArchive archive = new ZipArchive(zipStream, ZipArchiveMode.Read))
                     {
                         ZipArchiveEntry entry = archive.GetEntry("manifest.json");
@@ -1695,7 +1696,7 @@ namespace AgyClaudeStudio.Installer
                 }
             }
             catch { }
-            return "2.2.3";
+            return InstallerCore.FallbackVersion;
         }
 
         private static RoundedButton CreatePrimaryButton(string text, Point loc, Size size)
