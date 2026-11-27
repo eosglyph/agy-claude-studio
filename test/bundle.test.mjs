@@ -5638,11 +5638,24 @@ test('inline model trigger tags data-ag-cs-inline-model-wrap without *:has(), op
     vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, periodicSelector: true }), sandbox);
     assert.equal(inlineParent.getAttribute('data-ag-cs-inline-model-wrap'), '1', 'inline parent is tagged for scoped :has() hover');
 
-    // ArrowDown and ArrowUp open periodic selector
+    // ArrowDown and ArrowUp open periodic selector idempotently, and repeat: true never toggles it closed
     for (const key of ['ArrowDown', 'ArrowUp']) {
       const notPrevented = modelBtn.dispatchEvent({ type: 'keydown', key });
       assert.equal(notPrevented, false, `${key} should be prevented when opening periodic selector`);
       assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, `${key} must open periodic selector`);
+
+      const repeatNotPrevented = modelBtn.dispatchEvent({ type: 'keydown', key, repeat: true });
+      assert.equal(repeatNotPrevented, false, `held ${key} (repeat: true) should still prevent native menu`);
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, `held ${key} (repeat: true) must not close periodic selector`);
+
+      const idempotentNotPrevented = modelBtn.dispatchEvent({ type: 'keydown', key });
+      assert.equal(idempotentNotPrevented, false, `second ${key} should be prevented`);
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, `second ${key} must keep periodic selector open`);
+
+      const enterRepeatNotPrevented = modelBtn.dispatchEvent({ type: 'keydown', key: 'Enter', repeat: true });
+      assert.equal(enterRepeatNotPrevented, false, 'held Enter (repeat: true) should still prevent native menu');
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'held Enter (repeat: true) must not toggle periodic selector');
+
       for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
         fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
       }

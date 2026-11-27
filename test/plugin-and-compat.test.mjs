@@ -3697,6 +3697,15 @@ test('Dock reacts to real MutationObserver attribute changes, guards narrow wind
     await new Promise((r) => setTimeout(r, 25));
     assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false);
 
+    // P2: Mixed MutationObserver batch (Dock attr + childList) schedules only one sync (no duplicate scheduleDockSync + scheduleSync)
+    const rafBeforeMixed = rafCalls;
+    observerCb([
+      { type: 'attributes', target: strip, attributeName: 'data-active-tab-id' },
+      { type: 'childList', target: body, addedNodes: [], removedNodes: [] },
+    ]);
+    assert.equal(rafCalls - rafBeforeMixed, 1, 'Mixed MutationObserver batch must schedule only 1 rAF (full sync covers Dock)');
+    await new Promise((r) => setTimeout(r, 25));
+
     // P1-4 (narrow window): Width below 900px in 3-column mode must tear down Dock WITHOUT clicking host buttons
     const clicksBeforeNarrow = {
       browser: browserBtn.clicks,
@@ -3710,6 +3719,25 @@ test('Dock reacts to real MutationObserver attribute changes, guards narrow wind
     assert.equal(browserBtn.clicks, clicksBeforeNarrow.browser, 'Must not click otherTabBtn on narrow window');
     assert.equal(toggleAuxBtn.clicks, clicksBeforeNarrow.toggle, 'Must not click toggleAuxBtn on narrow window');
     assert.equal(newTabBtn.clicks, clicksBeforeNarrow.newTab, 'Must not click newTabBtn on narrow window');
+
+    // P2: Pending close_aux at 820px keeps target solo mode (560px threshold) until host commits or times out
+    auxPane.setAttribute('data-aux-pane-open', 'false');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.ok(split.querySelector('.ag-cs-pinned-dock'), 'Solo mode mounts cleanly at 820px');
+    const toggleBeforePendingClose = toggleAuxBtn.clicks;
+    const browserBeforePendingClose = browserBtn.clicks;
+    auxPane.setAttribute('data-aux-pane-open', 'true');
+    strip.setAttribute('data-active-tab-id', 'sidecar__agy-claude-studio/studio__/');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(toggleAuxBtn.clicks, toggleBeforePendingClose + 1, 'Round 1 requests close_aux');
+    assert.ok(split.querySelector('.ag-cs-pinned-dock'), 'Dock stays mounted while close_aux is pending');
+    // Round 2 before host commits data-aux-pane-open="false" must keep solo 560px threshold and NOT teardown at 900px
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.ok(split.querySelector('.ag-cs-pinned-dock'), 'Dock must not teardown prematurely at 820px while close_aux is pending');
+    assert.equal(browserBtn.clicks, browserBeforePendingClose, 'Pending close_aux must not switch to browser tab');
+    auxPane.setAttribute('data-aux-pane-open', 'false');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.ok(split.querySelector('.ag-cs-pinned-dock'), 'Dock remains mounted in solo mode after host commits close_aux');
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
   } finally {
@@ -3906,12 +3934,39 @@ test('/btw draft protection preserves non-empty drafts, handles restore errors w
     assert.equal(ed2.textContent, '/btw');
     assert.equal(ed1.textContent, 'unsent user draft');
 
+    // 2b. Non-existent explicit conversationId must NOT fall back to first composer
+    ed2.textContent = '';
+    const missingRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: '99999999-9999-4999-8999-999999999999' });
+    assert.equal(missingRes.ok, false);
+    assert.equal(missingRes.reason, 'conversation_not_found');
+    assert.equal(ed1.textContent, 'unsent user draft', 'Missing conversationId must not touch convo1');
+    assert.equal(ed2.textContent, '', 'Missing conversationId must not fall back to empty convo2');
+
+    const missingForceNew = sandbox.window.__agClaudeStudio.openSideQuestion({ forceNew: true, conversationId: '99999999-9999-4999-8999-999999999999' });
+    assert.equal(missingForceNew.ok, false);
+    assert.equal(missingForceNew.action, 'conversation_not_found');
+    assert.equal(ed2.textContent, '');
+
     // 3. Restore error returns explicit restore_failed and never overwrites draft
     shouldThrowOnDispatch = true;
     const errRes = sandbox.window.__agClaudeStudio.openSideQuestion({ conversationId: '11111111-1111-4111-8111-111111111111', cascadeId: 'sq-1' });
     assert.equal(errRes.ok, false);
     assert.equal(errRes.action, 'restore_failed');
     assert.equal(ed1.textContent, 'unsent user draft', 'Restore error must not overwrite user draft');
+
+    // 3b. User switching to another sidebar tab within 40ms cancels delayed restore retries and never steals focus
+    shouldThrowOnDispatch = false;
+    strip.setAttribute('data-active-tab-id', 'side_question__sq-1');
+    const switchTestRes = sandbox.window.__agClaudeStudio.openSideQuestion({ conversationId: '11111111-1111-4111-8111-111111111111', cascadeId: 'sq-1' });
+    assert.equal(switchTestRes.ok, true);
+    const clicksBeforeUserSwitch = sqTabBtn.clicks;
+    const focusBeforeUserSwitch = sqEditor.focusCount;
+    // Simulate user switching to browser tab within 10ms
+    await new Promise((r) => setTimeout(r, 10));
+    strip.setAttribute('data-active-tab-id', 'browser__1');
+    await new Promise((r) => setTimeout(r, 180));
+    assert.equal(sqTabBtn.clicks, clicksBeforeUserSwitch, 'Delayed restore retry must not click back to old /btw tab after user switched');
+    assert.equal(sqEditor.focusCount, focusBeforeUserSwitch, 'Delayed restore retry must not steal focus after user switched');
 
     // 4. Destroy cancels pending 40-140ms restore timers so they do not click tabs or steal focus
     shouldThrowOnDispatch = false;

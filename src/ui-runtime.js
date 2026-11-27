@@ -2340,32 +2340,47 @@
         scopeEl.closest?.('.surface-composer-card') ||
         scopedBox?.querySelector?.('.surface-composer-card') ||
         scopeEl;
-      const ed =
-        scopedBox?.querySelector?.('[contenteditable="true"]') ||
-        document.querySelector('[data-testid="agent-input-box"] [contenteditable="true"]');
-      return { card, ed };
+      const ed = scopedBox?.querySelector?.('[contenteditable="true"]') || null;
+      return {
+        card: ed ? card : null,
+        ed,
+        reason: ed ? '' : 'conversation_not_found',
+      };
     }
     const cards = Array.from(document.querySelectorAll('[data-testid="agent-input-box"] .surface-composer-card'));
-    const targetCid = normalizeCascadeId(conversationId);
-    let matchedCard = null;
-    if (targetCid) {
-      matchedCard =
+    const rawCid = String(conversationId || '').trim();
+    const hasExplicitCid = Boolean(rawCid);
+    const targetCid = normalizeCascadeId(rawCid);
+    if (hasExplicitCid) {
+      if (!targetCid) {
+        return { card: null, ed: null, reason: 'conversation_not_found' };
+      }
+      const matchedCard =
         cards.find((c) => {
           if (c.closest?.('[data-testid="subagent-tab-conversation"]')) return false;
           const box = c.closest?.('[data-testid="agent-input-box"]');
           const boxCid = resolveCascadeId(box);
           return Boolean(boxCid && sameCascadeId(boxCid, targetCid));
         }) || null;
+      if (!matchedCard) {
+        return { card: null, ed: null, reason: 'conversation_not_found' };
+      }
+      const ed = matchedCard.querySelector?.('[contenteditable="true"]') || null;
+      return {
+        card: matchedCard,
+        ed,
+        reason: ed ? '' : 'conversation_not_found',
+      };
     }
     const primaryCard =
-      matchedCard ||
       cards.find((c) => !c.closest?.('[data-testid="subagent-tab-conversation"]')) ||
       cards[0] ||
       null;
     const ed =
       primaryCard?.querySelector?.('[contenteditable="true"]') ||
-      document.querySelector('[data-testid="agent-input-box"] [contenteditable="true"]');
-    return { card: primaryCard, ed };
+      document.querySelector('[data-testid="agent-input-box"] [contenteditable="true"]') ||
+      null;
+    return { card: primaryCard, ed, reason: ed ? '' : 'composer_not_found' };
   }
 
   function fillBtwCommand(scopeEl, opts = {}) {
@@ -2380,8 +2395,9 @@
       resolvedOpts = resolvedScope;
       resolvedScope = resolvedOpts.scopeEl || null;
     }
-    const { card, ed } = findPrimaryComposerTarget(resolvedScope, resolvedOpts?.conversationId || '');
-    if (!ed) return { ok: false, reason: 'composer_not_found' };
+    const target = findPrimaryComposerTarget(resolvedScope, resolvedOpts?.conversationId || '');
+    const { card, ed } = target;
+    if (!ed) return { ok: false, reason: target.reason || 'composer_not_found' };
     try {
       const ui = uiText(getLang());
       if (findStandaloneBtwChip(ed)) {
@@ -2709,6 +2725,20 @@
     return { ok: true, conversationId: cid, items };
   }
 
+  let sideQuestionRestoreGen = 0;
+  let sideQuestionRestoreActive = null;
+  let internalSideQuestionClick = false;
+  const sideQuestionRestoreTimers = new Set();
+
+  function cancelSideQuestionRestore() {
+    sideQuestionRestoreGen += 1;
+    sideQuestionRestoreActive = null;
+    for (const tid of sideQuestionRestoreTimers) {
+      clearTimeout(tid);
+    }
+    sideQuestionRestoreTimers.clear();
+  }
+
   function openSideQuestion(opts = {}) {
     const store = findHostReduxStore();
     const cid = resolveActiveConversationIdForHost(opts?.conversationId || '', store);
@@ -2787,27 +2817,69 @@
         toolbarBtn.click();
       }
 
+      cancelSideQuestionRestore();
+      const restoreGen = sideQuestionRestoreGen;
+      const initialActiveTabId = document.querySelector('[data-side-panel-strip]')?.getAttribute('data-active-tab-id') || '';
+      sideQuestionRestoreActive = {
+        gen: restoreGen,
+        conversationId: cid,
+        tabId,
+        sawTargetActive: initialActiveTabId === tabId,
+      };
+
       const focusSideQuestionTab = () => {
-        if (destroyed) return;
+        if (
+          destroyed ||
+          restoreGen !== sideQuestionRestoreGen ||
+          !sideQuestionRestoreActive ||
+          sideQuestionRestoreActive.gen !== restoreGen
+        ) {
+          return;
+        }
         const liveCid = resolveActiveConversationIdForHost('', findHostReduxStore());
-        if (cid && liveCid && !sameCascadeId(liveCid, cid)) return;
+        if (cid && liveCid && !sameCascadeId(liveCid, cid)) {
+          cancelSideQuestionRestore();
+          return;
+        }
         try {
           const strip = document.querySelector('[data-side-panel-strip]');
-          if (strip && strip.getAttribute('data-active-tab-id') !== tabId) {
+          const curTabId = strip ? (strip.getAttribute('data-active-tab-id') || '') : '';
+          if (curTabId === tabId) {
+            sideQuestionRestoreActive.sawTargetActive = true;
+          } else if (sideQuestionRestoreActive.sawTargetActive) {
+            cancelSideQuestionRestore();
+            return;
+          } else if (curTabId && initialActiveTabId && curTabId !== initialActiveTabId) {
+            cancelSideQuestionRestore();
+            return;
+          }
+          if (strip && curTabId !== tabId) {
             const tabBtns = Array.from(strip.querySelectorAll('button, [role="tab"]'));
             const matchBtn = tabBtns.find((btn) => {
               const idAttr = btn.getAttribute('data-tab-id') || btn.closest?.('[data-tab-id]')?.getAttribute('data-tab-id') || '';
               return idAttr === tabId;
             });
             if (matchBtn && typeof matchBtn.click === 'function') {
-              matchBtn.click();
+              internalSideQuestionClick = true;
+              try {
+                matchBtn.click();
+              } finally {
+                internalSideQuestionClick = false;
+              }
             }
           }
-          // Focus composer inside the newly activated side-question pane if present
-          const sidePane = document.querySelector('[data-aux-pane-open="true"], [data-testid="side-panel-v2"]');
-          const sqEditor = sidePane?.querySelector?.('[data-testid="agent-input-box"] [contenteditable="true"]');
-          if (sqEditor && typeof sqEditor.focus === 'function') {
-            sqEditor.focus();
+          const afterTabId = strip ? (strip.getAttribute('data-active-tab-id') || '') : '';
+          if (afterTabId === tabId) {
+            sideQuestionRestoreActive.sawTargetActive = true;
+          }
+          const auxOpenAttr = document.querySelector('[data-aux-pane-open]')?.getAttribute('data-aux-pane-open');
+          const isTargetTabActive = (!strip || afterTabId === tabId) && auxOpenAttr !== 'false';
+          if (isTargetTabActive && restoreGen === sideQuestionRestoreGen) {
+            const sidePane = document.querySelector('[data-aux-pane-open="true"], [data-testid="side-panel-v2"]');
+            const sqEditor = sidePane?.querySelector?.('[data-testid="agent-input-box"] [contenteditable="true"]');
+            if (sqEditor && typeof sqEditor.focus === 'function') {
+              sqEditor.focus();
+            }
           }
         } catch {}
       };
@@ -2815,10 +2887,10 @@
       if (typeof setTimeout === 'function') {
         for (const delayMs of [40, 140]) {
           const tid = setTimeout(() => {
-            submitSyncTimers.delete(tid);
+            sideQuestionRestoreTimers.delete(tid);
             focusSideQuestionTab();
           }, delayMs);
-          submitSyncTimers.add(tid);
+          sideQuestionRestoreTimers.add(tid);
         }
       }
 
@@ -6566,7 +6638,7 @@
     };
   }
 
-  function openPeriodicSelector(triggerBtn, modelBtn) {
+  function openPeriodicSelector(triggerBtn, modelBtn, opts = {}) {
     if (!periodicCore) return;
     const btn = triggerBtn || document.querySelector('.ag-cs-periodic-trigger');
     const mBtn =
@@ -6576,6 +6648,7 @@
       document.querySelector('[data-testid="model-selector-trigger"]');
 
     if (openPsDrawer && openPsDrawer.isConnected && (!btn || openPsTrigger === btn)) {
+      if (opts && opts.keepOpen) return;
       closePeriodicSelector();
       return;
     }
@@ -7752,25 +7825,35 @@
       } catch {}
     }
 
+    const activePendingHostAction =
+      pinnedDock.pendingHostAction && now - pinnedDock.pendingHostAction.startedAt < 1500
+        ? pinnedDock.pendingHostAction
+        : null;
+
     let expectedSoloMode = !isAuxOpen || isStudioActiveTab;
     let plannedHostOp = null;
     if (isAuxOpen && isStudioActiveTab && strip) {
-      const otherTabBtn = findNonStudioTabButton(strip, pinnedDock.lastNonStudioTabId);
-      const newTabBtn = strip.querySelector('[data-testid="side-panel-new-tab-button"]');
-      const wasBlankNewTab = /^newTab__/i.test(pinnedDock.lastNonStudioTabId);
-
-      if (!prevAuxOpen && !recentUserAuxToggle && !pinnedDock.userForcedAuxOpen) {
-        expectedSoloMode = true;
-        plannedHostOp = 'close_aux';
-      } else if (otherTabBtn && typeof otherTabBtn.click === 'function') {
-        expectedSoloMode = false;
-        plannedHostOp = 'switch_tab';
-      } else if (pinnedDock.userForcedAuxOpen || recentUserAuxToggle || (prevAuxOpen && wasBlankNewTab)) {
-        expectedSoloMode = false;
-        plannedHostOp = 'new_tab';
+      if (activePendingHostAction) {
+        expectedSoloMode = activePendingHostAction.type === 'close_aux';
+        plannedHostOp = activePendingHostAction.type;
       } else {
-        expectedSoloMode = true;
-        plannedHostOp = 'close_aux';
+        const otherTabBtn = findNonStudioTabButton(strip, pinnedDock.lastNonStudioTabId);
+        const newTabBtn = strip.querySelector('[data-testid="side-panel-new-tab-button"]');
+        const wasBlankNewTab = /^newTab__/i.test(pinnedDock.lastNonStudioTabId);
+
+        if (!prevAuxOpen && !recentUserAuxToggle && !pinnedDock.userForcedAuxOpen) {
+          expectedSoloMode = true;
+          plannedHostOp = 'close_aux';
+        } else if (otherTabBtn && typeof otherTabBtn.click === 'function') {
+          expectedSoloMode = false;
+          plannedHostOp = 'switch_tab';
+        } else if (pinnedDock.userForcedAuxOpen || recentUserAuxToggle || (prevAuxOpen && wasBlankNewTab)) {
+          expectedSoloMode = false;
+          plannedHostOp = 'new_tab';
+        } else {
+          expectedSoloMode = true;
+          plannedHostOp = 'close_aux';
+        }
       }
     }
 
@@ -7782,9 +7865,7 @@
     }
 
     let soloMode = expectedSoloMode;
-    const hasPendingHostAction = Boolean(
-      pinnedDock.pendingHostAction && now - pinnedDock.pendingHostAction.startedAt < 1500
-    );
+    const hasPendingHostAction = Boolean(activePendingHostAction);
     if (isAuxOpen && isStudioActiveTab && strip && !hasPendingHostAction) {
       const otherTabBtn = findNonStudioTabButton(strip, pinnedDock.lastNonStudioTabId);
       const newTabBtn = strip.querySelector('[data-testid="side-panel-new-tab-button"]');
@@ -9301,6 +9382,16 @@
   }
 
   function onStoreChanged() {
+    if (sideQuestionRestoreActive) {
+      const liveCid = resolveActiveConversationIdForHost('', findHostReduxStore());
+      if (
+        sideQuestionRestoreActive.conversationId &&
+        liveCid &&
+        !sameCascadeId(liveCid, sideQuestionRestoreActive.conversationId)
+      ) {
+        cancelSideQuestionRestore();
+      }
+    }
     const inHero = Boolean(document.querySelector('.agy-home'));
     if (inHero && cfg.homeLayout === 'studio') {
       refreshUsageRollup(false);
@@ -9364,11 +9455,11 @@
     return modelBtn;
   }
 
-  function openPeriodicFromModelTrigger(modelBtn) {
+  function openPeriodicFromModelTrigger(modelBtn, opts = {}) {
     if (!modelBtn || isModelButtonLocked(modelBtn)) return;
     const card = modelBtn.closest ? modelBtn.closest('.surface-composer-card') : null;
     const triggerBtn = card?.querySelector?.('.ag-cs-periodic-trigger') || document.querySelector('.ag-cs-periodic-trigger');
-    openPeriodicSelector(triggerBtn, modelBtn);
+    openPeriodicSelector(triggerBtn, modelBtn, opts);
   }
 
   function onDocPointerDown(ev) {
@@ -9474,6 +9565,20 @@
       ev?.target?.closest &&
       ev.target.closest('[data-side-panel-strip], [data-testid="toggle-aux-sidebar"]')
     ) {
+      if (sideQuestionRestoreActive && !internalSideQuestionClick && !pinnedDock.internalToggleClick) {
+        if (ev.target.closest('[data-testid="toggle-aux-sidebar"]')) {
+          cancelSideQuestionRestore();
+        } else {
+          const tabEl = ev.target.closest('[data-tab-id], button, [role="tab"]');
+          const clickedTabId =
+            tabEl?.getAttribute?.('data-tab-id') ||
+            tabEl?.closest?.('[data-tab-id]')?.getAttribute?.('data-tab-id') ||
+            '';
+          if (clickedTabId !== sideQuestionRestoreActive.tabId) {
+            cancelSideQuestionRestore();
+          }
+        }
+      }
       scheduleSync();
       const id = setTimeout(() => {
         submitSyncTimers.delete(id);
@@ -9503,7 +9608,9 @@
         ev.stopPropagation();
         if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
         ev.preventDefault();
-        openPeriodicFromModelTrigger(interceptedModelBtn);
+        if (ev.repeat) return;
+        const keepOpen = ev.key === 'ArrowDown' || ev.key === 'ArrowUp';
+        openPeriodicFromModelTrigger(interceptedModelBtn, { keepOpen });
         return;
       }
     }
@@ -9755,6 +9862,21 @@
       if (isIgnorableMutation(m)) continue;
       if (isDockStateAttrMutation(m)) {
         hasDockAttrOnly = true;
+        if (sideQuestionRestoreActive && m.target) {
+          if (m.attributeName === 'data-active-tab-id') {
+            const curTab = m.target.getAttribute('data-active-tab-id') || '';
+            if (curTab === sideQuestionRestoreActive.tabId) {
+              sideQuestionRestoreActive.sawTargetActive = true;
+            } else if (curTab && curTab !== sideQuestionRestoreActive.tabId) {
+              cancelSideQuestionRestore();
+            }
+          } else if (m.attributeName === 'data-aux-pane-open') {
+            const auxOpen = m.target.getAttribute('data-aux-pane-open');
+            if (auxOpen === 'false' && sideQuestionRestoreActive.sawTargetActive) {
+              cancelSideQuestionRestore();
+            }
+          }
+        }
         continue;
       }
       hasRelevant = true;
@@ -9763,20 +9885,21 @@
         break;
       }
     }
+    if (hasRelevant && hasNonCharData) {
+      cancelScheduledDockSync();
+      scheduleSync();
+      return;
+    }
     if (hasDockAttrOnly) {
       scheduleDockSync();
     }
     if (!hasRelevant) return;
-    if (!hasNonCharData) {
-      if (!charDataThrottleTimer) {
-        charDataThrottleTimer = setTimeout(() => {
-          charDataThrottleTimer = null;
-          if (!destroyed) scheduleSync();
-        }, 250);
-      }
-      return;
+    if (!charDataThrottleTimer) {
+      charDataThrottleTimer = setTimeout(() => {
+        charDataThrottleTimer = null;
+        if (!destroyed) scheduleSync();
+      }, 250);
     }
-    scheduleSync();
   });
 
   const DOC_LISTENERS = [
@@ -9819,6 +9942,7 @@
     }
     for (const id of submitSyncTimers) clearTimeout(id);
     submitSyncTimers.clear();
+    cancelSideQuestionRestore();
     if (caretRaf) {
       if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(caretRaf);
       caretRaf = 0;
