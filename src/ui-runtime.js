@@ -7873,6 +7873,31 @@
             if (sub.classList.contains('ag-cs-effort-badge')) sub.classList.remove('ag-cs-effort-badge');
           }
         }
+        const activeEffortSpan = modelBtn.querySelector('.ag-cs-effort-badge, [data-ag-cs-effort]');
+        if (activeEffortSpan) {
+          if (modelBtn.getAttribute('data-ag-cs-has-effort') !== '1') {
+            modelBtn.setAttribute('data-ag-cs-has-effort', '1');
+          }
+          let effortCut = 0;
+          if (typeof modelBtn.getBoundingClientRect === 'function' && typeof activeEffortSpan.getBoundingClientRect === 'function') {
+            const btnRect = modelBtn.getBoundingClientRect();
+            const effortRect = activeEffortSpan.getBoundingClientRect();
+            if (btnRect && effortRect && btnRect.width > 0 && effortRect.width > 0) {
+              effortCut = Math.max(0, Math.round(btnRect.right - effortRect.left) + 4);
+            }
+          }
+          const cutVal = effortCut + 'px';
+          if (modelBtn.style?.getPropertyValue?.('--ag-cs-effort-cut') !== cutVal) {
+            modelBtn.style?.setProperty?.('--ag-cs-effort-cut', cutVal);
+          }
+        } else {
+          if (modelBtn.hasAttribute('data-ag-cs-has-effort')) {
+            modelBtn.removeAttribute('data-ag-cs-has-effort');
+          }
+          if (modelBtn.style?.getPropertyValue?.('--ag-cs-effort-cut')) {
+            modelBtn.style.removeProperty('--ag-cs-effort-cut');
+          }
+        }
       }
 
       // 3. Inline stats, remaining-usage ring, turn badges & surround HUD (both new conversations & active chats)
@@ -9162,7 +9187,36 @@
     scheduleSync();
   }
 
+  let allowNativeModelMenuDepth = 0;
+
+  function withNativeModelMenuBypass(modelBtn, fn) {
+    allowNativeModelMenuDepth += 1;
+    if (modelBtn) {
+      try {
+        modelBtn._agCsAllowNativeModelMenu = true;
+      } catch {}
+    }
+    try {
+      return typeof fn === 'function' ? fn() : undefined;
+    } finally {
+      allowNativeModelMenuDepth = Math.max(0, allowNativeModelMenuDepth - 1);
+      if (modelBtn) {
+        try {
+          delete modelBtn._agCsAllowNativeModelMenu;
+        } catch {}
+      }
+    }
+  }
+
+  function isNativeModelMenuBypassed(ev, modelBtn) {
+    if (allowNativeModelMenuDepth > 0) return true;
+    if (ev && ev._agCsAllowNativeModelMenu === true) return true;
+    if (modelBtn && modelBtn._agCsAllowNativeModelMenu === true) return true;
+    return false;
+  }
+
   function findClickedEffortBadge(ev) {
+    if (cfg.effortSlider === false) return null;
     const t = ev?.target;
     if (!t || !t.closest) return null;
     const badge = t.closest('[data-testid="model-selector-trigger"] .ag-cs-effort-badge, [data-testid="model-selector-trigger"] [data-ag-cs-effort]');
@@ -9170,6 +9224,30 @@
     const modelBtn = badge.closest('[data-testid="model-selector-trigger"]');
     if (isModelButtonLocked(modelBtn)) return null;
     return badge;
+  }
+
+  function findInterceptedModelTrigger(ev) {
+    if (cfg.periodicSelector === false || !periodicCore) return null;
+    if (ev && typeof ev.button === 'number' && ev.button !== 0) return null;
+    const t = ev?.target;
+    if (!t || !t.closest) return null;
+    if (
+      cfg.effortSlider !== false &&
+      t.closest('[data-testid="model-selector-trigger"] .ag-cs-effort-badge, [data-testid="model-selector-trigger"] [data-ag-cs-effort]')
+    ) {
+      return null;
+    }
+    const modelBtn = t.closest('[data-testid="model-selector-trigger"]');
+    if (!modelBtn) return null;
+    if (isNativeModelMenuBypassed(ev, modelBtn)) return null;
+    return modelBtn;
+  }
+
+  function openPeriodicFromModelTrigger(modelBtn) {
+    if (!modelBtn || isModelButtonLocked(modelBtn)) return;
+    const card = modelBtn.closest ? modelBtn.closest('.surface-composer-card') : null;
+    const triggerBtn = card?.querySelector?.('.ag-cs-periodic-trigger') || document.querySelector('.ag-cs-periodic-trigger');
+    openPeriodicSelector(triggerBtn, modelBtn);
   }
 
   function onDocPointerDown(ev) {
@@ -9189,6 +9267,13 @@
     if (openFileMenu && !nodeContains(openFileMenu, ev.target)) {
       closeFileLinkMenu();
     }
+    const interceptedModelBtn = findInterceptedModelTrigger(ev);
+    if (interceptedModelBtn) {
+      ev.stopPropagation();
+      if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+      ev.preventDefault();
+      return;
+    }
     if (crabState.root) {
       crabState.stage.quietSince = Date.now();
       if (crabState.stage.asleep) {
@@ -9205,6 +9290,13 @@
   function onDocMouseDown(ev) {
     const effortBadge = findClickedEffortBadge(ev);
     if (effortBadge) {
+      ev.stopPropagation();
+      if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+      ev.preventDefault();
+      return;
+    }
+    const interceptedModelBtn = findInterceptedModelTrigger(ev);
+    if (interceptedModelBtn) {
       ev.stopPropagation();
       if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
       ev.preventDefault();
@@ -9233,6 +9325,15 @@
       ev.preventDefault();
       const modelBtn = effortBadge.closest('[data-testid="model-selector-trigger"]');
       openEffortPopover(effortBadge, modelBtn);
+      return;
+    }
+    const interceptedModelBtn = findInterceptedModelTrigger(ev);
+    if (interceptedModelBtn) {
+      ev.stopPropagation();
+      if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+      ev.preventDefault();
+      if (openEffortPop) closeEffortPopover();
+      openPeriodicFromModelTrigger(interceptedModelBtn);
       return;
     }
     const modelBtn = ev?.target?.closest ? ev.target.closest('[data-testid="model-selector-trigger"]') : null;
@@ -9268,6 +9369,18 @@
       if (openEffortPop) closeEffortPopover();
       if (openFileMenu) closeFileLinkMenu();
       return;
+    }
+    if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      const interceptedModelBtn = findInterceptedModelTrigger(ev);
+      if (interceptedModelBtn) {
+        ev.stopPropagation();
+        if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+        ev.preventDefault();
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          openPeriodicFromModelTrigger(interceptedModelBtn);
+        }
+        return;
+      }
     }
     if (
       ev.key === 'Enter' &&
@@ -9885,6 +9998,9 @@
     openPeriodicSelector(triggerBtn, modelBtn) {
       openPeriodicSelector(triggerBtn, modelBtn);
     },
+    withNativeModelMenuBypass(modelBtn, fn) {
+      return withNativeModelMenuBypass(modelBtn, fn);
+    },
     openEffortPopover(badgeEl, modelBtn) {
       const b = badgeEl || document.querySelector('[data-testid="model-selector-trigger"] .ag-cs-effort-badge, [data-testid="model-selector-trigger"] [data-ag-cs-effort]');
       const m = modelBtn || b?.closest?.('[data-testid="model-selector-trigger"]') || document.querySelector('[data-testid="model-selector-trigger"]');
@@ -9986,6 +10102,10 @@
       document.querySelectorAll('[data-ag-cs-effort]').forEach((el) => {
         el.removeAttribute('data-ag-cs-effort');
         el.classList.remove('ag-cs-effort-badge');
+      });
+      document.querySelectorAll('[data-ag-cs-has-effort]').forEach((el) => {
+        el.removeAttribute('data-ag-cs-has-effort');
+        el.style?.removeProperty?.('--ag-cs-effort-cut');
       });
       document.querySelectorAll('[data-ag-cs-queued], [data-ag-cs-takeover]').forEach((el) => {
         el.removeAttribute('data-ag-cs-queued');

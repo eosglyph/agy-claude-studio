@@ -4079,7 +4079,12 @@ test('unmountRipple tolerates zero-size .agy-home (field=null) and copy honestly
     const el = {
       tagName: String(tag || 'div').toUpperCase(),
       id: opts.id || '',
-      style: { setProperty() {}, removeProperty() {} },
+      style: {
+        _props: new Map(),
+        setProperty(k, v) { this._props.set(k, String(v)); },
+        removeProperty(k) { this._props.delete(k); },
+        getPropertyValue(k) { return this._props.get(k) || ''; },
+      },
       dataset: {},
       textContent: opts.text || '',
       _html: '',
@@ -5074,6 +5079,342 @@ test('stale async fetchActiveConvo response is discarded when reused composer ca
     assert.ok(statsBtn && !statsBtn.textContent.includes('52.5K'), 'footer stats must not display stale cascadeA tokens');
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('model selector partitions sparkle+name from effort pill, suppresses native menu when periodicSelector is on, supports bypass, and cleans up', () => {
+  const fs = require('node:fs');
+  const css = fs.readFileSync(require.resolve('../src/style.css'), 'utf8');
+  assert.ok(css.includes('[data-testid="model-selector-trigger"]::before'), 'style.css uses ::before background split for model name');
+  assert.ok(css.includes('--ag-cs-effort-cut'), 'style.css clips ::before via --ag-cs-effort-cut');
+  assert.ok(css.includes('margin-right: -4px !important'), 'style.css offsets 4px flex gap between sparkle and model name');
+  assert.ok(css.includes('border-radius: 6px 0 0 6px !important'), 'style.css overrides host rounded-full pill radius on sparkle trigger');
+  assert.ok(
+    !/:has\([^)]*:has\(/.test(css),
+    'style.css must never nest :has() inside :has() (invalid in CSS Selectors Level 4)'
+  );
+  assert.ok(
+    css.includes('.agy-composer-footer:has([data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has([data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover))'),
+    'style.css uses flat non-nested :has():not(:has()) for synchronized sparkle + model name hover'
+  );
+  assert.ok(
+    css.includes('[data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover:not(:has([data-ag-cs-effort]:hover))::before'),
+    'style.css excludes effort hover from highlighting model name ::before'
+  );
+
+  const timers = new Set();
+  const docCaptureListeners = new Map();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const matchesSimple = (n, simple) => {
+      if (!n || n.nodeType !== 1) return false;
+      let rest = simple.trim();
+      const attrMatches = [...rest.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)];
+      for (const m of attrMatches) {
+        const [, k, v] = m;
+        if (v === undefined) {
+          if (!n.hasAttribute(k)) return false;
+        } else if (n.getAttribute(k) !== v) return false;
+      }
+      rest = rest.replace(/\[[^\]]+\]/g, '');
+      const idMatch = rest.match(/#([A-Za-z0-9_-]+)/);
+      if (idMatch && n.getAttribute('id') !== idMatch[1]) return false;
+      rest = rest.replace(/#[A-Za-z0-9_-]+/g, '');
+      const clsMatches = [...rest.matchAll(/\.([A-Za-z0-9_-]+)/g)];
+      for (const m of clsMatches) if (!n.classes.has(m[1])) return false;
+      rest = rest.replace(/\.[A-Za-z0-9_-]+/g, '');
+      if (rest && n.tagName !== rest.toUpperCase()) return false;
+      return true;
+    };
+    const matchesSel = (n, sel) => {
+      const parts = sel.trim().split(/\s+/);
+      let cur = n;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (i === parts.length - 1) {
+          if (!matchesSimple(cur, parts[i])) return false;
+        } else {
+          cur = cur.parentElement;
+          while (cur && !matchesSimple(cur, parts[i])) cur = cur.parentElement;
+          if (!cur) return false;
+        }
+      }
+      return true;
+    };
+    const el = {
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      parentElement: null,
+      children,
+      classes,
+      style: {
+        _props: new Map(),
+        setProperty(k, v) { this._props.set(k, String(v)); },
+        removeProperty(k) { this._props.delete(k); },
+        getPropertyValue(k) { return this._props.get(k) || ''; },
+      },
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        contains: (c) => classes.has(c),
+        toggle: (c, force) => {
+          const on = force === undefined ? !classes.has(c) : Boolean(force);
+          if (on) classes.add(c); else classes.delete(c);
+          return on;
+        },
+      },
+      animate() { return { cancel() {} }; },
+      get className() { return [...classes].join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((x) => classes.add(x)); },
+      get isConnected() { let p = this; while (p) { if (p === html) return true; p = p.parentElement; } return false; },
+      get childElementCount() { return children.length; },
+      get nextSibling() {
+        if (!this.parentElement) return null;
+        const idx = this.parentElement.children.indexOf(this);
+        return idx >= 0 && idx + 1 < this.parentElement.children.length ? this.parentElement.children[idx + 1] : null;
+      },
+      get textContent() {
+        return children.length ? children.map((c) => c.textContent).join('') : (el._text || '');
+      },
+      set textContent(v) { children.length = 0; el._text = String(v ?? ''); },
+      _text: opts.text || '',
+      set innerHTML(v) { children.length = 0; el._html = String(v || ''); },
+      get innerHTML() { return el._html || ''; },
+      appendChild(c) { if (c.parentElement) c.parentElement.removeChild(c); children.push(c); c.parentElement = el; return c; },
+      insertBefore(c, ref) {
+        if (c.parentElement) c.parentElement.removeChild(c);
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c); else children.push(c);
+        c.parentElement = el;
+        return c;
+      },
+      removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; return c; },
+      remove() { if (el.parentElement) el.parentElement.removeChild(el); },
+      contains(other) { let c = other; while (c) { if (c === el) return true; c = c.parentElement; } return false; },
+      getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      removeAttribute: (k) => attrs.delete(k),
+      hasAttribute: (k) => attrs.has(k),
+      closest(s) {
+        const list = s.split(',').map((x) => x.trim());
+        let c = el;
+        while (c) {
+          if (list.some((x) => matchesSel(c, x))) return c;
+          c = c.parentElement;
+        }
+        return null;
+      },
+      querySelectorAll(s) {
+        const list = s.split(',').map((x) => x.trim());
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (list.some((x) => matchesSel(c, x))) out.push(c);
+            walk(c);
+          }
+        };
+        walk(el);
+        return out;
+      },
+      querySelector(s) { return el.querySelectorAll(s)[0] || null; },
+      getBoundingClientRect: () => opts.rect || { left: 20, top: 200, width: 120, height: 26, right: 140, bottom: 226 },
+      addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
+      removeEventListener(type, fn) { const arr = listeners.get(type) || []; const i = arr.indexOf(fn); if (i >= 0) arr.splice(i, 1); },
+      dispatchEvent(ev) {
+        ev.target = ev.target || el;
+        ev.preventDefault = ev.preventDefault || (() => { ev.defaultPrevented = true; });
+        ev.stopPropagation = ev.stopPropagation || (() => { ev._stopped = true; });
+        ev.stopImmediatePropagation = ev.stopImmediatePropagation || (() => { ev._stopped = true; ev._immStopped = true; });
+        for (const fn of [...(docCaptureListeners.get(ev.type) || [])]) {
+          fn(ev);
+          if (ev._immStopped) break;
+        }
+        if (ev._stopped) return !ev.defaultPrevented;
+        let cur = el;
+        while (cur && !ev._stopped) {
+          for (const fn of [...(cur._listeners?.get(ev.type) || [])]) {
+            fn(ev);
+            if (ev._immStopped) break;
+          }
+          cur = cur.parentElement;
+        }
+        return !ev.defaultPrevented;
+      },
+      _listeners: listeners,
+    };
+    return el;
+  };
+
+  const html = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body');
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const inputBox = makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } });
+  const card = makeEl('div', { className: 'surface-composer-card' });
+  const footer = makeEl('div', { className: 'agy-composer-footer' });
+  const modelBtn = makeEl('button', {
+    attrs: { 'data-testid': 'model-selector-trigger' },
+    rect: { left: 40, top: 200, width: 140, height: 26, right: 180, bottom: 226 },
+  });
+  const labelWrap = makeEl('span', { className: 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap', text: 'Gemini 4 Neon' });
+  const effortSpan = makeEl('span', {
+    className: 'opacity-70',
+    text: ' High',
+    rect: { left: 146, top: 204, width: 32, height: 18, right: 178, bottom: 222 },
+  });
+  labelWrap.appendChild(effortSpan);
+  modelBtn.appendChild(labelWrap);
+
+  const options = [
+    { label: 'Gemini 4 Neon (Low)', value: 1531, disabled: false, modelId: 'gemini-4-neon-low' },
+    { label: 'Gemini 4 Neon (High)', value: 1532, disabled: false, modelId: 'gemini-4-neon-high' },
+    { label: 'Gemini 3.8 Flash', value: 1500, disabled: false, modelId: 'gemini-3-8-flash' },
+  ];
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      selectedModel: options[1],
+      modelOptions: options,
+      setSelectedModel() {},
+    },
+    return: null,
+  };
+
+  let nativeMenuOpens = 0;
+  for (const type of ['pointerdown', 'mousedown', 'click']) {
+    modelBtn.addEventListener(type, () => { nativeMenuOpens += 1; });
+  }
+
+  footer.appendChild(modelBtn);
+  card.appendChild(footer);
+  inputBox.appendChild(card);
+  body.appendChild(inputBox);
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    createElement: (tag) => makeEl(tag),
+    getElementById: (id) => html.querySelector(`#${id}`),
+    querySelector: (sel) => html.querySelector(sel),
+    querySelectorAll: (sel) => html.querySelectorAll(sel),
+    addEventListener(type, fn, capture) {
+      if (!capture) return;
+      if (!docCaptureListeners.has(type)) docCaptureListeners.set(type, []);
+      docCaptureListeners.get(type).push(fn);
+    },
+    removeEventListener(type, fn, capture) {
+      if (!capture) return;
+      const arr = docCaptureListeners.get(type) || [];
+      const i = arr.indexOf(fn);
+      if (i >= 0) arr.splice(i, 1);
+    },
+  };
+
+  const sandbox = {
+    window: null,
+    globalThis: null,
+    document: doc,
+    navigator: { language: 'zh-CN' },
+    location: { pathname: '/' },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => setTimeout(() => fn(Date.now()), 5),
+    cancelAnimationFrame: (id) => clearTimeout(id),
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    const res = vm.runInNewContext(cdp.buildInjectExpression(cdp.DEFAULT_CONFIG), sandbox);
+    assert.equal(res.status, 'ok', JSON.stringify(res));
+
+    // 1. Real Antigravity DOM (bare TextNode + child effort span) sets data-ag-cs-has-effort & --ag-cs-effort-cut
+    assert.equal(modelBtn.getAttribute('data-ag-cs-has-effort'), '1');
+    assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '38px');
+    assert.equal(effortSpan.classList.contains('ag-cs-effort-badge'), true);
+    assert.equal(effortSpan.getAttribute('data-ag-cs-effort'), 'high');
+
+    // 2. Clicking model label wrapper suppresses native menu and opens Periodic Table
+    for (const type of ['pointerdown', 'mousedown', 'click']) {
+      labelWrap.dispatchEvent({ type, button: 0 });
+    }
+    assert.equal(nativeMenuOpens, 0, 'native model menu must not open when periodicSelector is enabled');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'clicking model name opens periodic selector');
+
+    // Close drawer via Escape
+    for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
+      fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    }
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+
+    // ArrowUp / ArrowDown on modelBtn also opens/blocks native menu
+    modelBtn.dispatchEvent({ type: 'keydown', key: 'ArrowUp' });
+    assert.equal(nativeMenuOpens, 0);
+
+    // 3. Clicking effort badge opens ONLY effort popover (no native menu, no periodic selector)
+    for (const type of ['pointerdown', 'mousedown', 'click']) {
+      effortSpan.dispatchEvent({ type, button: 0 });
+    }
+    assert.equal(nativeMenuOpens, 0, 'clicking effort badge must not open native model menu');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false, 'clicking effort badge must not open periodic selector');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true, 'clicking effort badge opens effort popover');
+
+    // 3b. When effortSlider: false and periodicSelector: true, clicking effort badge is also intercepted (not leaked to native menu)
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSlider: false, periodicSelector: true });
+    effortSpan.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(nativeMenuOpens, 0, 'effortSlider: false must not leak effort badge click to native menu');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'effortSlider: false falls back to opening periodic selector');
+    for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
+      fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    }
+
+    // 4. Programmatic bypass reaches native model menu without opening periodic selector
+    sandbox.window.__agClaudeStudio.withNativeModelMenuBypass(modelBtn, () => {
+      modelBtn.dispatchEvent({ type: 'click', button: 0 });
+    });
+    assert.equal(nativeMenuOpens, 1, 'programmatic bypass reaches native model button click handler');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+
+    // 5. Disabling periodicSelector removes sparkle trigger and restores native menu, while keeping effort badge independent
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSlider: true, periodicSelector: false });
+    assert.equal(footer.querySelector('.ag-cs-periodic-trigger'), null, 'sparkle trigger removed when periodicSelector is false');
+    labelWrap.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(nativeMenuOpens, 2, 'native model menu works normally when periodicSelector is false');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+
+    effortSpan.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(nativeMenuOpens, 2, 'effort badge remains independent when periodicSelector is false');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true);
+
+    // 6. Model without effort badge clears data-ag-cs-has-effort and --ag-cs-effort-cut
+    effortSpan.remove();
+    labelWrap.textContent = 'Gemini 3.8 Flash';
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, periodicSelector: true });
+    assert.equal(modelBtn.hasAttribute('data-ag-cs-has-effort'), false);
+    assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '');
+    assert.equal(modelBtn.querySelector('.ag-cs-effort-badge'), null);
+
+    // 7. Cleanup removes all new attributes/classes/vars and listeners
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(modelBtn.hasAttribute('data-ag-cs-has-effort'), false);
+    assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '');
+    assert.equal(footer.querySelector('.ag-cs-periodic-trigger'), null);
+    assert.equal(docCaptureListeners.get('click')?.length || 0, 0);
   } finally {
     for (const id of timers) clearTimeout(id);
   }
