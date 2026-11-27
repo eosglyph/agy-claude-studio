@@ -2256,6 +2256,9 @@
       font-weight: 550;
       cursor: pointer;
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
     }
     button.cd-btw-new-btn:hover {
@@ -2270,6 +2273,7 @@
     }
     button.cd-btw-row {
       width: 100%;
+      min-height: 34px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -2287,12 +2291,9 @@
       background: var(--control-hover);
       border-color: color-mix(in srgb, var(--brand-accent) 45%, var(--border-col));
     }
-    button.cd-btw-row.is-empty-entry {
-      border-style: dashed;
-      background: transparent;
-    }
-    button.cd-btw-row.is-empty-entry:hover {
-      background: var(--control-bg);
+    button.cd-btw-row.is-empty-entry .cd-btw-sub {
+      font-size: 11.5px;
+      color: var(--muted-fg);
     }
     .cd-btw-row-left {
       display: flex;
@@ -5783,6 +5784,7 @@
           btwJumpTip: 'Click to jump back to this side question',
           btwStartTip: 'Insert /btw command chip in composer',
           btwFailedToast: 'Could not reach host window to open /btw',
+          btwDraftToast: 'Composer already has an unsent draft — clear or send it before using /btw',
           scriptsTitle: 'Custom Scripts',
           scriptsCount: (n) => `${n} script${n === 1 ? '' : 's'}`,
           scriptsEmpty: 'Add local Node, Python, or Shell scripts to run with one click.',
@@ -5843,6 +5845,7 @@
           btwJumpTip: 'クリックしてこのサイド質問へ移動',
           btwStartTip: '入力欄に /btw コマンドチップを挿入',
           btwFailedToast: 'ホストウィンドウに接続できませんでした',
+          btwDraftToast: '入力欄に未送信の下書きがあります。クリアまたは送信してから /btw を使用してください',
           scriptsTitle: 'カスタムスクリプト',
           scriptsCount: (n) => `${n} 件`,
           scriptsEmpty: 'ローカルの Node / Python / Shell スクリプトを登録してワンクリックで実行できます。',
@@ -5910,6 +5913,9 @@
         btwJumpTip: isTrad ? '點擊跳回此旁支提問' : '点击跳转回此旁支提问',
         btwStartTip: isTrad ? '點擊在輸入框插入 /btw 命令並提問' : '点击在输入框插入 /btw 命令并提问',
         btwFailedToast: isTrad ? '未能連線主視窗以開啟旁支提問' : '未能连接主窗口以打开旁支提问',
+        btwDraftToast: isTrad
+          ? '輸入框已有未傳送草稿，請先清空或傳送後再使用 /btw'
+          : '输入框已有未发送草稿，请先清空或发送后再使用 /btw',
         scriptsTitle: isTrad ? '自訂腳本' : '自定义脚本',
         scriptsCount: (n) => (isTrad ? `${n} 個` : `${n} 个`),
         scriptsEmpty: isTrad
@@ -6255,7 +6261,7 @@
       const lang = currentConfig?.language || 'zh-CN';
       const c = getOverviewExtrasCopy(lang);
       const targetConvoId =
-        String(payload?.conversationId || liveTasksState.sideQuestionConvoId || activeConversationId || '').trim();
+        String(payload?.conversationId || activeConversationId || liveTasksState.sideQuestionConvoId || '').trim();
       try {
         const res = await apiFetch('/api/side-question/open', {
           method: 'POST',
@@ -6270,7 +6276,12 @@
         });
         const data = await res.json().catch(() => null);
         if (!res.ok || !data?.ok) {
-          showToast(c.btwFailedToast, 'err');
+          const reason = String(data?.reason || data?.action || '').trim();
+          if (reason === 'draft_present') {
+            showToast(c.btwDraftToast || c.btwFailedToast, 'err');
+          } else {
+            showToast(c.btwFailedToast, 'err');
+          }
           return;
         }
         setTimeout(() => {
@@ -6287,50 +6298,9 @@
       block.innerHTML = '';
 
       const items = Array.isArray(liveTasksState.sideQuestions) ? liveTasksState.sideQuestions : [];
-      const convoId = liveTasksState.sideQuestionConvoId || activeConversationId || '';
+      const convoId = activeConversationId || liveTasksState.sideQuestionConvoId || '';
       const arrowSvg =
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
-
-      if (items.length === 0) {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'cd-btw-row is-empty-entry';
-        row.title = c.btwStartTip;
-
-        const left = document.createElement('span');
-        left.className = 'cd-btw-row-left';
-        const pill = document.createElement('span');
-        pill.className = 'cd-btw-pill';
-        pill.textContent = '/btw';
-        const copy = document.createElement('span');
-        copy.className = 'cd-btw-copy';
-        const title = document.createElement('span');
-        title.className = 'cd-btw-title';
-        title.textContent = c.btwTitle;
-        const sub = document.createElement('span');
-        sub.className = 'cd-btw-sub';
-        sub.textContent = c.btwEmptySub;
-        copy.appendChild(title);
-        copy.appendChild(sub);
-        left.appendChild(pill);
-        left.appendChild(copy);
-
-        const right = document.createElement('span');
-        right.className = 'cd-btw-row-right';
-        const arrow = document.createElement('span');
-        arrow.className = 'cd-btw-arrow';
-        arrow.setAttribute('aria-hidden', 'true');
-        arrow.innerHTML = arrowSvg;
-        right.appendChild(arrow);
-
-        row.appendChild(left);
-        row.appendChild(right);
-        row.addEventListener('click', () => {
-          triggerSideQuestionOpen({ conversationId: convoId, forceNew: true });
-        });
-        block.appendChild(row);
-        return;
-      }
 
       const head = document.createElement('div');
       head.className = 'cd-btw-head';
@@ -6351,6 +6321,41 @@
 
       const list = document.createElement('div');
       list.className = 'cd-btw-list';
+
+      if (items.length === 0) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'cd-btw-row is-empty-entry';
+        row.title = c.btwStartTip;
+
+        const left = document.createElement('span');
+        left.className = 'cd-btw-row-left';
+        const copy = document.createElement('span');
+        copy.className = 'cd-btw-copy';
+        const sub = document.createElement('span');
+        sub.className = 'cd-btw-sub';
+        sub.textContent = c.btwEmptySub;
+        copy.appendChild(sub);
+        left.appendChild(copy);
+
+        const right = document.createElement('span');
+        right.className = 'cd-btw-row-right';
+        const arrow = document.createElement('span');
+        arrow.className = 'cd-btw-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.innerHTML = arrowSvg;
+        right.appendChild(arrow);
+
+        row.appendChild(left);
+        row.appendChild(right);
+        row.addEventListener('click', () => {
+          triggerSideQuestionOpen({ conversationId: convoId, forceNew: true });
+        });
+        list.appendChild(row);
+        block.appendChild(list);
+        return;
+      }
+
       for (const sq of items.slice(0, 5)) {
         const row = document.createElement('button');
         row.type = 'button';
@@ -6397,15 +6402,20 @@
       block.appendChild(list);
     }
 
+    let liveTasksReqSeq = 0;
+
     async function loadLiveTasks() {
+      const reqConvoId = activeConversationId || '';
+      const reqSeq = ++liveTasksReqSeq;
       try {
         const res = await apiFetch('/api/live-tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversationId: activeConversationId || '' }),
+          body: JSON.stringify({ conversationId: reqConvoId }),
         });
         if (!res.ok) return;
         const data = await res.json();
+        if (reqSeq !== liveTasksReqSeq || reqConvoId !== (activeConversationId || '')) return;
         if (data && data.ok) {
           liveTasksState = data;
           renderLiveTasksCard();
@@ -6730,6 +6740,23 @@
         return '';
       }
     })();
+
+    window.addEventListener('message', (ev) => {
+      if (ev.source !== window.parent) return;
+      const msg = ev.data;
+      if (!msg || typeof msg !== 'object' || msg.type !== 'ag-cs:active-conversation') return;
+      const nextCid = String(msg.conversationId || '').trim();
+      if (!nextCid || !/^[0-9a-f-]{8,64}$/i.test(nextCid) || nextCid === activeConversationId) return;
+      activeConversationId = nextCid;
+      liveTasksState = {
+        ...liveTasksState,
+        sideQuestionConvoId: nextCid,
+        sideQuestions: [],
+      };
+      renderLiveTasksCard();
+      void loadLiveTasks();
+      void loadConversationInspector();
+    });
 
     let inspectorState = null;
     const inspectorExpanded = { mcp: false, skills: false, connectors: false };

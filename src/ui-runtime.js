@@ -2021,6 +2021,167 @@
     return isSlashMentionNode(node, 'compact');
   }
 
+  function isAnySlashCommandMentionNode(node) {
+    if (!node || typeof node !== 'object') return false;
+    if (node.type !== 'beautifulMention' && node.type !== 'contextScopeItemMention') return false;
+    if (node.trigger === '/') return true;
+    const val = cleanCompactCmd(node.value);
+    if ((val === 'compact' || val === 'btw') && (!node.trigger || node.trigger === '/')) {
+      return true;
+    }
+    const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
+    return Boolean(rawData && /slashCommand|recipe/i.test(rawData));
+  }
+
+  function hasSlashCommandChipInComposer(ed) {
+    if (!ed) return false;
+    const lex = ed.__lexicalEditor;
+    if (lex && typeof lex.getEditorState === 'function') {
+      try {
+        const root = lex.getEditorState()?.toJSON?.()?.root;
+        const paras = Array.isArray(root?.children) ? root.children : [];
+        for (const p of paras) {
+          const kids = Array.isArray(p?.children) ? p.children : [];
+          for (const node of kids) {
+            if (isAnySlashCommandMentionNode(node)) return true;
+          }
+        }
+      } catch {}
+    }
+    const decorators = Array.from(ed.querySelectorAll?.('[data-lexical-decorator="true"], [data-chip]') || []);
+    for (const d of decorators) {
+      const rawTxt = getNonIconText(d);
+      const txt = cleanCompactCmd(rawTxt);
+      if (
+        txt === 'compact' ||
+        txt === 'btw' ||
+        Boolean(d.getAttribute?.('data-slash-command')) ||
+        /^\s*\//.test(rawTxt)
+      ) {
+        return true;
+      }
+    }
+    const raw = getNonIconText(ed).replace(/[\u200B\uFEFF\u00A0]/g, ' ').trim();
+    return /^\/(compact|btw)\b/i.test(raw);
+  }
+
+  function findLexicalCommandByName(lex, name) {
+    if (!lex || !lex._commands || typeof lex._commands.keys !== 'function') return null;
+    for (const key of lex._commands.keys()) {
+      if (key && (key.type === name || key.name === name)) return key;
+    }
+    return null;
+  }
+
+  function clearComposerAndInsertSlashCommand(ed, cmdText) {
+    if (!ed) return false;
+    const targetCmd = cleanCompactCmd(cmdText);
+    const hasExistingContent = () => {
+      const txt = getNonIconText(ed).replace(/[\u200B\uFEFF\u00A0]/g, ' ').trim();
+      const hasDec = Boolean(ed.querySelector?.('[data-lexical-decorator], [data-chip]'));
+      return txt.length > 0 || hasDec;
+    };
+
+    ed.focus();
+
+    if (hasExistingContent()) {
+      const lex = ed.__lexicalEditor;
+      if (lex) {
+        try {
+          const clearSticky = findLexicalCommandByName(lex, 'CLEAR_DISMISSED_STICKY_MENTION_COMMAND');
+          if (clearSticky && typeof lex.dispatchCommand === 'function') {
+            lex.dispatchCommand(clearSticky, undefined);
+          }
+        } catch {}
+        if (typeof lex.update === 'function') {
+          try {
+            lex.update(
+              () => {
+                const root =
+                  lex._pendingEditorState?._nodeMap?.get?.('root') ||
+                  lex._editorState?._nodeMap?.get?.('root');
+                if (root && typeof root.clear === 'function') {
+                  root.clear();
+                  if (typeof root.select === 'function') root.select();
+                }
+              },
+              { discrete: true }
+            );
+          } catch {}
+        }
+        if (hasExistingContent() && typeof lex.dispatchCommand === 'function') {
+          try {
+            const selAll = findLexicalCommandByName(lex, 'SELECT_ALL_COMMAND');
+            const remTxt = findLexicalCommandByName(lex, 'REMOVE_TEXT_COMMAND');
+            const delChar = findLexicalCommandByName(lex, 'DELETE_CHARACTER_COMMAND');
+            if (selAll) lex.dispatchCommand(selAll, null);
+            if (remTxt) lex.dispatchCommand(remTxt, null);
+            else if (delChar) lex.dispatchCommand(delChar, true);
+          } catch {}
+        }
+      }
+
+      if (hasExistingContent()) {
+        try {
+          if (
+            typeof window !== 'undefined' &&
+            typeof window.getSelection === 'function' &&
+            typeof document.createRange === 'function'
+          ) {
+            const sel = window.getSelection();
+            if (sel) {
+              const range = document.createRange();
+              range.selectNodeContents(ed);
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          }
+        } catch {}
+        if (typeof document.execCommand === 'function') {
+          try {
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+          } catch {}
+        }
+        if (hasExistingContent()) {
+          ed.textContent = '';
+          if (typeof InputEvent === 'function') {
+            try {
+              ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: '', inputType: 'deleteContentBackward' }));
+            } catch {}
+          }
+        }
+      }
+      ed.focus();
+    }
+
+    let inserted = false;
+    if (typeof document.execCommand === 'function') {
+      try {
+        document.execCommand('selectAll', false, null);
+        inserted = Boolean(document.execCommand('insertText', false, cmdText));
+      } catch {}
+    }
+    if (!inserted) {
+      if (typeof InputEvent === 'function') {
+        try {
+          ed.dispatchEvent(
+            new InputEvent('beforeinput', { bubbles: true, cancelable: true, data: cmdText, inputType: 'insertText' })
+          );
+        } catch {}
+      }
+      if (cleanCompactCmd(getNonIconText(ed)) !== targetCmd) {
+        ed.textContent = cmdText;
+        if (typeof InputEvent === 'function') {
+          try {
+            ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: cmdText, inputType: 'insertText' }));
+          } catch {}
+        }
+      }
+    }
+    return inserted || cleanCompactCmd(getNonIconText(ed)) === targetCmd;
+  }
+
   function findStandaloneSlashChip(ed, cmdName) {
     if (!ed || ed._agCsComposing) return null;
     const target = String(cmdName || '').toLowerCase();
@@ -2418,7 +2579,8 @@
       }
       const existingText = getNonIconText(ed).replace(/[\u200B\uFEFF\u00A0]/g, ' ').trim();
       const hasDraftNode = Boolean(ed.querySelector?.('[data-lexical-decorator], [data-chip]'));
-      if (existingText.length > 0 || hasDraftNode) {
+      const hasSlashChip = hasSlashCommandChipInComposer(ed);
+      if ((existingText.length > 0 || hasDraftNode) && !hasSlashChip) {
         try {
           ed.focus?.();
         } catch {}
@@ -2429,25 +2591,7 @@
           window.focus();
         } catch {}
       }
-      ed.focus();
-      let inserted = false;
-      if (typeof document.execCommand === 'function') {
-        document.execCommand('selectAll', false, null);
-        inserted = Boolean(document.execCommand('insertText', false, '/btw'));
-      }
-      if (!inserted) {
-        if (typeof InputEvent === 'function') {
-          ed.dispatchEvent(
-            new InputEvent('beforeinput', { bubbles: true, cancelable: true, data: '/btw', inputType: 'insertText' })
-          );
-        }
-        if (cleanCompactCmd(getNonIconText(ed)) !== 'btw') {
-          ed.textContent = '/btw';
-          if (typeof InputEvent === 'function') {
-            ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: '/btw', inputType: 'insertText' }));
-          }
-        }
-      }
+      clearComposerAndInsertSlashCommand(ed, '/btw');
       const delays = [60, 100, 140, 200, 260];
       let step = 0;
       const scheduleTrackedTimer = (fn, delayMs) => {
@@ -2758,6 +2902,7 @@
       return {
         ok: Boolean(res?.ok),
         action: res?.ok ? 'composer_btw' : (res?.reason || 'composer_not_found'),
+        reason: res?.ok ? '' : (res?.reason || 'composer_not_found'),
         conversationId: cid,
       };
     }
@@ -2784,6 +2929,7 @@
       return {
         ok: Boolean(res?.ok),
         action: res?.ok ? 'composer_btw' : (res?.reason || 'composer_not_found'),
+        reason: res?.ok ? '' : (res?.reason || 'composer_not_found'),
         conversationId: cid,
       };
     }
@@ -2933,18 +3079,7 @@
         }
         return true;
       }
-      ed.focus();
-      let inserted = false;
-      if (typeof document.execCommand === 'function') {
-        document.execCommand('selectAll', false, null);
-        inserted = Boolean(document.execCommand('insertText', false, '/compact'));
-      }
-      if (!inserted) {
-        ed.textContent = '/compact';
-        if (typeof InputEvent === 'function') {
-          ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: '/compact', inputType: 'insertText' }));
-        }
-      }
+      clearComposerAndInsertSlashCommand(ed, '/compact');
       const delays = [60, 100, 140, 200, 250];
       let step = 0;
       const schedulePresetOrHint = () => {
@@ -7504,13 +7639,88 @@
     return true;
   }
 
+  function extractConversationIdFromUrl(rawUrl) {
+    const s = String(rawUrl || '').trim();
+    if (!s) return '';
+    try {
+      const parsed = new URL(s);
+      const q = parsed.searchParams.get('conversationId') || '';
+      if (q) return normalizeCascadeId(q) || q.trim();
+    } catch {
+      const m = s.match(/[?&]conversationId=([^&#]+)/i);
+      if (m && m[1]) {
+        try {
+          const dec = decodeURIComponent(m[1]);
+          return normalizeCascadeId(dec) || dec.trim();
+        } catch {}
+      }
+    }
+    return '';
+  }
+
+  function getActiveConversationIdFast() {
+    try {
+      const cv = document.querySelector('[data-testid="conversation-view"]');
+      const attrId = normalizeCascadeId(cv?.getAttribute?.('data-cascade-id'));
+      if (attrId) return attrId;
+    } catch {}
+    try {
+      const m = String(location?.pathname || '').match(/\/c\/([0-9a-f-]{8,})/i);
+      if (m && m[1]) return normalizeCascadeId(m[1]) || m[1];
+    } catch {}
+    return resolveActiveConversationIdForHost('', findHostReduxStore());
+  }
+
+  function syncDockedIframeConversation(iframe, activeCid) {
+    if (!iframe || !activeCid) return;
+    try {
+      const win = iframe.contentWindow;
+      if (!win || typeof win.postMessage !== 'function') return;
+      if (!iframe._agCsConvoSyncLoadBound && typeof iframe.addEventListener === 'function') {
+        iframe._agCsConvoSyncLoadBound = true;
+        iframe.addEventListener('load', () => {
+          iframe._agCsPostedCid = '';
+          const liveCid = getActiveConversationIdFast();
+          if (liveCid) syncDockedIframeConversation(iframe, liveCid);
+        });
+      }
+      if (iframe._agCsPostedCid && sameCascadeId(iframe._agCsPostedCid, activeCid)) return;
+      iframe._agCsPostedCid = activeCid;
+      win.postMessage({ type: 'ag-cs:active-conversation', conversationId: activeCid }, '*');
+    } catch {}
+  }
+
   function findLiveStudioSlot() {
-    const iframe = document.querySelector('iframe[src*="agy-claude-studio--studio"]');
-    if (!iframe) return null;
-    const slot = typeof iframe.closest === 'function' ? iframe.closest('[data-testid="sidecar-iframe-slot"]') : null;
-    const overlay = slot?.parentElement || null;
-    if (!slot || !overlay) return null;
-    return { iframe, slot, overlay };
+    const iframes = Array.from(document.querySelectorAll('iframe[src*="agy-claude-studio--studio"]'));
+    if (!iframes.length) return null;
+    const candidates = [];
+    for (const iframe of iframes) {
+      const slot = typeof iframe.closest === 'function' ? iframe.closest('[data-testid="sidecar-iframe-slot"]') : null;
+      const overlay = slot?.parentElement || null;
+      if (!slot || !overlay) continue;
+      const url = iframe.getAttribute?.('src') || iframe.src || slot.getAttribute?.('data-sidecar-url') || '';
+      const slotCid = extractConversationIdFromUrl(url);
+      const isVisible = slot.getAttribute?.('data-visible') === 'true';
+      candidates.push({ iframe, slot, overlay, slotCid, isVisible });
+    }
+    if (!candidates.length) return null;
+    const activeCid = getActiveConversationIdFast();
+    let chosen = null;
+    let matched = false;
+    if (activeCid) {
+      const exact = candidates.filter((c) => c.slotCid && sameCascadeId(c.slotCid, activeCid));
+      if (exact.length > 0) {
+        chosen = exact.find((c) => c.isVisible) || exact[exact.length - 1];
+        matched = true;
+      }
+    }
+    if (!chosen) {
+      chosen =
+        candidates.find((c) => c.isVisible) ||
+        candidates.find((c) => !c.slotCid) ||
+        candidates[candidates.length - 1];
+    }
+    return { ...chosen, activeCid, matched };
   }
 
   function syncPinnedStudioDockPosition() {
@@ -7563,6 +7773,9 @@
     }
     pinnedDock.slotEl = found.slot;
     pinnedDock.overlayEl = found.overlay;
+    if (found.activeCid) {
+      syncDockedIframeConversation(found.iframe, found.activeCid);
+    }
   }
 
   function scheduleDockPositionSync() {

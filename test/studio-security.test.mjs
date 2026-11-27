@@ -351,6 +351,19 @@ test('openSideQuestionInHost stops immediately on draft_present and continues on
   assert.deepEqual(evaluatedTargets, ['win-1']);
 
   evaluatedTargets.length = 0;
+  const actionDraftRes = await openSideQuestionInHost(
+    { conversationId: 'conv-1' },
+    {
+      cdpClient: makeCdp({
+        'win-1': { ok: false, action: 'draft_present' },
+        'win-2': { ok: true, status: 'opened' },
+      }),
+    }
+  );
+  assert.deepEqual(actionDraftRes, { ok: false, action: 'draft_present' });
+  assert.deepEqual(evaluatedTargets, ['win-1']);
+
+  evaluatedTargets.length = 0;
   const fallbackRes = await openSideQuestionInHost(
     { conversationId: 'conv-2' },
     {
