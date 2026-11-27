@@ -7710,6 +7710,12 @@
   function openStudioPane(opts = {}) {
     const found = getEffectivePinRightPane() === 'studio' && pinnedDock.el && pinnedDock.el.isConnected ? findLiveStudioSlot() : null;
     if (found) {
+      if (pinnedDock.auxMaximized) {
+        const maxBtn = document.querySelector('[data-testid="toggle-maximize-pane"]');
+        if (maxBtn && typeof maxBtn.click === 'function') {
+          try { maxBtn.click(); } catch {}
+        }
+      }
       if (pinnedDock.collapsed) {
         setPinnedDockCollapsed(false);
         return { ok: true, status: 'dock_expanded' };
@@ -7774,6 +7780,7 @@
     width: DOCK_DEFAULT_WIDTH,
     collapsed: false,
     soloMode: false,
+    auxMaximized: false,
     lastNonStudioTabId: '',
     prevActiveTabId: '',
     prevAuxOpen: false,
@@ -7983,6 +7990,7 @@
       try {
         pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-open');
         pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-solo');
+        pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-aux-max');
         pinnedDock.splitEl.style?.removeProperty?.('--ag-cs-dock-w');
         pinnedDock.splitEl.style?.removeProperty?.('--ag-cs-dock-solo-pr');
       } catch {}
@@ -8038,6 +8046,7 @@
     detachDockSplitListeners();
     detachDockToggleListeners();
     pinnedDock.soloMode = false;
+    pinnedDock.auxMaximized = false;
     pinnedDock.auxCloseAttempted = false;
     pinnedDock.userForcedAuxOpen = false;
     pinnedDock.pendingHostAction = null;
@@ -8201,9 +8210,20 @@
     return { ...chosen, activeCid, matched };
   }
 
+  function isAuxPaneMaximized(split) {
+    if (!split) return false;
+    const trans = split.getAttribute?.('data-split-transition') || '';
+    if (trans === 'maximizing' || trans === 'restoring') return true;
+    const children = Array.from(split.children || []);
+    for (const ch of children) {
+      if (ch && ch.getAttribute?.('data-split-overlaid') === 'true') return true;
+    }
+    return false;
+  }
+
   function syncPinnedStudioDockPosition(preFound = null) {
     if (destroyed || !pinnedDock.el || !pinnedDock.el.isConnected) return;
-    if (pinnedDock.collapsed) {
+    if (pinnedDock.collapsed || pinnedDock.auxMaximized || isAuxPaneMaximized(pinnedDock.splitEl)) {
       releaseDockedStudioSlot({ keepHidden: true });
       hideStudioSlotWhileCollapsed(preFound);
       return;
@@ -8302,6 +8322,7 @@
 
     const wasOpen = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-open') === '1';
     const wasSolo = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-solo') === '1';
+    const wasAuxMax = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-aux-max') === '1';
     const wasCollapsed = Boolean(pinnedDock.el.classList?.contains?.('is-collapsed'));
     const prevDockW = pinnedDock.splitEl.style?.getPropertyValue?.('--ag-cs-dock-w') || '';
     const nextDockW = `${activeWidth}px`;
@@ -8311,6 +8332,12 @@
     }
     if (!wasOpen) {
       pinnedDock.splitEl.setAttribute('data-ag-cs-dock-open', '1');
+    }
+    if (pinnedDock.auxMaximized) {
+      stopDockDrag();
+      if (!wasAuxMax) pinnedDock.splitEl.setAttribute('data-ag-cs-dock-aux-max', '1');
+    } else if (wasAuxMax) {
+      pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-aux-max');
     }
     if (pinnedDock.soloMode) {
       if (!wasSolo) pinnedDock.splitEl.setAttribute('data-ag-cs-dock-solo', '1');
@@ -8326,6 +8353,7 @@
       Boolean(opts.forceTrack) ||
       !wasOpen ||
       wasSolo !== Boolean(pinnedDock.soloMode) ||
+      wasAuxMax !== Boolean(pinnedDock.auxMaximized) ||
       wasCollapsed !== Boolean(pinnedDock.collapsed) ||
       widthChanged;
 
@@ -8348,7 +8376,7 @@
       if (pinnedDock.expandLabelEl) pinnedDock.expandLabelEl.textContent = copy.railLabel;
     }
 
-    if (pinnedDock.collapsed) {
+    if (pinnedDock.collapsed || pinnedDock.auxMaximized) {
       releaseDockedStudioSlot({ keepHidden: true });
       hideStudioSlotWhileCollapsed(opts.preFound || null);
     } else {
@@ -8639,6 +8667,7 @@
     }
 
     pinnedDock.soloMode = soloMode;
+    pinnedDock.auxMaximized = isAuxPaneMaximized(split);
 
     const dockEl = ensurePinnedDockElement();
     if (pinnedDock.splitEl !== split) {
@@ -10697,12 +10726,20 @@
       attr !== 'data-aux-pane-open' &&
       attr !== 'data-active-tab-id' &&
       attr !== 'data-cascade-id' &&
-      attr !== 'data-visible'
+      attr !== 'data-visible' &&
+      attr !== 'data-split-overlaid' &&
+      attr !== 'data-split-transition'
     ) {
       return false;
     }
     const targetEl = m.target && typeof m.target.closest === 'function' ? m.target : m.target?.parentElement;
     if (!targetEl || typeof targetEl.closest !== 'function') return false;
+    if (attr === 'data-split-transition') {
+      return Boolean(targetEl.matches?.('[data-testid="aux-pane-split"]'));
+    }
+    if (attr === 'data-split-overlaid') {
+      return Boolean(targetEl.parentElement?.matches?.('[data-testid="aux-pane-split"]'));
+    }
     if (attr === 'data-aux-pane-open') {
       return Boolean(
         targetEl.hasAttribute?.('data-aux-pane-open') ||
@@ -10931,7 +10968,7 @@
       characterData: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'data-aux-pane-open', 'data-active-tab-id', 'data-cascade-id', 'data-visible'],
+      attributeFilter: ['class', 'data-aux-pane-open', 'data-active-tab-id', 'data-cascade-id', 'data-visible', 'data-split-overlaid', 'data-split-transition'],
     });
     for (const [evName, handler] of DOC_LISTENERS) {
       document.addEventListener(evName, handler, true);
@@ -11310,6 +11347,7 @@
         hasPinnedDock: Boolean(pinnedDock.el && pinnedDock.el.isConnected),
         pinnedDockCollapsed: Boolean(pinnedDock.collapsed),
         pinnedDockSolo: Boolean(pinnedDock.soloMode),
+        pinnedDockAuxMaximized: Boolean(pinnedDock.auxMaximized),
         hasSmoothCaret: Boolean(document.querySelector('.ag-cs-smooth-caret')),
         hasEffortPopover: Boolean(openEffortPop && openEffortPop.isConnected),
         hasContextPopover: Boolean(openPopover && openPopover.isConnected),

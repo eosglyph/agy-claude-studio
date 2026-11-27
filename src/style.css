@@ -4953,8 +4953,27 @@ html[data-ag-cs-style][data-ag-cs-gemini-loader="on"] .ripple-container > .rippl
 }
 
 /* ── Persistent 3-Column Claude Studio Dock ────────────────────────────────── */
-[data-testid="aux-pane-split"][data-ag-cs-dock-open="1"]:not([data-ag-cs-dock-solo="1"]) > :last-child {
+[data-testid="aux-pane-split"][data-ag-cs-dock-open="1"]:not([data-ag-cs-dock-solo="1"]):not([data-ag-cs-dock-aux-max="1"]):not([data-split-transition="maximizing"]):not([data-split-transition="restoring"]):not(:has(> [data-split-overlaid="true"])) > :last-child {
   max-width: calc(100% - 340px - var(--ag-cs-dock-w, 310px)) !important;
+}
+
+[data-testid="aux-pane-split"][data-ag-cs-dock-aux-max="1"] > .ag-cs-pinned-dock,
+[data-testid="aux-pane-split"][data-split-transition="maximizing"] > .ag-cs-pinned-dock,
+[data-testid="aux-pane-split"][data-split-transition="restoring"] > .ag-cs-pinned-dock,
+[data-testid="aux-pane-split"]:has(> [data-split-overlaid="true"]) > .ag-cs-pinned-dock {
+  z-index: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+[data-testid="aux-pane-split"][data-ag-cs-dock-aux-max="1"] ~ * [data-testid="sidecar-iframe-slot"][data-ag-cs-docked-slot="1"],
+[data-testid="aux-pane-split"][data-split-transition="maximizing"] ~ * [data-testid="sidecar-iframe-slot"][data-ag-cs-docked-slot="1"],
+[data-testid="aux-pane-split"][data-split-transition="restoring"] ~ * [data-testid="sidecar-iframe-slot"][data-ag-cs-docked-slot="1"],
+[data-testid="aux-pane-split"]:has(> [data-split-overlaid="true"]) ~ * [data-testid="sidecar-iframe-slot"][data-ag-cs-docked-slot="1"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 [data-testid="aux-pane-split"][data-ag-cs-dock-solo="1"] > .ag-cs-pinned-dock ~ * {

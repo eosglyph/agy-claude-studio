@@ -1030,9 +1030,10 @@ const REMOVE_EXPRESSION = `(() => {
   document.querySelectorAll('[data-ag-cs-inline-model-wrap]').forEach((el) => {
     el.removeAttribute('data-ag-cs-inline-model-wrap');
   });
-  document.querySelectorAll('[data-ag-cs-dock-open], [data-ag-cs-dock-solo]').forEach((el) => {
+  document.querySelectorAll('[data-ag-cs-dock-open], [data-ag-cs-dock-solo], [data-ag-cs-dock-aux-max]').forEach((el) => {
     el.removeAttribute('data-ag-cs-dock-open');
     el.removeAttribute('data-ag-cs-dock-solo');
+    el.removeAttribute('data-ag-cs-dock-aux-max');
     el.style?.removeProperty?.('--ag-cs-dock-w');
     el.style?.removeProperty?.('--ag-cs-dock-solo-pr');
   });

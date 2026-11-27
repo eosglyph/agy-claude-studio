@@ -978,6 +978,7 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
           if (p === 'iframe[src*="agy-claude-studio--studio"]') return c.tagName === 'IFRAME' && String(c.getAttribute('src') || '').includes('agy-claude-studio--studio');
           if (p === '[data-ag-cs-dock-open]') return c.hasAttribute('data-ag-cs-dock-open');
           if (p === '[data-ag-cs-dock-solo]') return c.hasAttribute('data-ag-cs-dock-solo');
+          if (p === '[data-ag-cs-dock-aux-max]') return c.hasAttribute('data-ag-cs-dock-aux-max');
           if (p === '[data-ag-cs-docked-slot]') return c.hasAttribute('data-ag-cs-docked-slot');
           if (p === '[data-ag-cs-dock-hidden]') return c.hasAttribute('data-ag-cs-dock-hidden');
           if (p === '.ag-cs-pinned-dock') return c.classList.contains('ag-cs-pinned-dock');
@@ -1216,13 +1217,55 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false, 'Other plugin opens Column 3 alongside pinned Studio dock');
     assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
 
-    // 6. REMOVE_EXPRESSION tears everything down cleanly including solo/hidden attrs
+    // 5d. Maximizing the right aux pane (e.g. fullscreen image/file viewer) hides the pinned Studio dock & iframe
+    // during maximizing, settled overlaid, and restoring transitions, then restores cleanly without losing state
+    chatCol.setAttribute('data-split-overlaid', 'true');
+    split.setAttribute('data-split-transition', 'maximizing');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1', 'Marks split aux-maximized during maximize');
+    assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false, 'Releases docked slot while aux pane is maximized');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1', 'Hides Studio iframe while aux pane is maximized');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().pinnedDockAuxMaximized, true);
+
+    // Settled maximized state (transition cleared, data-split-overlaid remains)
+    split.removeAttribute('data-split-transition');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1', 'Stays hidden while aux pane remains overlaid');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
+
+    // Restoring transition (data-split-overlaid removed, data-split-transition="restoring" still active)
+    chatCol.removeAttribute('data-split-overlaid');
+    split.setAttribute('data-split-transition', 'restoring');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1', 'Keeps Studio hidden during restoring slide animation');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
+
+    // Settled restored state -> re-docks Studio cleanly
+    split.removeAttribute('data-split-transition');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.hasAttribute('data-ag-cs-dock-aux-max'), false, 'Clears aux-max attribute once restored');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1', 'Re-docks Studio iframe after restore');
+    assert.equal(studioSlot.hasAttribute('data-ag-cs-dock-hidden'), false);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().pinnedDockAuxMaximized, false);
+
+    // Nested split child with data-split-overlaid must NOT falsely trigger aux-pane maximize
+    const nestedSplitChild = auxWrap.appendChild(makeEl('div', { attrs: { 'data-split-overlaid': 'true' } }));
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.hasAttribute('data-ag-cs-dock-aux-max'), false, 'Ignores nested split overlaid attr');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
+    nestedSplitChild.remove();
+
+    // 6. REMOVE_EXPRESSION tears everything down cleanly including solo/aux-max/hidden attrs
+    chatCol.setAttribute('data-split-overlaid', 'true');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1');
     sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(true);
     assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
     assert.equal(split.querySelector('.ag-cs-pinned-dock'), null);
     assert.equal(split.hasAttribute('data-ag-cs-dock-open'), false);
     assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false);
+    assert.equal(split.hasAttribute('data-ag-cs-dock-aux-max'), false);
     assert.equal(split.style.getPropertyValue('--ag-cs-dock-solo-pr'), '');
     assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false);
     assert.equal(studioSlot.hasAttribute('data-ag-cs-dock-hidden'), false);
