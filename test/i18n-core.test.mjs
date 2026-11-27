@@ -818,3 +818,77 @@ test('i18n-sync validates, syncs, checksums, falls back to bundled offline packs
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+
+test('i18n-sync distinguishes active cloud override from remote manifest updates via sourceSha256', async () => {
+  const tmpDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-i18n-update-')));
+  try {
+    const bundledManifest = i18nSync.readBundledManifest();
+    const bundledZhSha = bundledManifest.locales['zh-CN'].sha256;
+
+    // 1. Built-in zh-CN matches current manifest -> no remote update
+    const stSame = i18nSync.getLocalePackStatus('zh-CN', tmpDir, { remoteManifest: bundledManifest });
+    const zhSame = stSame.packs.find((p) => p.lang === 'zh-CN');
+    assert.equal(zhSame.source, 'bundled');
+    assert.equal(zhSame.hasRemoteUpdate, false);
+
+    // 2. Remote manifest publishes a newer zh-CN pack -> hasRemoteUpdate becomes true
+    const newPackObj = {
+      schemaVersion: 1,
+      lang: 'zh-CN',
+      label: '简体中文',
+      bundled: true,
+      agyVersion: '2.36.0',
+      updatedAt: '2026-12-01',
+      cjkLatinSpacing: true,
+      units: { sec: '秒' },
+      dict: { Settings: '设置', Preview: '预览' },
+      rules: [],
+      timeRules: [],
+      sentences: [],
+    };
+    const newPackText = JSON.stringify(newPackObj, null, 2) + '\n';
+    const newPackSha = crypto.createHash('sha256').update(newPackText, 'utf8').digest('hex');
+    const newerManifest = {
+      schemaVersion: 1,
+      agyVersion: '2.36.0',
+      updatedAt: '2026-12-01',
+      locales: {
+        ...bundledManifest.locales,
+        'zh-CN': {
+          ...bundledManifest.locales['zh-CN'],
+          dictCount: 2,
+          sha256: newPackSha,
+        },
+      },
+    };
+
+    const stOutdated = i18nSync.getLocalePackStatus('zh-CN', tmpDir, { remoteManifest: newerManifest });
+    const zhOutdated = stOutdated.packs.find((p) => p.lang === 'zh-CN');
+    assert.equal(zhOutdated.source, 'bundled');
+    assert.equal(zhOutdated.hasRemoteUpdate, true);
+    assert.notEqual(bundledZhSha, newPackSha);
+
+    // 3. After syncing the newer remote pack, source is 'cloud' and hasRemoteUpdate clears to false
+    const mockFetch = async (url) => {
+      if (String(url).endsWith('/manifest.json')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(newerManifest) };
+      }
+      if (String(url).endsWith('/zh-CN.json')) {
+        return { ok: true, status: 200, text: async () => newPackText };
+      }
+      return { ok: false, status: 404, text: async () => '' };
+    };
+    const synced = await i18nSync.syncLocalePack({ lang: 'zh-CN', pluginDataDir: tmpDir, fetchFn: mockFetch });
+    assert.equal(synced.ok, true);
+    assert.equal(synced.sha256, newPackSha);
+
+    const stAfterSync = i18nSync.getLocalePackStatus('zh-CN', tmpDir, { remoteManifest: newerManifest });
+    const zhAfterSync = stAfterSync.packs.find((p) => p.lang === 'zh-CN');
+    assert.equal(zhAfterSync.source, 'cloud');
+    assert.equal(zhAfterSync.hasCloudOverride, true);
+    assert.equal(zhAfterSync.hasRemoteUpdate, false);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

@@ -92,6 +92,33 @@ function detectUsageMonitorInstalled(pluginDirs) {
   return false;
 }
 
+const REMOTE_LOCALE_MANIFEST_TTL_MS = 10 * 60 * 1000;
+let remoteLocaleManifestCache = { at: 0, value: null, inFlight: null };
+
+function getRemoteLocaleManifestNonBlocking() {
+  const now = Date.now();
+  if (now - remoteLocaleManifestCache.at >= REMOTE_LOCALE_MANIFEST_TTL_MS && !remoteLocaleManifestCache.inFlight) {
+    remoteLocaleManifestCache.inFlight = i18nSync
+      .fetchRemoteLocaleManifest({
+        userAgent: `agy-claude-studio/${cdp.PLUGIN_VERSION}`,
+        timeoutMs: 5000,
+      })
+      .then((manifest) => {
+        if (manifest) {
+          remoteLocaleManifestCache.value = manifest;
+        }
+        remoteLocaleManifestCache.at = Date.now();
+      })
+      .catch(() => {
+        remoteLocaleManifestCache.at = Date.now();
+      })
+      .finally(() => {
+        remoteLocaleManifestCache.inFlight = null;
+      });
+  }
+  return remoteLocaleManifestCache.value;
+}
+
 async function getStudioStatus() {
   const config = cdp.readConfig();
   const ports = cdp.readActivePorts();
@@ -152,7 +179,9 @@ async function getStudioStatus() {
       pluginCount: compatInfo.plugins.length,
       selectorCount: compatInfo.selectors.length,
     },
-    i18nPack: i18nSync.getLocalePackStatus(config.language, cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR),
+    i18nPack: i18nSync.getLocalePackStatus(config.language, cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR, {
+      remoteManifest: getRemoteLocaleManifestNonBlocking(),
+    }),
     notify: notifyCore.getNotifyStatusSummary(resolveNotifyDir()),
     update: {
       isGitRepo: updateState.isGitRepo,
@@ -1108,6 +1137,10 @@ async function syncI18nPackApi({
       fetchFn,
       userAgent: `agy-claude-studio/${cdp.PLUGIN_VERSION}`,
     });
+    if (syncRes.remoteManifest) {
+      remoteLocaleManifestCache.value = syncRes.remoteManifest;
+      remoteLocaleManifestCache.at = Date.now();
+    }
     try {
       await reinjectFn();
     } catch {}

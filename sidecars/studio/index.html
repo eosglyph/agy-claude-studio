@@ -1038,6 +1038,11 @@
       background: rgba(59, 130, 246, 0.1);
       border-color: rgba(59, 130, 246, 0.25);
     }
+    .i18n-pack-tag.is-update {
+      color: var(--ok);
+      background: var(--ok-soft);
+      border-color: color-mix(in srgb, var(--ok) 34%, transparent);
+    }
     .i18n-pack-tag.is-missing {
       color: var(--brand-accent);
       background: rgba(217, 119, 87, 0.1);
@@ -1080,6 +1085,17 @@
     button.i18n-pack-btn.primary:hover:not(:disabled) {
       background: var(--brand-accent-hover);
       border-color: var(--brand-accent-hover);
+    }
+    button.i18n-pack-btn.is-update {
+      background: var(--ok);
+      border-color: var(--ok);
+      color: #ffffff;
+      font-weight: 550;
+    }
+    button.i18n-pack-btn.is-update:hover:not(:disabled) {
+      filter: brightness(1.06);
+      background: var(--ok);
+      border-color: var(--ok);
     }
     button.i18n-pack-btn:disabled {
       opacity: 0.55;
@@ -5131,11 +5147,18 @@
 
               const tag = document.createElement('span');
               tag.className = 'i18n-pack-tag';
-              if (pack.hasCloudOverride) {
+              if (pack.installed && pack.hasRemoteUpdate) {
+                tag.classList.add('is-update');
+                tag.textContent = isEnUi
+                  ? 'Cloud Updated'
+                  : isJaUi
+                  ? 'クラウド更新あり'
+                  : isTradUi
+                  ? '雲端已更新'
+                  : '云端已更新';
+              } else if (pack.hasCloudOverride) {
                 tag.classList.add('is-cloud');
-                tag.textContent = pack.bundled
-                  ? (isEnUi ? 'Cloud Updated' : isJaUi ? 'クラウド更新済' : isTradUi ? '雲端已更新' : '云端已更新')
-                  : (isEnUi ? 'Downloaded' : isJaUi ? '導入済' : isTradUi ? '已下載' : '已下载');
+                tag.textContent = isEnUi ? 'Cloud' : isJaUi ? 'クラウド' : isTradUi ? '雲端' : '云端';
               } else if (pack.bundled) {
                 tag.textContent = isEnUi ? 'Built-in' : isJaUi ? '内蔵' : isTradUi ? '內建' : '内置';
               } else {
@@ -5161,7 +5184,9 @@
 
               const syncBtn = document.createElement('button');
               syncBtn.type = 'button';
-              syncBtn.className = 'i18n-pack-btn' + (pack.installed ? '' : ' primary');
+              syncBtn.className =
+                'i18n-pack-btn' +
+                (!pack.installed ? ' primary' : pack.hasRemoteUpdate ? ' is-update' : '');
               syncBtn.textContent = pack.installed
                 ? (isEnUi ? 'Update' : isJaUi ? '更新' : '更新')
                 : (isEnUi ? 'Download' : isJaUi ? 'ダウンロード' : isTradUi ? '下載' : '下载');
