@@ -63,7 +63,6 @@ const PLUGIN_RUNTIME_SCRIPTS = [
   'scripts/WindowsFileAction.cs',
   'scripts/fetch-agy-changelog.mjs',
   'scripts/notify-stop.mjs',
-  'scripts/ops/check-agy-update.mjs',
   'scripts/ops/check-repo-metrics.mjs',
   'scripts/ops/sync-periodic-elements.mjs',
 ];

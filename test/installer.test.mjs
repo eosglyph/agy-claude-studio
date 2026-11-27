@@ -479,7 +479,7 @@ test(
     fs.writeFileSync(userNotifyPath, JSON.stringify({ serverchan: { sendKey: 'KEEP_ME_SECRET' } }), 'utf8');
     const customOpsScript = path.join(pluginDir, 'scripts', 'ops', 'custom-user-script.mjs');
     fs.writeFileSync(customOpsScript, 'export const keep = true;\n', 'utf8');
-    const existingBundledOps = path.join(pluginDir, 'scripts', 'ops', 'check-agy-update.mjs');
+    const existingBundledOps = path.join(pluginDir, 'scripts', 'ops', 'check-repo-metrics.mjs');
     fs.writeFileSync(existingBundledOps, '// user-customized-ops-file\n', 'utf8');
 
     const oldScript = path.join(pluginDir, 'inject.sh');
