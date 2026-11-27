@@ -70,9 +70,27 @@ jobs:
           fi
 
           VERSION="${TAG#v}"
-          if [ "$VERSION" != "$PKG_VER" ]; then
-            echo "::warning::Release version ($VERSION) differs from package.json version ($PKG_VER)."
-          fi
+          node --input-type=module - "$VERSION" <<'EOF'
+          import fs from 'node:fs';
+
+          const tagVer = process.argv[2];
+          const checks = [
+            ['package.json', JSON.parse(fs.readFileSync('package.json', 'utf8')).version],
+            ['plugin.json', JSON.parse(fs.readFileSync('plugin.json', 'utf8')).version],
+            ['src/cdp.js', fs.readFileSync('src/cdp.js', 'utf8').match(/const PLUGIN_VERSION = '([^']+)'/)?.[1]],
+            ['installer/common/CdpClient.cs', fs.readFileSync('installer/common/CdpClient.cs', 'utf8').match(/GetString\(raw, "version", "([^"]+)"\)/)?.[1]],
+            ['installer/setup/Program.cs', fs.readFileSync('installer/setup/Program.cs', 'utf8').match(/SetValue\("DisplayVersion", version \?\? "([^"]+)"/)?.[1]],
+            ['installer/macos/Common/CdpClient.swift', fs.readFileSync('installer/macos/Common/CdpClient.swift', 'utf8').match(/raw\["version"\]\?\.stringValue \?\? "([^"]+)"/)?.[1]],
+          ];
+
+          const mismatches = checks.filter(([, ver]) => ver !== tagVer);
+          if (mismatches.length > 0) {
+            for (const [file, ver] of mismatches) {
+              console.error(`::error::Release version (${tagVer}) does not match ${file} (${ver ?? 'missing'}).`);
+            }
+            process.exit(1);
+          }
+          EOF
 
           if [ "$INPUT_PRERELEASE" = "true" ] || [[ "$TAG" == *-* ]]; then
             PRERELEASE="true"

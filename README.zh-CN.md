@@ -167,7 +167,7 @@ Claude 暖灰与黑曜石配色 · 3-Tab 右侧控制室（对话 / 工具 / 设
    - 若手动升级或由 AI 助手协助迁移：请注意，仅更新插件目录源码**不会**自动关闭旧目录（如 `%LOCALAPPDATA%\agy-claude-style`）中仍在运行的遗留守护进程 `agy-claude-style-watcher.exe`。
    - 升级前请先执行只读检查，确认后台是否存在 `agy-claude-style-watcher` 进程或旧版开机自启/卸载项。若存在，请在**征得用户确认后**通过旧版卸载入口关闭自启并确保旧进程彻底退出，再启用新版 `Claude Studio`（新版已深度接入宿主生命周期，在插件管理中关闭开关即可自动停注还原，不留孤儿进程）。
 3. **启用与快速生效**：
-   若 Antigravity 已携带 `--remote-debugging-port=0` 运行，可在插件目录下执行 `node inject.js` 热刷新（**切勿未经用户确认强杀正在运行的 Antigravity 进程**）；完成后可运行 `studio-doctor` 技能进行环境自检。
+   若 Antigravity 已携带 `--remote-debugging-port=0` 运行，可在插件目录下执行 `npm run inject`（或 `node src/inject.js`）热刷新（**切勿未经用户确认强杀正在运行的 Antigravity 进程**）；完成后可运行 `studio-doctor` 技能进行环境自检。
 
 ### 方式一：Windows 一键原生插件安装器（推荐 Windows 用户）
 
@@ -196,7 +196,7 @@ Claude 暖灰与黑曜石配色 · 3-Tab 右侧控制室（对话 / 工具 / 设
    # macOS / Linux
    git clone https://github.com/eosglyph/agy-claude-studio.git "$HOME/.gemini/config/plugins/agy-claude-studio"
    ```
-2. 彻底退出 Antigravity（含系统托盘），以 `--remote-debugging-port=0` 重新启动（或直接运行仓库内的 `launch.bat` / `./launch.sh`）。
+2. 彻底退出 Antigravity（含系统托盘），以 `--remote-debugging-port=0` 重新启动（或直接运行 `npm run launch` / `node src/inject.js --launch`）。
 3. 在 Antigravity **Customizations → Plugins** 中确认 **`Claude Studio`** 已启用，即可自动注入并在右侧辅助栏打开 **Claude Studio** 控制面板。
 
 </details>
@@ -290,7 +290,7 @@ npm run remove                        # 停止守护并无损还原原生界面
 <details>
 <summary><b>1. 升级到 Antigravity 2.33.0+ 后没有自动注入？</b></summary>
 
-Antigravity 从 `2.33.0` 起默认不再开启 CDP 端口。请彻底退出 Antigravity（含系统托盘）后携带 `--remote-debugging-port=0` 启动，或直接使用右侧面板的一键重启 / `launch.bat` / `./launch.sh`；也可以直接对 Gemini 说 *「帮我诊断 Claude Studio」* 触发 `studio-doctor` 技能排查。
+Antigravity 从 `2.33.0` 起默认不再开启 CDP 端口。请彻底退出 Antigravity（含系统托盘）后携带 `--remote-debugging-port=0` 启动，或直接使用右侧面板的一键重启 / `npm run launch`（`node src/inject.js --launch`）；也可以直接对 Gemini 说 *「帮我诊断 Claude Studio」* 触发 `studio-doctor` 技能排查。
 
 </details>
 
@@ -335,22 +335,26 @@ agy-claude-studio/
 ├── plugin/mcp-host.js                          # 原生插件生命周期宿主（PID 复用校验与热接管）
 ├── sidecars/studio/                            # 右侧 3-Tab「Claude Studio」控制室（对话 / 工具 / 设置）
 ├── skills/                                     # 4 项原生技能（setup / doctor / notify / translation-protect）
-├── cdp.js / lifecycle.js                       # CDP 客户端、配置迁移、进程守护与宿主看门狗
-├── watcher-core.js / inject.js                 # 多窗口热更新控制器与 CLI 注入入口
-├── style.css / ui-runtime.js                   # 核心主题样式与运行时（首页、周期表、滑块、/compact）
-├── sidecar-core.js                             # Swarm 蜂群侧栏（/swarm）精简无损翻译运行时
-├── periodic-core.js / periodic-sync.js         # Gemini 4 元素周期表目录与 AI Studio 直连同步
-├── effort-core.js                              # 双风格 60fps 思考强度滑块数学模型
-├── notify-core.js / scripts/notify-stop.mjs    # 8 渠道手机推送核心与 Stop Hook 入口
-├── scripts-core.js / scripts/fetch-agy-changelog.mjs # 本地脚本工具箱与 Antigravity 更新日志抓取器
-├── scripts/WindowsFileAction.cs                # Windows 原生资源管理器文件选中定位与路径动作
-├── i18n-core.js / i18n-locales.js / i18n-compat.json # 本地化引擎、内置语言词典与免打扰保护名单
-├── i18n-sync.js / locales/                     # 按需语言包同步器（粤语/日语按需拉取）与离线包
-├── usage-core.js                               # 内置轨迹解析、上下文拆解与热力图引擎
-├── mascot-core.js / crab-assets.js             # Clawd 状态机与 19 套像素双层精灵图
-├── ripple-core.js                              # 首页字符矩阵噪声与二维水波求解器
+├── src/                                        # 核心运行时、CDP 生命周期、UI 模块与本地化引擎
+│   ├── cdp.js / lifecycle.js                   # CDP 客户端、配置迁移、进程守护与宿主看门狗
+│   ├── watcher-core.js / inject.js / remove.js # 多窗口热更新控制器与 CLI 注入/还原入口
+│   ├── style.css / ui-runtime.js               # 核心主题样式与运行时（首页、周期表、滑块、/compact）
+│   ├── sidecar-core.js                         # Swarm 蜂群侧栏（/swarm）精简无损翻译运行时
+│   ├── periodic-core.js / periodic-sync.js     # Gemini 4 元素周期表目录与 AI Studio 直连同步
+│   ├── effort-core.js                          # 双风格 60fps 思考强度滑块数学模型
+│   ├── notify-core.js / scripts-core.js        # 8 渠道手机推送核心与本地脚本工具箱
+│   ├── i18n-core.js / i18n-locales.js / i18n-sync.js # 本地化引擎、内置语言词典与按需语言包同步器
+│   ├── usage-core.js                           # 内置轨迹解析、上下文拆解与热力图引擎
+│   ├── mascot-core.js / crab-assets.js         # Clawd 状态机与 19 套像素双层精灵图
+│   └── ripple-core.js                          # 首页字符矩阵噪声与二维水波求解器
+├── locales/                                    # 按需语言包离线词典
+├── i18n-compat.json                            # 第三方搭档插件免打扰翻译保护名单
 ├── installer/ & companion/                     # Windows (C#) / macOS (Swift) 安装器与伴随脚本
-├── scripts/ & test/                            # 构建打包脚本与 node:test 自动化测试套件
+├── scripts/                                    # Stop Hook、更新日志抓取、Windows 助手与构建脚本
+│   ├── notify-stop.mjs / fetch-agy-changelog.mjs # Stop Hook 入口与 Antigravity 更新日志抓取器
+│   ├── WindowsFileAction.cs                    # Windows 原生资源管理器文件选中定位与路径动作
+│   └── build-*.mjs                             # 安装器、macOS、语言包与发布包构建脚本
+├── test/                                       # node:test 自动化测试套件
 └── assets/                                     # 图标、横幅与实景展示图
 ```
 

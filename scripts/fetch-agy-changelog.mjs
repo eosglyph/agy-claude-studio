@@ -6,6 +6,7 @@
 // caches & auto-translates release notes to Simplified Chinese (Google Translate + MyMemory fallback),
 // and compares against PLUGIN_DATA/agy-changelog-state.json.
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -104,11 +105,11 @@ function parseLatestReleases(text, limit = 2) {
       current.date = line;
       continue;
     }
-    if (!current.headline && line.length > 10 && !/^(Improvements|Fixes|Features)/.test(line)) {
+    if (!current.headline && !/^(Improvements|Fixes|Features|Changes|Security|Performance)\b/i.test(line)) {
       current.headline = line;
       continue;
     }
-    if (line.length > 16 && current.bullets.length < 16) {
+    if (current.bullets.length < 16) {
       current.bullets.push(cleanBulletLine(line));
     }
   }
@@ -157,40 +158,60 @@ async function translateViaMyMemory(text, targetLang) {
   return out;
 }
 
-async function translateLine(line, targetLang) {
-  if (!line || !/[A-Za-z]{2,}/.test(line)) return line;
+async function translateLineDetailed(line, targetLang) {
+  if (!line || !/[A-Za-z]{2,}/.test(line)) return { text: line, failed: false };
   // Preserve leading Chinese category prefix such as 【修复 (1)】
   const prefixMatch = line.match(/^(【[^】]+】)\s*/);
   const prefix = prefixMatch ? prefixMatch[1] : '';
   const rawBody = prefixMatch ? line.slice(prefixMatch[0].length).trim() : line;
-  if (!rawBody) return line;
+  if (!rawBody) return { text: line, failed: false };
   // Clarify Antigravity domain terms so machine translation avoids literal puns (e.g. "turn" -> "转弯")
   const body = rawBody
     .replace(/\bwhile a turn is running\b/gi, 'while a conversation turn is running')
     .replace(/\bduring a turn\b/gi, 'during a conversation turn');
   try {
     const zh = await translateViaGoogle(body, targetLang);
-    return prefix + zh;
+    return { text: prefix + zh, failed: false };
   } catch {
     try {
       const zh = await translateViaMyMemory(body, targetLang);
-      return prefix + zh;
+      return { text: prefix + zh, failed: false };
     } catch {
-      return line;
+      return { text: line, failed: true };
     }
   }
 }
 
-async function translateReleasesWithCache(releases, targetLang, state) {
+async function translateLine(line, targetLang) {
+  const result = await translateLineDetailed(line, targetLang);
+  return result.text;
+}
+
+function buildReleaseContentHash(rel) {
+  const payload = JSON.stringify({
+    headline: String(rel?.headline || ''),
+    bullets: Array.isArray(rel?.bullets) ? rel.bullets.map((item) => String(item || '')) : [],
+  });
+  return createHash('sha256').update(payload, 'utf8').digest('hex');
+}
+
+function buildTranslationCacheKey(rel, targetLang) {
+  return `${rel.version}:${targetLang}:${buildReleaseContentHash(rel)}`;
+}
+
+async function translateReleasesWithCache(releases, targetLang, state, { translateLineFn = translateLineDetailed } = {}) {
   if (!state.translatedCache || typeof state.translatedCache !== 'object') {
     state.translatedCache = {};
   }
   const translated = [];
   for (const rel of releases) {
-    const cacheKey = `${rel.version}:${targetLang}`;
+    const contentHash = buildReleaseContentHash(rel);
+    const cacheKey = `${rel.version}:${targetLang}:${contentHash}`;
     const cached = state.translatedCache[cacheKey];
     if (
       cached &&
+      cached.contentHash === contentHash &&
+      cached.targetLang === targetLang &&
       cached.headlineSrc === rel.headline &&
       Array.isArray(cached.bullets) &&
       cached.bullets.length === rel.bullets.length
@@ -202,22 +223,36 @@ async function translateReleasesWithCache(releases, targetLang, state) {
       });
       continue;
     }
-    const headlineZh = await translateLine(rel.headline, targetLang);
+
+    let anyFailed = false;
+    const headlineRes = await translateLineFn(rel.headline, targetLang);
+    const headlineZh = typeof headlineRes === 'string' ? headlineRes : headlineRes.text;
+    if (typeof headlineRes === 'object' && headlineRes?.failed) anyFailed = true;
+
     const bulletsZh = [];
     for (const b of rel.bullets) {
-      bulletsZh.push(await translateLine(b, targetLang));
+      const bulletRes = await translateLineFn(b, targetLang);
+      bulletsZh.push(typeof bulletRes === 'string' ? bulletRes : bulletRes.text);
+      if (typeof bulletRes === 'object' && bulletRes?.failed) anyFailed = true;
     }
-    state.translatedCache[cacheKey] = {
-      headlineSrc: rel.headline,
-      headlineZh,
-      bullets: bulletsZh,
-    };
-    // Keep cache compact (latest 10 entries)
-    const keys = Object.keys(state.translatedCache);
-    if (keys.length > 10) {
-      for (const oldKey of keys.slice(0, keys.length - 10)) {
-        delete state.translatedCache[oldKey];
+
+    if (!anyFailed) {
+      state.translatedCache[cacheKey] = {
+        contentHash,
+        targetLang,
+        headlineSrc: rel.headline,
+        headlineZh,
+        bullets: bulletsZh,
+      };
+      // Keep cache compact (latest 10 entries)
+      const keys = Object.keys(state.translatedCache);
+      if (keys.length > 10) {
+        for (const oldKey of keys.slice(0, keys.length - 10)) {
+          delete state.translatedCache[oldKey];
+        }
       }
+    } else {
+      delete state.translatedCache[cacheKey];
     }
     translated.push({ ...rel, headlineZh, bulletsZh });
   }
@@ -326,7 +361,21 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Antigravity 更新日志抓取失败:', err?.message || err);
-  process.exit(1);
-});
+export {
+  stripHtml,
+  cleanBulletLine,
+  parseLatestReleases,
+  buildReleaseContentHash,
+  buildTranslationCacheKey,
+  translateLine,
+  translateLineDetailed,
+  translateReleasesWithCache,
+};
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (isMain) {
+  main().catch((err) => {
+    console.error('Antigravity 更新日志抓取失败:', err?.message || err);
+    process.exit(1);
+  });
+}
