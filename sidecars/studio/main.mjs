@@ -8,14 +8,14 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const cdp = require('../../cdp.js');
-const lifecycle = require('../../lifecycle.js');
-const notifyCore = require('../../notify-core.js');
-const scriptsCore = require('../../scripts-core.js');
-const periodicSync = require('../../periodic-sync.js');
-const i18nSync = require('../../i18n-sync.js');
-const { updateConfigSetting, injectOnce } = require('../../inject.js');
-const { removeFromAllWindows } = require('../../remove.js');
+const cdp = require('../../src/cdp.js');
+const lifecycle = require('../../src/lifecycle.js');
+const notifyCore = require('../../src/notify-core.js');
+const scriptsCore = require('../../src/scripts-core.js');
+const periodicSync = require('../../src/periodic-sync.js');
+const i18nSync = require('../../src/i18n-sync.js');
+const { updateConfigSetting, injectOnce } = require('../../src/inject.js');
+const { removeFromAllWindows } = require('../../src/remove.js');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT_DIR = resolve(__dirname, '..', '..');
@@ -944,6 +944,26 @@ async function performArchiveSelfUpdate({
     const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
     const files = getArchiveCopyPlan(sourceRoot, installRoot, isProtected);
     applyArchiveCopyPlan(files, join(tmpRoot, 'backup'));
+
+    // Remove legacy flat root files when upgrading into the src/-organized layout
+    if (existsSync(join(installRoot, 'src', 'cdp.js'))) {
+      const legacyFlatFiles = [
+        'cdp.js', 'crab-assets.js', 'effort-core.js', 'i18n-core.js', 'i18n-locales.js',
+        'i18n-sync.js', 'inject.js', 'lifecycle.js', 'mascot-core.js', 'notify-core.js',
+        'periodic-core.js', 'periodic-sync.js', 'remove.js', 'ripple-core.js',
+        'scripts-core.js', 'sidecar-core.js', 'style.css', 'ui-runtime.js',
+        'usage-core.js', 'watcher-core.js',
+        'autostart-off.bat', 'autostart-on.bat', 'inject.bat', 'inject.sh',
+        'launch.bat', 'launch.sh', 'remove.bat', 'remove.sh',
+        'watch.bat', 'watch.sh', 'watch-hidden.vbs',
+      ];
+      for (const name of legacyFlatFiles) {
+        const stale = join(installRoot, name);
+        if (!isProtected(stale, false) && existsSync(stale)) {
+          try { rmSync(stale, { force: true }); } catch {}
+        }
+      }
+    }
 
     let nextVersion = normalizedTag.replace(/^v/i, '');
     try {

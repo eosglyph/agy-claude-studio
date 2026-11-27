@@ -94,7 +94,7 @@ function parseLatestReleases(text, limit = 2) {
 }
 
 function countLocalI18nEntries() {
-  const localesPath = path.join(REPO_ROOT, 'i18n-locales.js');
+  const localesPath = path.join(REPO_ROOT, 'src', 'i18n-locales.js');
   if (!fs.existsSync(localesPath)) return null;
   try {
     const src = fs.readFileSync(localesPath, 'utf8');
@@ -159,7 +159,7 @@ async function main() {
 
   if (shouldPush && isNew) {
     try {
-      const notifyCore = require(path.join(REPO_ROOT, 'notify-core.js'));
+      const notifyCore = require(path.join(REPO_ROOT, 'src', 'notify-core.js'));
       const cfg = notifyCore.readNotifyConfig(dataDir);
       if (cfg.enabled && notifyCore.isChannelConfigured(cfg)) {
         const pushRes = await notifyCore.deliverNotification(cfg, {

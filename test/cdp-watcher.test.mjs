@@ -14,9 +14,9 @@ const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
-const cdp = require(path.join(ROOT_DIR, 'cdp.js'));
-const injectMod = require(path.join(ROOT_DIR, 'inject.js'));
-const removeMod = require(path.join(ROOT_DIR, 'remove.js'));
+const cdp = require(path.join(ROOT_DIR, 'src', 'cdp.js'));
+const injectMod = require(path.join(ROOT_DIR, 'src', 'inject.js'));
+const removeMod = require(path.join(ROOT_DIR, 'src', 'remove.js'));
 
 function createMockCdpServer({ evaluateDelayMs = 0, pageIds = ['PAGE_MOCK'] } = {}) {
   const sockets = new Set();
@@ -171,15 +171,17 @@ function createMockCdpServer({ evaluateDelayMs = 0, pageIds = ['PAGE_MOCK'] } = 
 
 function stageTempRuntimeDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-watcher-test-'));
-  const files = [
+  const srcDir = path.join(dir, 'src');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.copyFileSync(path.join(ROOT_DIR, 'config.example.json'), path.join(dir, 'config.example.json'));
+  const srcFiles = [
     'cdp.js',
     'inject.js',
     'style.css',
-    'config.example.json',
     ...cdp.RUNTIME_PARTS,
   ];
-  for (const f of files) {
-    fs.copyFileSync(path.join(ROOT_DIR, f), path.join(dir, f));
+  for (const f of srcFiles) {
+    fs.copyFileSync(path.join(ROOT_DIR, 'src', f), path.join(srcDir, f));
   }
   return dir;
 }
@@ -286,8 +288,8 @@ for (const mode of ['cli', 'controller']) {
       set(false);
       const port = await mock.start();
       const env = { ...process.env, AG_CDP_PORT: String(port), AG_WATCH_POLL_MS: '100', AGY_CLAUDE_STUDIO_ANTIGRAVITY_CONFIG: file, AGY_CLAUDE_STUDIO_STATE_DIR: dir };
-      for (const name of ['watcher-core.js', 'lifecycle.js']) fs.copyFileSync(path.join(ROOT_DIR, name), path.join(dir, name));
-      const args = mode === 'cli' ? ['inject.js', '--watch'] : ['-e', "require('./watcher-core').startWatchController({watchHostExit:false, tickIntervalMs:100, installWatchdog:false})"];
+      for (const name of ['watcher-core.js', 'lifecycle.js']) fs.copyFileSync(path.join(ROOT_DIR, 'src', name), path.join(dir, 'src', name));
+      const args = mode === 'cli' ? [path.join('src', 'inject.js'), '--watch'] : ['-e', "require('./src/watcher-core').startWatchController({watchHostExit:false, tickIntervalMs:100, installWatchdog:false})"];
       child = spawn(process.execPath, args, { env, cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
       let stderr = '';
       child.stderr.on('data', chunk => { stderr += chunk; });
@@ -341,7 +343,7 @@ test('inject.js --watch --exit-on-host-close exits cleanly and removes .watch.pi
   let child = null;
   try {
     const port = await mock.start();
-    child = spawn(process.execPath, [path.join(dir, 'inject.js'), '--watch', '--exit-on-host-close'], {
+    child = spawn(process.execPath, [path.join(dir, 'src', 'inject.js'), '--watch', '--exit-on-host-close'], {
       cwd: dir,
       env: { ...process.env, AG_CDP_PORT: String(port) },
       stdio: 'ignore',
@@ -383,7 +385,7 @@ test('inject.js --watch --parent-pid exits cleanly when parent process is gone',
 
     child = spawn(
       process.execPath,
-      [path.join(dir, 'inject.js'), '--watch', '--parent-pid', String(deadPid)],
+      [path.join(dir, 'src', 'inject.js'), '--watch', '--parent-pid', String(deadPid)],
       {
         cwd: dir,
         env: { ...process.env, AG_CDP_PORT: '1' },
@@ -652,7 +654,7 @@ test('inject.js --watch --exit-on-host-close --startup-grace 1 exits 0 and clean
   try {
     child = spawn(
       process.execPath,
-      [path.join(dir, 'inject.js'), '--watch', '--exit-on-host-close', '--startup-grace', '1'],
+      [path.join(dir, 'src', 'inject.js'), '--watch', '--exit-on-host-close', '--startup-grace', '1'],
       {
         cwd: dir,
         env: { ...process.env, AG_CDP_PORT: '1', AG_WATCH_POLL_MS: '300' },
@@ -682,7 +684,7 @@ test('plain inject.js --watch does NOT exit when --startup-grace 1 expires (even
   try {
     child = spawn(
       process.execPath,
-      [path.join(dir, 'inject.js'), '--watch', '--startup-grace=1'],
+      [path.join(dir, 'src', 'inject.js'), '--watch', '--startup-grace=1'],
       {
         cwd: dir,
         env: { ...process.env, AG_CDP_PORT: '1', AG_WATCH_POLL_MS: '300' },
@@ -706,7 +708,7 @@ test('inject.js --managed attaches to mock CDP, injects, and exits 0 when mock C
   let child = null;
   try {
     const port = await mock.start();
-    child = spawn(process.execPath, [path.join(dir, 'inject.js'), '--managed'], {
+    child = spawn(process.execPath, [path.join(dir, 'src', 'inject.js'), '--managed'], {
       cwd: dir,
       env: { ...process.env, AG_CDP_PORT: String(port), AG_WATCH_POLL_MS: '250' },
       stdio: 'ignore',
@@ -749,7 +751,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
     const port = await mock.start();
     const pidFile = path.join(dir, '.watch.pid');
 
-    first = spawn(process.execPath, [path.join(dir, 'inject.js'), '--watch'], {
+    first = spawn(process.execPath, [path.join(dir, 'src', 'inject.js'), '--watch'], {
       cwd: dir,
       env: { ...process.env, AG_CDP_PORT: String(port), AG_WATCH_POLL_MS: '300' },
       stdio: 'ignore',
@@ -763,7 +765,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
     }, 15000, 50);
 
     // 1. Plain duplicate --watch exits 1 without overwriting .watch.pid
-    dupPlain = spawn(process.execPath, [path.join(dir, 'inject.js'), '--watch'], {
+    dupPlain = spawn(process.execPath, [path.join(dir, 'src', 'inject.js'), '--watch'], {
       cwd: dir,
       env: { ...process.env, AG_CDP_PORT: String(port) },
       stdio: 'ignore',
@@ -777,7 +779,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
     assert.equal(first.exitCode, null);
 
     // 2. Duplicate --managed waits briefly and exits 0 cleanly without clobbering .watch.pid
-    dupManaged = spawn(process.execPath, [path.join(dir, 'inject.js'), '--managed'], {
+    dupManaged = spawn(process.execPath, [path.join(dir, 'src', 'inject.js'), '--managed'], {
       cwd: dir,
       env: { ...process.env, AG_CDP_PORT: String(port) },
       stdio: 'ignore',
@@ -792,7 +794,7 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
 
     // 3. --watch --replace terminates first watcher and takes over .watch.pid
     const firstExitPromise = new Promise((resolve) => first.on('exit', resolve));
-    replacer = spawn(process.execPath, [path.join(dir, 'inject.js'), '--watch', '--replace'], {
+    replacer = spawn(process.execPath, [path.join(dir, 'src', 'inject.js'), '--watch', '--replace'], {
       cwd: dir,
       env: { ...process.env, AG_CDP_PORT: String(port), AG_WATCH_POLL_MS: '300' },
       stdio: 'ignore',
@@ -818,30 +820,15 @@ test('duplicate watcher handling: --managed exits 0 cleanly without clobbering, 
   }
 });
 
-test('launch scripts, watch-hidden.vbs, and package.json support managed mode by default and --daemon fallback', () => {
-  const launchBat = fs.readFileSync(path.join(ROOT_DIR, 'launch.bat'), 'utf8');
-  assert.match(launchBat, /--daemon/i);
-  assert.match(launchBat, /--exit-on-host-close/);
-  assert.match(launchBat, /--watch --replace/);
-  assert.match(launchBat, /--launch/);
-
-  const launchSh = fs.readFileSync(path.join(ROOT_DIR, 'launch.sh'), 'utf8');
-  assert.match(launchSh, /INJECT_JS="\$PWD\/inject\.js"/);
-  assert.match(launchSh, /--daemon/);
-  assert.match(launchSh, /--exit-on-host-close/);
-  assert.match(launchSh, /--skip-if-running/);
-  assert.match(launchSh, /--watch --replace/);
-  assert.match(launchSh, /LAUNCH_ARGS/);
-  assert.match(launchSh, /node "\$INJECT_JS" --launch/);
-  assert.match(launchSh, /node "\$INJECT_JS" --watch --exit-on-host-close --skip-if-running/);
-
-  const vbs = fs.readFileSync(path.join(ROOT_DIR, 'watch-hidden.vbs'), 'utf8');
-  assert.match(vbs, /WScript\.Arguments\.Count\s*=\s*0/i);
-  assert.match(vbs, /--watch --replace/);
-  assert.match(vbs, /WScript\.Arguments\(i\)/i);
-
+test('package.json entry scripts point to src/ and legacy flat launch scripts are retired', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8'));
-  assert.equal(pkg.scripts.managed, 'node inject.js --managed');
+  assert.equal(pkg.scripts.managed, 'node src/inject.js --managed');
+  assert.equal(pkg.scripts.inject, 'node src/inject.js');
+  assert.equal(pkg.scripts.watch, 'node src/inject.js --watch');
+  assert.equal(pkg.scripts.remove, 'node src/remove.js');
+  for (const legacy of ['launch.bat', 'launch.sh', 'watch-hidden.vbs', 'autostart-on.bat']) {
+    assert.equal(fs.existsSync(path.join(ROOT_DIR, legacy)), false, `Legacy script ${legacy} should be removed`);
+  }
 });
 
 test('buildRefreshExpression produces lightweight config refresh payload matching codeHash', () => {

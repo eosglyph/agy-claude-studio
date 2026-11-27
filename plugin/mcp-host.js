@@ -5,7 +5,7 @@
 //   and host shutdown (LS /healthz unreachable or parent exit -> immediate clean exit with zero orphans).
 const fs = require('fs');
 const path = require('path');
-const { STATE_DIR: CDP_STATE_DIR, createWatcherEnabledReader, resolveHostPluginConfigPath } = require('../cdp');
+const { STATE_DIR: CDP_STATE_DIR, createWatcherEnabledReader, resolveHostPluginConfigPath } = require('../src/cdp');
 const {
   isBrokenPipeError,
   isPidAlive,
@@ -18,9 +18,9 @@ const {
   ensureIdeRemoteDebuggingArgv,
   ensureDesktopRemoteDebuggingLaunchers,
   exitProcessCleanly,
-} = require('../lifecycle');
-const { updateConfigSetting } = require('../inject');
-const { startWatchController, removeInjectedUiFromReachablePages } = require('../watcher-core');
+} = require('../src/lifecycle');
+const { updateConfigSetting } = require('../src/inject');
+const { startWatchController, removeInjectedUiFromReachablePages } = require('../src/watcher-core');
 
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
 const PLUGIN_MANIFEST_PATH = path.join(PLUGIN_ROOT, 'plugin.json');

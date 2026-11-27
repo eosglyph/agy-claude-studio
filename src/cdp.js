@@ -76,11 +76,12 @@ function resolvePluginDataDir(env = process.env) {
 }
 
 const PLUGIN_DATA_DIR = resolvePluginDataDir(process.env);
+const ROOT_DIR = path.resolve(__dirname, '..');
 const PORT_FILE = path.join(APP_DATA, 'Antigravity', 'DevToolsActivePort');
-const STATE_DIR = STATE_DIR_ENV || PLUGIN_DATA_DIR || __dirname;
+const STATE_DIR = STATE_DIR_ENV || PLUGIN_DATA_DIR || ROOT_DIR;
 const PID_FILE = path.join(STATE_DIR, '.watch.pid');
 const LOCK_FILE = path.join(STATE_DIR, '.watch.lock.json');
-const LEGACY_CONFIG_FILE = path.join(__dirname, 'config.json');
+const LEGACY_CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
 const CONFIG_FILE =
   CONFIG_FILE_ENV ||
   (PLUGIN_DATA_DIR ? path.join(PLUGIN_DATA_DIR, 'config.json') : LEGACY_CONFIG_FILE);
@@ -172,7 +173,7 @@ const CONFIG_VALIDATORS = {
   exitOnHostClose: 'boolean',
 };
 
-const I18N_COMPAT_FILE = path.join(__dirname, 'i18n-compat.json');
+const I18N_COMPAT_FILE = path.join(ROOT_DIR, 'i18n-compat.json');
 const REMOTE_I18N_COMPAT_URL =
   'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/i18n-compat.json';
 
@@ -1371,7 +1372,7 @@ function isNodeBinaryName(binPathOrToken, targetPlatform = process.platform) {
   return /^(?:node(?:\.exe)?|nodejs|electron(?:\.exe)?|electron helper.*|antigravity(?:\.exe)?)$/.test(base);
 }
 
-function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform = process.platform) {
+function evaluateWatcherOwnership(rawInfo, targetDir = ROOT_DIR, targetPlatform = process.platform) {
   if (!rawInfo || !targetDir) return 'unknown';
   const info =
     typeof rawInfo === 'string'
@@ -1429,7 +1430,10 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
 
   // 2. Node inject.js --watch / --managed check: verify executable AND exact first script argument (no ambiguous CLI flag skipping).
   if (!hasFlag('--watch') && !hasFlag('--managed')) return 'foreign';
-  const expectedScript = normalizePathForCompare(pathMod.join(normTargetDir, 'inject.js'), targetPlatform);
+  const expectedScripts = [
+    normalizePathForCompare(pathMod.join(normTargetDir, 'src', 'inject.js'), targetPlatform),
+    normalizePathForCompare(pathMod.join(normTargetDir, 'inject.js'), targetPlatform),
+  ];
 
   if (args && args.length >= 2) {
     if (!isNodeBinaryName(info.exePath || args[0], targetPlatform)) return 'foreign';
@@ -1443,7 +1447,7 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
     }
     const resolvedEntry = resolveCandidatePath(entryScript, info.cwd, targetPlatform);
     if (resolvedEntry) {
-      return resolvedEntry === expectedScript ? 'owned' : 'foreign';
+      return expectedScripts.includes(resolvedEntry) ? 'owned' : 'foreign';
     }
     return 'unknown';
   }
@@ -1487,10 +1491,12 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
     targetPlatform === 'darwin'
       ? rawUnquotedRest.replace(/^\/private(?=\/(?:var|tmp|etc)(?:\/|\s|"|'|$))/, '')
       : rawUnquotedRest;
-  if (unquotedRest.startsWith(expectedScript)) {
-    const nextChar = unquotedRest[expectedScript.length];
-    if (!nextChar || /[\s"']/.test(nextChar)) {
-      return 'owned';
+  for (const expectedScript of expectedScripts) {
+    if (unquotedRest.startsWith(expectedScript)) {
+      const nextChar = unquotedRest[expectedScript.length];
+      if (!nextChar || /[\s"']/.test(nextChar)) {
+        return 'owned';
+      }
     }
   }
 
@@ -1502,16 +1508,16 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
   }
   const resolvedRel = resolveCandidatePath(firstArg, info.cwd, targetPlatform);
   if (resolvedRel) {
-    return resolvedRel === expectedScript ? 'owned' : 'foreign';
+    return expectedScripts.includes(resolvedRel) ? 'owned' : 'foreign';
   }
   return 'unknown';
 }
 
-function matchesWatcherForDir(rawInfo, targetDir = __dirname, targetPlatform = process.platform) {
+function matchesWatcherForDir(rawInfo, targetDir = ROOT_DIR, targetPlatform = process.platform) {
   return evaluateWatcherOwnership(rawInfo, targetDir, targetPlatform) === 'owned';
 }
 
-function classifyWatcherPid(pid, targetDir = __dirname, opts = {}) {
+function classifyWatcherPid(pid, targetDir = ROOT_DIR, opts = {}) {
   const killFn = typeof opts.killFn === 'function' ? opts.killFn : (p, sig) => process.kill(p, sig);
   const inspectFn = typeof opts.inspectFn === 'function' ? opts.inspectFn : inspectProcessInfo;
   const platform = opts.platform || process.platform;
@@ -1551,11 +1557,11 @@ function classifyWatcherPid(pid, targetDir = __dirname, opts = {}) {
   return { status: 'foreign', pid, info };
 }
 
-function isLikelyWatcherProcess(pid, targetDir = __dirname, opts = {}) {
+function isLikelyWatcherProcess(pid, targetDir = ROOT_DIR, opts = {}) {
   return classifyWatcherPid(pid, targetDir, opts).status === 'owned';
 }
 
-function resolveExistingWatchPidAction(pidFile = PID_FILE, targetDir = __dirname, opts = {}) {
+function resolveExistingWatchPidAction(pidFile = PID_FILE, targetDir = ROOT_DIR, opts = {}) {
   const selfPid = Number.isInteger(opts.selfPid) ? opts.selfPid : process.pid;
   let pid;
   try {
@@ -1771,10 +1777,10 @@ async function relaunchAntigravityWithCdp(opts = {}) {
 
 function formatCdpUnavailableMessage({ running, port }) {
   const launchHint = IS_MAC
-    ? 'open -a Antigravity --args --remote-debugging-port=0（或运行 ./launch.sh）'
+    ? 'open -a Antigravity --args --remote-debugging-port=0（或运行 npm run launch）'
     : IS_WIN
-    ? 'Antigravity.exe --remote-debugging-port=0（或双击 launch.bat）'
-    : 'antigravity --remote-debugging-port=0（或运行 ./launch.sh）';
+    ? 'Antigravity.exe --remote-debugging-port=0（或运行 npm run launch）'
+    : 'antigravity --remote-debugging-port=0（或运行 npm run launch）';
   if (running) {
     return (
       `检测到 Antigravity 正在运行，但未开启远程调试端口（Antigravity 2.33.0+ 默认关闭 CDP` +
@@ -1818,7 +1824,7 @@ function prepareLocalFileAction({ mode, target, platform = process.platform, fsA
     // helper checks drive type and each component before querying the target.
     const command = 'try { Add-Type -LiteralPath $env:AGY_FILE_HELPER -ErrorAction Stop; if ([AgyClaudeStudio.WindowsFileAction]::Run($env:AGY_FILE_URI,$env:AGY_FILE_MODE)) { exit 0 } } catch {}; exit 1';
     const bin = path.win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    return { ok: true, mode, bin, args: ['-NoProfile', '-NonInteractive', '-STA', '-Command', command], options: { windowsHide: true, stdio: 'ignore', env: { ...process.env, AGY_FILE_HELPER: path.join(__dirname, 'scripts', 'WindowsFileAction.cs'), AGY_FILE_URI: target, AGY_FILE_MODE: mode } } };
+    return { ok: true, mode, bin, args: ['-NoProfile', '-NonInteractive', '-STA', '-Command', command], options: { windowsHide: true, stdio: 'ignore', env: { ...process.env, AGY_FILE_HELPER: path.join(ROOT_DIR, 'scripts', 'WindowsFileAction.cs'), AGY_FILE_URI: target, AGY_FILE_MODE: mode } } };
   }
   let stat;
   try {
@@ -1865,7 +1871,7 @@ function findWindowsCscExe() {
 }
 
 function getWindowsFileActionCacheInfo(cacheDir = path.join(STATE_DIR, 'cache')) {
-  const helperSrcPath = path.join(__dirname, 'scripts', 'WindowsFileAction.cs');
+  const helperSrcPath = path.join(ROOT_DIR, 'scripts', 'WindowsFileAction.cs');
   if (!fs.existsSync(helperSrcPath)) return null;
   const src = fs.readFileSync(helperSrcPath, 'utf8');
   const hash = computeHash(src + '\n' + WINDOWS_FILE_ACTION_MAIN_CS);

@@ -6,8 +6,8 @@ import test from 'node:test';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const periodicCore = require('../periodic-core.js');
-const periodicSync = require('../periodic-sync.js');
+const periodicCore = require('../src/periodic-core.js');
+const periodicSync = require('../src/periodic-sync.js');
 
 test('resolveColorExpr accurately evaluates light-dark, var, and nested color-mix(in srgb)', () => {
   const tokens = periodicSync.parseColorV3Tokens(`

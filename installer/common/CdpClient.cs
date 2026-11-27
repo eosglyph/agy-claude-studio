@@ -599,20 +599,27 @@ namespace AgyClaudeStudio
             return new string(buf, pos, buf.Length - pos);
         }
 
+        private static string ResolveRuntimeAssetPath(string baseDir, string fileName)
+        {
+            string srcPath = Path.Combine(Path.Combine(baseDir, "src"), fileName);
+            if (File.Exists(srcPath)) return srcPath;
+            return Path.Combine(baseDir, fileName);
+        }
+
         public static string ReadRuntimeBundle(string baseDir, PluginManifest manifest)
         {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < manifest.Parts.Count; i++)
             {
                 if (i > 0) sb.Append('\n');
-                sb.Append(File.ReadAllText(Path.Combine(baseDir, manifest.Parts[i]), Encoding.UTF8));
+                sb.Append(File.ReadAllText(ResolveRuntimeAssetPath(baseDir, manifest.Parts[i]), Encoding.UTF8));
             }
             return sb.ToString();
         }
 
         public static void ReadBundleAndCssHashes(string baseDir, PluginManifest manifest, out string codeHash, out string cssHash)
         {
-            string css = File.ReadAllText(Path.Combine(baseDir, "style.css"), Encoding.UTF8);
+            string css = File.ReadAllText(ResolveRuntimeAssetPath(baseDir, "style.css"), Encoding.UTF8);
             string bundle = ReadRuntimeBundle(baseDir, manifest);
             codeHash = ComputeHash(bundle);
             cssHash = ComputeHash(css);
@@ -655,7 +662,7 @@ namespace AgyClaudeStudio
         public static string BuildInjectExpression(string baseDir, PluginManifest manifest)
         {
             Dictionary<string, object> config = ReadConfig(baseDir, manifest);
-            string css = File.ReadAllText(Path.Combine(baseDir, "style.css"), Encoding.UTF8);
+            string css = File.ReadAllText(ResolveRuntimeAssetPath(baseDir, "style.css"), Encoding.UTF8);
             string bundle = ReadRuntimeBundle(baseDir, manifest);
             string codeHash = ComputeHash(bundle);
 
@@ -912,8 +919,11 @@ namespace AgyClaudeStudio
                 {
                     return WatcherPidStatus.Unknown;
                 }
-                string expectedScript = NormalizeWindowsPath(Path.Combine(normDir, "inject.js"));
-                return string.Equals(NormalizeWindowsPath(entryScript), expectedScript, StringComparison.OrdinalIgnoreCase)
+                string expectedSrcScript = NormalizeWindowsPath(Path.Combine(Path.Combine(normDir, "src"), "inject.js"));
+                string expectedRootScript = NormalizeWindowsPath(Path.Combine(normDir, "inject.js"));
+                string normalizedEntry = NormalizeWindowsPath(entryScript);
+                return (string.Equals(normalizedEntry, expectedSrcScript, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(normalizedEntry, expectedRootScript, StringComparison.OrdinalIgnoreCase))
                     ? WatcherPidStatus.Owned
                     : WatcherPidStatus.Foreign;
             }

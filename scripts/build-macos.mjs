@@ -247,12 +247,12 @@ function buildMacosApp({
 
     const payloadEntries = [
       { name: 'manifest.json', data: Buffer.from(manifestJson, 'utf8') },
-      { name: 'style.css', data: fs.readFileSync(path.join(ROOT_DIR, 'style.css')) },
+      { name: 'style.css', data: fs.readFileSync(path.join(ROOT_DIR, 'src', 'style.css')) },
       { name: 'config.json', data: fs.readFileSync(activeConfigFile) },
       { name: 'config.example.json', data: fs.readFileSync(path.join(ROOT_DIR, 'config.example.json')) },
       ...cdp.RUNTIME_PARTS.map((part) => ({
         name: part,
-        data: fs.readFileSync(path.join(ROOT_DIR, part)),
+        data: fs.readFileSync(path.join(ROOT_DIR, 'src', part)),
       })),
     ];
 

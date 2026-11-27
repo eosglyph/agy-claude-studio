@@ -12,11 +12,11 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
 
-const cdp = require(path.join(ROOT_DIR, 'cdp.js'));
-const effortCore = require(path.join(ROOT_DIR, 'effort-core.js'));
-const i18nLocales = require(path.join(ROOT_DIR, 'i18n-locales.js'));
-const i18nCore = require(path.join(ROOT_DIR, 'i18n-core.js'));
-const lifecycle = require(path.join(ROOT_DIR, 'lifecycle.js'));
+const cdp = require(path.join(ROOT_DIR, 'src', 'cdp.js'));
+const effortCore = require(path.join(ROOT_DIR, 'src', 'effort-core.js'));
+const i18nLocales = require(path.join(ROOT_DIR, 'src', 'i18n-locales.js'));
+const i18nCore = require(path.join(ROOT_DIR, 'src', 'i18n-core.js'));
+const lifecycle = require(path.join(ROOT_DIR, 'src', 'lifecycle.js'));
 const mcpHost = require(path.join(ROOT_DIR, 'plugin', 'mcp-host.js'));
 
 function matchesCompound(node, sel) {
@@ -519,7 +519,7 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
   assert.ok(studioHtml.includes('/api/notify') && studioHtml.includes('/api/notify/test'), 'Studio UI wires mobile push save and test endpoints');
   assert.equal(/liangwufeng|performanceBackdrop/i.test(studioHtml), false, 'Studio UI contains no Liang Wufeng controls');
 
-  const css = fs.readFileSync(path.join(ROOT_DIR, 'style.css'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT_DIR, 'src', 'style.css'), 'utf8');
   assert.match(css, /\.agy-composer-footer\s*\{[\s\S]*?position:\s*relative\s*!important/, 'Composer footer establishes positioning context so Tier-1 controls stay immune to bottom HUD bar');
   assert.match(css, /permissions-selector-trigger[\s\S]*?order:\s*9\s*!important/, 'Permissions selector sits on the right side of the Claude-style footer');
   assert.match(css, /button\[aria-haspopup="menu"\][\s\S]*?left:\s*8px\s*!important[\s\S]*?bottom:\s*calc\(100%\s*\+\s*18px\)\s*!important/, 'Add (+) button is pinned inside Tier-1 left edge');
@@ -1389,8 +1389,8 @@ test('disabling composerRestyle keeps HUD stats active and places periodic/orche
 });
 
 test('i18n-core universal opt-out protocol and dynamic setExtraOptOut protect third-party roots', () => {
-  const i18nCore = require('../i18n-core.js');
-  const i18nLocales = require('../i18n-locales.js');
+  const i18nCore = require('../src/i18n-core.js');
+  const i18nLocales = require('../src/i18n-locales.js');
 
   assert.ok(i18nCore.OPT_OUT_PROTOCOL.includes('[translate="no"]'));
   assert.ok(i18nCore.OPT_OUT_PROTOCOL.includes('.notranslate'));

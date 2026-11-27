@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const periodicCore = require('../periodic-core.js');
+const periodicCore = require('../src/periodic-core.js');
 
 const SAMPLE_OPTIONS = [
   { label: 'Gemini 4 Neon (High)', value: 1532, disabled: false, tagTitle: 'New', tagDescription: 'For most deep reasoning and complex problems', modelId: 'gemini-4-neon-high' },

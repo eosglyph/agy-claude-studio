@@ -34,5 +34,5 @@ description: >-
 ### 第三步：确认、写入并热生效
 
 1. 向用户简洁展示：「将把 `<选择器>` 加入翻译保护名单，仅保护 `<插件/区域名>` 不被翻译，不影响其余界面」，征得确认（若用户已明确指令添加特定插件且选择器 100% 唯一明确，也可直接写入并告知支持随时撤销）。
-2. 通过插件目录 `cdp.js` 的 `updateConfigSetting('i18nIgnoreSelectors', nextList)` 原子写入 `config.json`（避免破坏其他配置）。
-3. 运行插件目录下的 `node inject.js` 热刷新当前窗口，让被误翻的区域立即恢复原文并汇报结果。
+2. 通过插件目录 `src/cdp.js` 的 `updateConfigSetting('i18nIgnoreSelectors', nextList)` 原子写入 `config.json`（避免破坏其他配置）。
+3. 运行插件目录下的 `node src/inject.js` 热刷新当前窗口，让被误翻的区域立即恢复原文并汇报结果。

@@ -7,9 +7,9 @@ import test from 'node:test';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const scriptsCore = require('../scripts-core.js');
-const i18nCore = require('../i18n-core.js');
-const i18nLocales = require('../i18n-locales.js');
+const scriptsCore = require('../src/scripts-core.js');
+const i18nCore = require('../src/i18n-core.js');
+const i18nLocales = require('../src/i18n-locales.js');
 const studioMain = await import('../sidecars/studio/main.mjs');
 
 test('scripts-core parses args, CRUDs entries in scripts.json, and executes scripts with shell:false', async () => {

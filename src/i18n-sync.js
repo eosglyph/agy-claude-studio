@@ -18,7 +18,7 @@ const LANGUAGE_CATALOG = Object.freeze([
 
 const REMOTE_LOCALES_BASE_URL =
   'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/locales';
-const BUNDLED_LOCALES_DIR = path.join(__dirname, 'locales');
+const BUNDLED_LOCALES_DIR = path.join(__dirname, '..', 'locales');
 const PACKS_SUBDIR = 'i18n-packs';
 const MAX_PACK_BYTES = 1536 * 1024;
 const ALLOWED_REGEX_FLAGS = /^[ims]*$/;
