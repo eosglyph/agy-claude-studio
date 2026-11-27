@@ -5089,7 +5089,16 @@ test('model selector partitions sparkle+name from effort pill, suppresses native
   const css = fs.readFileSync(require.resolve('../src/style.css'), 'utf8');
   assert.ok(css.includes('[data-testid="model-selector-trigger"]::before'), 'style.css uses ::before background split for model name');
   assert.ok(css.includes('--ag-cs-effort-cut'), 'style.css clips ::before via --ag-cs-effort-cut');
-  assert.ok(css.includes('margin-right: -4px'), 'style.css offsets 4px flex gap between sparkle and model name');
+  assert.ok(css.includes('margin-right: -4px !important'), 'style.css offsets 4px flex gap between sparkle and model name');
+  assert.ok(css.includes('border-radius: 6px 0 0 6px !important'), 'style.css overrides host rounded-full pill radius on sparkle trigger');
+  assert.ok(
+    !/:has\([^)]*:has\(/.test(css),
+    'style.css must never nest :has() inside :has() (invalid in CSS Selectors Level 4)'
+  );
+  assert.ok(
+    css.includes('.agy-composer-footer:has([data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has([data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover))'),
+    'style.css uses flat non-nested :has():not(:has()) for synchronized sparkle + model name hover'
+  );
   assert.ok(
     css.includes('[data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover:not(:has([data-ag-cs-effort]:hover))::before'),
     'style.css excludes effort hover from highlighting model name ::before'
