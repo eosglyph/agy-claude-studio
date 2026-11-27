@@ -1606,6 +1606,9 @@
       z-index: 9999;
       min-width: 210px;
       max-width: calc(100vw - 16px);
+      max-height: min(320px, calc(100vh - 16px));
+      overflow-y: auto;
+      overscroll-behavior: contain;
       padding: 6px;
       border-radius: 14px;
       background: #ffffff;
@@ -5068,7 +5071,7 @@
         const flags = [
           Boolean(cfg.periodicSelector),
           cfg.orchestratorSwitch !== false,
-          cfg.effortSliderStyle === 'claude' ? Boolean(cfg.effortAccent) : true,
+          cfg.effortSliderStyle === 'off' ? false : cfg.effortSliderStyle === 'claude' ? Boolean(cfg.effortAccent) : true,
           Boolean(cfg.smoothCaret),
           cfg.mascot === 'crab',
           Boolean(cfg.homeRipple),
@@ -6258,10 +6261,12 @@
     }
 
     async function triggerSideQuestionOpen(payload = {}) {
+      if (isConversationUnbound) return;
       const lang = currentConfig?.language || 'zh-CN';
       const c = getOverviewExtrasCopy(lang);
       const targetConvoId =
         String(payload?.conversationId || activeConversationId || liveTasksState.sideQuestionConvoId || '').trim();
+      if (!targetConvoId) return;
       try {
         const res = await apiFetch('/api/side-question/open', {
           method: 'POST',
@@ -6312,6 +6317,7 @@
       newBtn.className = 'cd-btw-new-btn';
       newBtn.textContent = c.btwNewBtn;
       newBtn.title = c.btwStartTip;
+      newBtn.disabled = isConversationUnbound;
       newBtn.addEventListener('click', () => {
         triggerSideQuestionOpen({ conversationId: convoId, forceNew: true });
       });
@@ -6327,6 +6333,7 @@
         row.type = 'button';
         row.className = 'cd-btw-row is-empty-entry';
         row.title = c.btwStartTip;
+        row.disabled = isConversationUnbound;
 
         const left = document.createElement('span');
         left.className = 'cd-btw-row-left';
@@ -6406,16 +6413,17 @@
 
     async function loadLiveTasks() {
       const reqConvoId = activeConversationId || '';
+      const reqUnbound = isConversationUnbound;
       const reqSeq = ++liveTasksReqSeq;
       try {
         const res = await apiFetch('/api/live-tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversationId: reqConvoId }),
+          body: JSON.stringify({ conversationId: reqConvoId, unbound: reqUnbound }),
         });
         if (!res.ok) return;
         const data = await res.json();
-        if (reqSeq !== liveTasksReqSeq || reqConvoId !== (activeConversationId || '')) return;
+        if (reqSeq !== liveTasksReqSeq || reqConvoId !== (activeConversationId || '') || reqUnbound !== isConversationUnbound) return;
         if (data && data.ok) {
           liveTasksState = data;
           renderLiveTasksCard();
@@ -6740,22 +6748,50 @@
         return '';
       }
     })();
+    let isConversationUnbound = false;
+
+    function isAllowedParentOrigin(origin) {
+      if (!origin || origin === 'null') return true;
+      if (window.location.origin && window.location.origin !== 'null' && origin === window.location.origin) return true;
+      return /^(?:vscode-webview|vscode-file|file|plugin):/i.test(origin) || /^https?:\/\/(?:\[::1\]|127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin);
+    }
 
     window.addEventListener('message', (ev) => {
       if (ev.source !== window.parent) return;
+      if (!isAllowedParentOrigin(ev.origin)) return;
       const msg = ev.data;
       if (!msg || typeof msg !== 'object' || msg.type !== 'ag-cs:active-conversation') return;
-      const nextCid = String(msg.conversationId || '').trim();
-      if (!nextCid || !/^[0-9a-f-]{8,64}$/i.test(nextCid) || nextCid === activeConversationId) return;
-      activeConversationId = nextCid;
+      if (typeof msg.conversationId !== 'string') return;
+      const nextCid = msg.conversationId.trim();
+      const nextUnbound = Boolean(msg.unbound) || nextCid === '';
+      if (!nextUnbound && !/^[0-9a-f-]{8,64}$/i.test(nextCid)) return;
+      if (nextUnbound) {
+        if (isConversationUnbound && activeConversationId === '') return;
+        activeConversationId = '';
+        isConversationUnbound = true;
+      } else {
+        if (!isConversationUnbound && nextCid === activeConversationId) return;
+        activeConversationId = nextCid;
+        isConversationUnbound = false;
+      }
+      liveTasksReqSeq += 1;
+      inspectorReqSeq += 1;
+      closeEnvPopover();
+      hideBranchTooltip();
+      inspectorState = null;
+      selectedWorktreePath = '';
+      lastInspectorWorkspacePath = '';
+      renderConversationInspector();
       liveTasksState = {
         ...liveTasksState,
-        sideQuestionConvoId: nextCid,
+        sideQuestionConvoId: nextUnbound ? '' : nextCid,
         sideQuestions: [],
       };
       renderLiveTasksCard();
       void loadLiveTasks();
-      void loadConversationInspector();
+      if (!nextUnbound) {
+        void loadConversationInspector();
+      }
     });
 
     let inspectorState = null;
@@ -6767,6 +6803,7 @@
           envHeading: 'Environment',
           hostLocal: 'This computer',
           worktreeTag: 'Worktree',
+          recentWorktreeTag: 'Recent',
           branchTooltipTitle: 'Branch',
           worktreesHeading: (n) => `Worktrees (${n})`,
           menuShowExplorer: 'Show in Explorer',
@@ -6816,6 +6853,7 @@
           envHeading: '環境',
           hostLocal: 'このコンピューター',
           worktreeTag: 'Worktree',
+          recentWorktreeTag: '最近',
           branchTooltipTitle: 'ブランチ',
           worktreesHeading: (n) => `Worktrees (${n})`,
           menuShowExplorer: 'エクスプローラーで表示',
@@ -6865,6 +6903,7 @@
         envHeading: isTrad ? '環境' : '环境',
         hostLocal: isTrad ? '本機電腦' : '本机',
         worktreeTag: 'Worktree',
+        recentWorktreeTag: isTrad ? '最近活動' : '最近活动',
         branchTooltipTitle: 'Branch',
         worktreesHeading: (n) => (isTrad ? `工作樹 (${n})` : `工作树 (${n})`),
         menuShowExplorer: isTrad ? '在檔案總管中顯示' : '在资源管理器中显示',
@@ -6975,7 +7014,8 @@
       const worktreePath = String(activeWt?.path || env?.worktreePath || '').trim();
       const worktreeRel = String(activeWt?.relPath || '').trim();
       const actionPath = worktreePath || String(env?.fullPath || '').trim();
-      return { activeWt, branch, worktreePath, worktreeRel, actionPath };
+      const inferredRecent = Boolean(!selectedWorktreePath && (activeWt ? activeWt.inferredRecent : env?.inferredRecent));
+      return { activeWt, branch, worktreePath, worktreeRel, actionPath, inferredRecent };
     }
 
     function hideBranchTooltip() {
@@ -6992,7 +7032,7 @@
       const metaEl = document.getElementById('cd-env-tooltip-meta');
       const env = inspectorState?.environment || {};
       if (!tip || !anchorEl || envPopoverKind) return;
-      const { branch, worktreeRel } = getEffectiveEnvBranchInfo(env);
+      const { branch, worktreeRel, inferredRecent } = getEffectiveEnvBranchInfo(env);
       if (!branch) {
         hideBranchTooltip();
         return;
@@ -7002,8 +7042,11 @@
       if (titleEl) titleEl.textContent = ic.branchTooltipTitle || 'Branch';
       if (valueEl) valueEl.textContent = branch;
       if (metaEl) {
-        if (worktreeRel) {
-          metaEl.textContent = worktreeRel;
+        const metaParts = [];
+        if (worktreeRel) metaParts.push(worktreeRel);
+        if (inferredRecent) metaParts.push(ic.recentWorktreeTag);
+        if (metaParts.length > 0) {
+          metaEl.textContent = metaParts.join(' · ');
           metaEl.hidden = false;
         } else {
           metaEl.textContent = '';
@@ -7027,11 +7070,13 @@
       });
     }
 
-    function closeEnvPopover() {
+    function closeEnvPopover({ restoreFocus = false } = {}) {
+      const prevAnchor = envPopoverAnchor;
       const pop = document.getElementById('cd-env-popover');
       if (pop) {
         pop.hidden = true;
         pop.innerHTML = '';
+        pop.style.maxHeight = '';
       }
       document.getElementById('cd-env-ws-row')?.classList.remove('is-menu-open');
       document.getElementById('cd-env-ws-row')?.setAttribute('aria-expanded', 'false');
@@ -7039,6 +7084,13 @@
       document.getElementById('cd-env-branch-btn')?.setAttribute('aria-expanded', 'false');
       envPopoverKind = '';
       envPopoverAnchor = null;
+      if (restoreFocus && prevAnchor && prevAnchor.isConnected && typeof prevAnchor.focus === 'function') {
+        try {
+          prevAnchor.focus({ preventScroll: true });
+        } catch {
+          prevAnchor.focus();
+        }
+      }
     }
 
     async function copyEnvText(text, okMsg) {
@@ -7065,7 +7117,10 @@
       } catch {}
     }
 
-    async function runEnvAction(payload, failMsg) {
+    async function runEnvAction(payload, failMsg, expectedConvoId = activeConversationId) {
+      if (isConversationUnbound || expectedConvoId !== activeConversationId) {
+        return;
+      }
       try {
         const res = await apiFetch('/api/env/action', {
           body: JSON.stringify(payload || {}),
@@ -7082,13 +7137,14 @@
     function openEnvPopover(kind, anchorEl, { keepOpen = false } = {}) {
       const pop = document.getElementById('cd-env-popover');
       const env = inspectorState?.environment || {};
-      if (!pop || !anchorEl) return;
+      if (!pop || !anchorEl || isConversationUnbound || !inspectorState) return;
       if (!keepOpen && envPopoverKind === kind && !pop.hidden) {
-        closeEnvPopover();
+        closeEnvPopover({ restoreFocus: true });
         return;
       }
       closeEnvPopover();
       hideBranchTooltip();
+      const menuConvoId = activeConversationId;
 
       const lang = currentConfig?.language || 'zh-CN';
       const ic = getInspectorCopy(lang);
@@ -7106,7 +7162,8 @@
         btn.textContent = label;
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          closeEnvPopover();
+          closeEnvPopover({ restoreFocus: true });
+          if (isConversationUnbound || menuConvoId !== activeConversationId) return;
           void onClick();
         });
         pop.appendChild(btn);
@@ -7126,17 +7183,17 @@
 
       if (kind === 'workspace') {
         if (!env.fullPath) return;
-        addItem(showLabel, () => runEnvAction({ action: 'reveal', path: env.fullPath }, ic.actionFail));
+        addItem(showLabel, () => runEnvAction({ action: 'reveal', path: env.fullPath }, ic.actionFail, menuConvoId));
         if (env.repoWebUrl) {
           addItem(
             env.isGitHub ? ic.menuOpenGithub : ic.menuOpenRepo,
-            () => runEnvAction({ action: 'open-repo', url: env.repoWebUrl }, ic.actionFail)
+            () => runEnvAction({ action: 'open-repo', url: env.repoWebUrl }, ic.actionFail, menuConvoId)
           );
         }
         addSep();
         addItem(ic.menuCopyPath, () => copyEnvText(env.fullPath, ic.copiedPath));
         addSep();
-        addItem(ic.menuOpenTerminal, () => runEnvAction({ action: 'terminal', path: env.fullPath }, ic.actionFail));
+        addItem(ic.menuOpenTerminal, () => runEnvAction({ action: 'terminal', path: env.fullPath }, ic.actionFail, menuConvoId));
       } else if (kind === 'branch') {
         const { activeWt, branch, worktreePath, actionPath } = getEffectiveEnvBranchInfo(env);
         if (!branch) return;
@@ -7144,9 +7201,9 @@
         if (actionPath) {
           addSep();
           if (worktreePath && worktreePath !== env.fullPath) {
-            addItem(showLabel, () => runEnvAction({ action: 'reveal', path: worktreePath }, ic.actionFail));
+            addItem(showLabel, () => runEnvAction({ action: 'reveal', path: worktreePath }, ic.actionFail, menuConvoId));
           }
-          addItem(ic.menuOpenTerminal, () => runEnvAction({ action: 'terminal', path: actionPath }, ic.actionFail));
+          addItem(ic.menuOpenTerminal, () => runEnvAction({ action: 'terminal', path: actionPath }, ic.actionFail, menuConvoId));
         }
         const wtList = Array.isArray(env.worktrees) ? env.worktrees : [];
         if (wtList.length > 1) {
@@ -7180,8 +7237,12 @@
             btn.appendChild(sub);
             btn.addEventListener('click', (e) => {
               e.stopPropagation();
+              if (isConversationUnbound || menuConvoId !== activeConversationId) {
+                closeEnvPopover();
+                return;
+              }
               selectedWorktreePath = wt.path;
-              closeEnvPopover();
+              closeEnvPopover({ restoreFocus: true });
               renderConversationInspector();
             });
             pop.appendChild(btn);
@@ -7197,13 +7258,33 @@
       envPopoverKind = kind;
       envPopoverAnchor = anchorEl;
 
-      const rect = anchorEl.getBoundingClientRect();
-      const popRect = pop.getBoundingClientRect();
       const pad = 8;
+      const rect = anchorEl.getBoundingClientRect();
+      const belowAvail = Math.max(0, window.innerHeight - rect.bottom - 5 - pad);
+      const aboveAvail = Math.max(0, rect.top - 5 - pad);
+      const maxViewportAvail = Math.max(0, window.innerHeight - pad * 2);
+      const preferredMax = Math.min(320, maxViewportAvail);
+      pop.style.maxHeight = `${Math.round(preferredMax)}px`;
+
+      const popRect = pop.getBoundingClientRect();
       let left = Math.max(pad, Math.min(rect.left, window.innerWidth - popRect.width - pad));
       let top = rect.bottom + 5;
       if (top + popRect.height > window.innerHeight - pad) {
-        top = Math.max(pad, rect.top - popRect.height - 5);
+        if (aboveAvail > belowAvail) {
+          const fitAbove = Math.min(preferredMax, Math.max(0, aboveAvail));
+          if (popRect.height > fitAbove) {
+            pop.style.maxHeight = `${Math.round(fitAbove)}px`;
+          }
+          const updatedRect = pop.getBoundingClientRect();
+          top = Math.max(pad, rect.top - updatedRect.height - 5);
+        } else {
+          const fitBelow = Math.min(preferredMax, Math.max(0, belowAvail));
+          if (popRect.height > fitBelow) {
+            pop.style.maxHeight = `${Math.round(fitBelow)}px`;
+          }
+          const updatedRect = pop.getBoundingClientRect();
+          top = Math.max(pad, Math.min(rect.bottom + 5, window.innerHeight - updatedRect.height - pad));
+        }
       }
       pop.style.left = `${Math.round(left)}px`;
       pop.style.top = `${Math.round(top)}px`;
@@ -7259,7 +7340,7 @@
         }
       }
       if (branchRow && branchEl) {
-        const { branch, worktreeRel } = getEffectiveEnvBranchInfo(env);
+        const { branch, worktreeRel, inferredRecent } = getEffectiveEnvBranchInfo(env);
         if (branch) {
           branchRow.hidden = false;
           branchEl.textContent = shortenBranchName(branch);
@@ -7269,7 +7350,7 @@
           }
           if (wtTagEl) {
             wtTagEl.hidden = !env.isWorktree;
-            wtTagEl.textContent = ic.worktreeTag;
+            wtTagEl.textContent = inferredRecent ? `${ic.worktreeTag} · ${ic.recentWorktreeTag}` : ic.worktreeTag;
           }
         } else {
           branchRow.hidden = true;
@@ -7493,6 +7574,7 @@
     let inspectorInFlight = null;
 
     async function loadConversationInspector() {
+      if (isConversationUnbound) return;
       const reqConvoId = activeConversationId;
       if (inspectorInFlight && inspectorInFlight.convoId === reqConvoId) {
         return inspectorInFlight.promise;
@@ -7505,7 +7587,7 @@
           });
           if (!res.ok) return;
           const data = await res.json();
-          if (reqSeq !== inspectorReqSeq || reqConvoId !== activeConversationId) return;
+          if (reqSeq !== inspectorReqSeq || reqConvoId !== activeConversationId || isConversationUnbound) return;
           if (data?.ok) {
             inspectorState = data;
             renderConversationInspector();
@@ -7577,7 +7659,7 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         hideBranchTooltip();
-        if (envPopoverKind) closeEnvPopover();
+        if (envPopoverKind) closeEnvPopover({ restoreFocus: true });
       }
     });
     window.addEventListener('resize', () => {

@@ -466,6 +466,17 @@
     }
   };
 
+  let effortConfigGeneration = 0;
+  let lastEffortSliderEnabled = null;
+  let pendingEffortBadgeRaf = 0;
+
+  function cancelPendingEffortBadgeRaf() {
+    if (pendingEffortBadgeRaf) {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(pendingEffortBadgeRaf);
+      pendingEffortBadgeRaf = 0;
+    }
+  }
+
   function isEffortSliderEnabled() {
     if (cfg.effortSlider === false) return false;
     const styleMode =
@@ -473,6 +484,24 @@
         ? effortCore.normalizeEffortStyle(cfg.effortSliderStyle)
         : String(cfg.effortSliderStyle || '').trim().toLowerCase();
     return styleMode !== 'off';
+  }
+
+  function cleanupEffortBadgesInDom() {
+    if (openEffortPop) closeEffortPopover();
+    const btns = document.querySelectorAll('[data-testid="model-selector-trigger"]');
+    for (const modelBtn of btns) {
+      for (const el of modelBtn.querySelectorAll('.ag-cs-effort-badge, [data-ag-cs-effort]')) {
+        if (el.hasAttribute('data-ag-cs-effort')) el.removeAttribute('data-ag-cs-effort');
+        if (el.classList.contains('ag-cs-effort-badge')) el.classList.remove('ag-cs-effort-badge');
+      }
+      if (modelBtn.hasAttribute('data-ag-cs-has-effort')) {
+        modelBtn.removeAttribute('data-ag-cs-has-effort');
+      }
+      if (modelBtn.style?.getPropertyValue?.('--ag-cs-effort-cut')) {
+        modelBtn.style.removeProperty('--ag-cs-effort-cut');
+      }
+      modelBtn._agCsHasEffortTagged = false;
+    }
   }
 
   function applyRootAttrs() {
@@ -489,6 +518,13 @@
     const palette = getEffectivePalette();
     const lang = getLang();
     const dark = isDarkTheme();
+    const nextEffortEnabled = isEffortSliderEnabled();
+    if (lastEffortSliderEnabled !== null && lastEffortSliderEnabled !== nextEffortEnabled) {
+      effortConfigGeneration += 1;
+      cancelPendingEffortBadgeRaf();
+      if (!nextEffortEnabled) cleanupEffortBadgesInDom();
+    }
+    lastEffortSliderEnabled = nextEffortEnabled;
     setHtmlAttr('data-ag-cs-style', '1');
     setHtmlAttr('data-ag-cs-palette', palette);
     setHtmlAttr('data-ag-cs-glass', cfg.glassEffect === false ? 'off' : 'on');
@@ -499,7 +535,7 @@
     setHtmlAttr('data-ag-cs-sidebar', cfg.sidebarRestyle === false ? 'off' : 'on');
     setHtmlAttr('data-ag-cs-sidebar-compact', cfg.sidebarCompact === true ? 'on' : 'off');
     removeHtmlAttr('data-ag-cs-hud-compact');
-    setHtmlAttr('data-ag-cs-effort-slider', isEffortSliderEnabled() ? 'on' : 'off');
+    setHtmlAttr('data-ag-cs-effort-slider', nextEffortEnabled ? 'on' : 'off');
     setHtmlAttr('data-ag-cs-effort-accent', cfg.effortAccent === false ? 'off' : 'on');
     setHtmlAttr('data-ag-cs-periodic', cfg.periodicSelector === false ? 'off' : 'on');
     setHtmlAttr('data-ag-cs-lang', lang);
@@ -946,7 +982,12 @@
     return m ? m[1] : s;
   }
 
-  function resolveCascadeId(inputBox) {
+  function resolveCascadeId(inputBox, opts = {}) {
+    if (inputBox) {
+      const selfAttrId = normalizeCascadeId(inputBox.getAttribute?.('data-cascade-id'));
+      if (selfAttrId) return selfAttrId;
+    }
+    if (opts?.viewScopedOnly && !inputBox) return '';
     const cv = inputBox ? inputBox.closest('[data-testid="conversation-view"]') : document.querySelector('[data-testid="conversation-view"]');
     if (inputBox && !cv && inputBox.closest('.agy-home')) {
       return '';
@@ -1002,6 +1043,7 @@
       const tfId = normalizeCascadeId(tf?.cascadeId);
       if (tfId) return tfId;
     }
+    if (opts && opts.viewScopedOnly) return '';
     if (!inputBox?.closest?.('[data-testid="subagent-tab-conversation"]')) {
       const h = ensureHooks(true);
       const convoState = h?.store?.getState?.()?.conversation?.convoState;
@@ -2006,15 +2048,17 @@
   function isSlashMentionNode(node, cmdName) {
     if (!node || typeof node !== 'object') return false;
     if (node.type !== 'beautifulMention' && node.type !== 'contextScopeItemMention') return false;
+    if (node.trigger && node.trigger !== '/') return false;
     const target = String(cmdName || '').toLowerCase();
     if (!target) return false;
-    if (cleanCompactCmd(node.value) === target && (!node.trigger || node.trigger === '/')) {
+    if (cleanCompactCmd(node.value) === target) {
       return true;
     }
     const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
     if (!rawData) return false;
+    if (/"(uri|fileUri|filePath|relativePath)"/i.test(rawData)) return false;
     const cmdRe = new RegExp(`\\b${target}\\b`, 'i');
-    return Boolean((/slashCommand|recipe/i.test(rawData) || target === 'btw') && cmdRe.test(rawData));
+    return Boolean((/slashCommand/i.test(rawData) || /"recipe"\s*:|"type"\s*:\s*"recipe"|"kind"\s*:\s*"recipe"/i.test(rawData) || target === 'btw') && cmdRe.test(rawData));
   }
 
   function isCompactMentionNode(node) {
@@ -2024,45 +2068,116 @@
   function isAnySlashCommandMentionNode(node) {
     if (!node || typeof node !== 'object') return false;
     if (node.type !== 'beautifulMention' && node.type !== 'contextScopeItemMention') return false;
+    if (node.trigger && node.trigger !== '/') return false;
     if (node.trigger === '/') return true;
     const val = cleanCompactCmd(node.value);
-    if ((val === 'compact' || val === 'btw') && (!node.trigger || node.trigger === '/')) {
-      return true;
-    }
+    if (val === 'compact' || val === 'btw') return true;
     const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
-    return Boolean(rawData && /slashCommand|recipe/i.test(rawData));
+    if (!rawData) return false;
+    if (/"(uri|fileUri|filePath|relativePath)"/i.test(rawData)) return false;
+    if (/slashCommand/i.test(rawData)) return true;
+    return /"recipe"\s*:|"type"\s*:\s*"recipe"|"kind"\s*:\s*"recipe"/i.test(rawData);
   }
 
-  function hasSlashCommandChipInComposer(ed) {
-    if (!ed) return false;
+  function extractSlashCommandNameFromNode(node) {
+    if (!isAnySlashCommandMentionNode(node)) return '';
+    const val = cleanCompactCmd(node.value);
+    if (val) return val;
+    const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
+    if (/\bcompact\b/i.test(rawData)) return 'compact';
+    if (/\bbtw\b/i.test(rawData)) return 'btw';
+    return 'slash';
+  }
+
+  function normalizeComposerWhitespace(str) {
+    return String(str || '').replace(/[\u200B\uFEFF\u00A0]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function getKnownCompactPresetTexts() {
+    const out = new Set();
+    const add = (val) => {
+      const norm = normalizeComposerWhitespace(val);
+      if (norm) out.add(norm);
+    };
+    const curUi = uiText(getLang());
+    add(resolveCompactPresetText(curUi));
+    add(cfg?.compactCustomText);
+    for (const ui of [curUi, uiText('en')]) {
+      if (!ui) continue;
+      add(ui.compactPresetClean || 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.');
+      add(ui.compactPresetDev || 'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.');
+      add(ui.compactPresetContinue || 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of the interrupted work, and remaining TODOs. Right after compaction completes, resume and continue executing the unfinished task.');
+    }
+    return out;
+  }
+
+  function classifyComposerSlashState(ed) {
+    if (!ed) return { state: 'draft', cmd: '', hasLexical: false };
+    if (ed._agCsComposing) {
+      return { state: 'draft', cmd: '', hasLexical: Boolean(ed.__lexicalEditor) };
+    }
     const lex = ed.__lexicalEditor;
     if (lex && typeof lex.getEditorState === 'function') {
       try {
         const root = lex.getEditorState()?.toJSON?.()?.root;
-        const paras = Array.isArray(root?.children) ? root.children : [];
-        for (const p of paras) {
-          const kids = Array.isArray(p?.children) ? p.children : [];
-          for (const node of kids) {
-            if (isAnySlashCommandMentionNode(node)) return true;
+        if (root && Array.isArray(root.children)) {
+          const nonEmpty = root.children.filter((p) => {
+            const kids = Array.isArray(p?.children) ? p.children : [];
+            return kids.some((n) => n?.type !== 'text' || normalizeComposerWhitespace(n.text) !== '');
+          });
+          if (nonEmpty.length === 0) {
+            const domTxt = normalizeComposerWhitespace(getNonIconText(ed));
+            const domDec = Boolean(ed.querySelector?.('[data-lexical-decorator="true"], [data-chip]'));
+            if (domTxt !== '' || domDec) {
+              return { state: 'draft', cmd: '', hasLexical: true };
+            }
+            return { state: 'empty', cmd: '', hasLexical: true };
           }
+          if (nonEmpty.length > 1) {
+            return { state: 'draft', cmd: '', hasLexical: true };
+          }
+          let slashNode = null;
+          const plainParts = [];
+          for (const node of nonEmpty[0].children) {
+            if (isAnySlashCommandMentionNode(node)) {
+              if (slashNode) return { state: 'draft', cmd: '', hasLexical: true };
+              slashNode = node;
+            } else if (node?.type === 'text') {
+              plainParts.push(String(node.text || ''));
+            } else {
+              return { state: 'draft', cmd: '', hasLexical: true };
+            }
+          }
+          const extraText = normalizeComposerWhitespace(plainParts.join(''));
+          if (!slashNode) {
+            if (extraText === '') {
+              const domTxt = normalizeComposerWhitespace(getNonIconText(ed));
+              const domDec = Boolean(ed.querySelector?.('[data-lexical-decorator="true"], [data-chip]'));
+              if (domTxt !== '' || domDec) {
+                return { state: 'draft', cmd: '', hasLexical: true };
+              }
+              return { state: 'empty', cmd: '', hasLexical: true };
+            }
+            return { state: 'draft', cmd: '', hasLexical: true };
+          }
+          const cmd = extractSlashCommandNameFromNode(slashNode);
+          if (extraText === '') {
+            return { state: 'standalone_slash', cmd, hasPreset: false, hasLexical: true };
+          }
+          if (cmd === 'compact' && getKnownCompactPresetTexts().has(extraText)) {
+            return { state: 'standalone_slash', cmd: 'compact', hasPreset: true, hasLexical: true };
+          }
+          return { state: 'draft', cmd: '', hasLexical: true };
         }
       } catch {}
     }
-    const decorators = Array.from(ed.querySelectorAll?.('[data-lexical-decorator="true"], [data-chip]') || []);
-    for (const d of decorators) {
-      const rawTxt = getNonIconText(d);
-      const txt = cleanCompactCmd(rawTxt);
-      if (
-        txt === 'compact' ||
-        txt === 'btw' ||
-        Boolean(d.getAttribute?.('data-slash-command')) ||
-        /^\s*\//.test(rawTxt)
-      ) {
-        return true;
-      }
+
+    const rawTxt = normalizeComposerWhitespace(getNonIconText(ed));
+    const hasDecorators = Boolean(ed.querySelector?.('[data-lexical-decorator="true"], [data-chip]'));
+    if (!hasDecorators && rawTxt === '') {
+      return { state: 'empty', cmd: '', hasLexical: false };
     }
-    const raw = getNonIconText(ed).replace(/[\u200B\uFEFF\u00A0]/g, ' ').trim();
-    return /^\/(compact|btw)\b/i.test(raw);
+    return { state: 'draft', cmd: '', hasLexical: false };
   }
 
   function findLexicalCommandByName(lex, name) {
@@ -2086,91 +2201,73 @@
 
     if (hasExistingContent()) {
       const lex = ed.__lexicalEditor;
-      if (lex) {
+      if (!lex) return false;
+      try {
+        const clearSticky = findLexicalCommandByName(lex, 'CLEAR_DISMISSED_STICKY_MENTION_COMMAND');
+        if (clearSticky && typeof lex.dispatchCommand === 'function') {
+          lex.dispatchCommand(clearSticky, undefined);
+        }
+      } catch {}
+      let clearedViaLexical = false;
+      if (typeof lex.update === 'function') {
         try {
-          const clearSticky = findLexicalCommandByName(lex, 'CLEAR_DISMISSED_STICKY_MENTION_COMMAND');
-          if (clearSticky && typeof lex.dispatchCommand === 'function') {
-            lex.dispatchCommand(clearSticky, undefined);
-          }
+          lex.update(
+            () => {
+              const root =
+                lex._pendingEditorState?._nodeMap?.get?.('root') ||
+                lex._editorState?._nodeMap?.get?.('root');
+              if (root && typeof root.clear === 'function') {
+                root.clear();
+                if (typeof root.select === 'function') root.select();
+                clearedViaLexical = true;
+              }
+            },
+            { discrete: true }
+          );
         } catch {}
-        if (typeof lex.update === 'function') {
-          try {
-            lex.update(
-              () => {
-                const root =
-                  lex._pendingEditorState?._nodeMap?.get?.('root') ||
-                  lex._editorState?._nodeMap?.get?.('root');
-                if (root && typeof root.clear === 'function') {
-                  root.clear();
-                  if (typeof root.select === 'function') root.select();
-                }
-              },
-              { discrete: true }
-            );
-          } catch {}
-        }
-        if (hasExistingContent() && typeof lex.dispatchCommand === 'function') {
-          try {
-            const selAll = findLexicalCommandByName(lex, 'SELECT_ALL_COMMAND');
-            const remTxt = findLexicalCommandByName(lex, 'REMOVE_TEXT_COMMAND');
-            const delChar = findLexicalCommandByName(lex, 'DELETE_CHARACTER_COMMAND');
-            if (selAll) lex.dispatchCommand(selAll, null);
-            if (remTxt) lex.dispatchCommand(remTxt, null);
-            else if (delChar) lex.dispatchCommand(delChar, true);
-          } catch {}
-        }
       }
-
-      if (hasExistingContent()) {
+      if (hasExistingContent() && typeof lex.dispatchCommand === 'function') {
         try {
-          if (
-            typeof window !== 'undefined' &&
-            typeof window.getSelection === 'function' &&
-            typeof document.createRange === 'function'
-          ) {
-            const sel = window.getSelection();
-            if (sel) {
-              const range = document.createRange();
-              range.selectNodeContents(ed);
-              sel.removeAllRanges();
-              sel.addRange(range);
-            }
+          const selAll = findLexicalCommandByName(lex, 'SELECT_ALL_COMMAND');
+          const remTxt = findLexicalCommandByName(lex, 'REMOVE_TEXT_COMMAND');
+          const delChar = findLexicalCommandByName(lex, 'DELETE_CHARACTER_COMMAND');
+          if (selAll) lex.dispatchCommand(selAll, null);
+          if (remTxt) {
+            lex.dispatchCommand(remTxt, null);
+            clearedViaLexical = true;
+          } else if (delChar) {
+            lex.dispatchCommand(delChar, true);
+            clearedViaLexical = true;
           }
         } catch {}
-        if (typeof document.execCommand === 'function') {
-          try {
-            document.execCommand('selectAll', false, null);
-            document.execCommand('delete', false, null);
-          } catch {}
-        }
-        if (hasExistingContent()) {
-          ed.textContent = '';
-          if (typeof InputEvent === 'function') {
-            try {
-              ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: '', inputType: 'deleteContentBackward' }));
-            } catch {}
-          }
-        }
+      }
+      if (!clearedViaLexical || hasExistingContent()) {
+        return false;
       }
       ed.focus();
     }
 
     let inserted = false;
-    if (typeof document.execCommand === 'function') {
+    const hasExecCommand = typeof document.execCommand === 'function';
+    if (hasExecCommand) {
       try {
         document.execCommand('selectAll', false, null);
         inserted = Boolean(document.execCommand('insertText', false, cmdText));
       } catch {}
-    }
-    if (!inserted) {
-      if (typeof InputEvent === 'function') {
+      if (!inserted) return false;
+    } else {
+      let beforeInputCancelled = false;
+      if (typeof InputEvent === 'function' && typeof ed.dispatchEvent === 'function') {
         try {
-          ed.dispatchEvent(
+          const evRes = ed.dispatchEvent(
             new InputEvent('beforeinput', { bubbles: true, cancelable: true, data: cmdText, inputType: 'insertText' })
           );
+          if (evRes === false) beforeInputCancelled = true;
         } catch {}
       }
+      if (beforeInputCancelled) return false;
       if (cleanCompactCmd(getNonIconText(ed)) !== targetCmd) {
+        if (ed.__lexicalEditor) return false;
         ed.textContent = cmdText;
         if (typeof InputEvent === 'function') {
           try {
@@ -2179,7 +2276,7 @@
         }
       }
     }
-    return inserted || cleanCompactCmd(getNonIconText(ed)) === targetCmd;
+    return cleanCompactCmd(getNonIconText(ed)) === targetCmd || Boolean(findStandaloneSlashChip(ed, targetCmd));
   }
 
   function findStandaloneSlashChip(ed, cmdName) {
@@ -2577,21 +2674,29 @@
         syncCompactGuideHint(card, ui);
         return { ok: true, reason: 'already_btw' };
       }
-      const existingText = getNonIconText(ed).replace(/[\u200B\uFEFF\u00A0]/g, ' ').trim();
-      const hasDraftNode = Boolean(ed.querySelector?.('[data-lexical-decorator], [data-chip]'));
-      const hasSlashChip = hasSlashCommandChipInComposer(ed);
-      if ((existingText.length > 0 || hasDraftNode) && !hasSlashChip) {
+      const slashState = classifyComposerSlashState(ed);
+      if (slashState.state === 'standalone_slash' && slashState.cmd === 'btw') {
+        ed.focus();
+        syncCompactGuideHint(card, ui);
+        return { ok: true, reason: 'already_btw' };
+      }
+      if (slashState.state === 'draft') {
         try {
           ed.focus?.();
         } catch {}
-        return { ok: false, reason: 'draft_present' };
+        return { ok: false, action: 'draft_present', reason: 'draft_present' };
       }
       if (typeof window !== 'undefined' && typeof window.focus === 'function') {
         try {
           window.focus();
         } catch {}
       }
-      clearComposerAndInsertSlashCommand(ed, '/btw');
+      if (!clearComposerAndInsertSlashCommand(ed, '/btw')) {
+        try {
+          ed.focus?.();
+        } catch {}
+        return { ok: false, action: 'insert_failed', reason: 'insert_failed' };
+      }
       const delays = [60, 100, 140, 200, 260];
       let step = 0;
       const scheduleTrackedTimer = (fn, delayMs) => {
@@ -2623,17 +2728,70 @@
     }
   }
 
+  let cachedHostReduxStore = null;
+  let cachedHostReduxRootEl = null;
+  let cachedHostReduxProviderFiber = null;
+  let cachedHostReduxPath = null;
+
+  function resolveCachedFiberByPath(start, pathSteps) {
+    if (!start || !Array.isArray(pathSteps)) return null;
+    let cur = start;
+    for (let i = 0; i < pathSteps.length; i++) {
+      if (!cur) return null;
+      cur = cur[pathSteps[i]];
+    }
+    return cur || null;
+  }
+
   function findHostReduxStore() {
     try {
       const rootEl = document.getElementById('root') || document.body?.firstElementChild;
-      if (!rootEl) return null;
+      if (!rootEl) {
+        cachedHostReduxStore = null;
+        cachedHostReduxRootEl = null;
+        cachedHostReduxProviderFiber = null;
+        cachedHostReduxPath = null;
+        return null;
+      }
       const fk = Object.keys(rootEl).find((k) => k.startsWith('__reactContainer') || k.startsWith('__reactFiber'));
       const start = fk ? rootEl[fk]?.current || rootEl[fk] : null;
-      if (!start) return null;
-      const queue = [start];
+      if (!start) {
+        cachedHostReduxStore = null;
+        cachedHostReduxRootEl = null;
+        cachedHostReduxProviderFiber = null;
+        cachedHostReduxPath = null;
+        return null;
+      }
+      if (
+        cachedHostReduxStore &&
+        cachedHostReduxRootEl === rootEl &&
+        cachedHostReduxPath
+      ) {
+        const liveProvider = resolveCachedFiberByPath(start, cachedHostReduxPath);
+        const liveStore = liveProvider?.memoizedProps?.value?.store;
+        if (
+          liveProvider &&
+          liveStore &&
+          typeof liveStore.getState === 'function' &&
+          typeof liveStore.dispatch === 'function'
+        ) {
+          try {
+            liveStore.getState();
+            cachedHostReduxProviderFiber = liveProvider;
+            cachedHostReduxStore = liveStore;
+            return liveStore;
+          } catch {
+            cachedHostReduxStore = null;
+            cachedHostReduxRootEl = null;
+            cachedHostReduxProviderFiber = null;
+            cachedHostReduxPath = null;
+          }
+        }
+      }
+      const queue = [{ fiber: start, path: [] }];
       let visited = 0;
       while (queue.length && visited < 15000) {
-        const f = queue.shift();
+        const { fiber: f, path } = queue.shift();
         visited++;
         const val = f?.memoizedProps?.value;
         if (
@@ -2643,13 +2801,129 @@
           typeof val.store.getState === 'function' &&
           typeof val.store.dispatch === 'function'
         ) {
+          cachedHostReduxStore = val.store;
+          cachedHostReduxRootEl = rootEl;
+          cachedHostReduxProviderFiber = f;
+          cachedHostReduxPath = path;
           return val.store;
         }
-        if (f?.child) queue.push(f.child);
-        if (f?.sibling) queue.push(f.sibling);
+        if (f?.child) queue.push({ fiber: f.child, path: path.concat('child') });
+        if (f?.sibling) queue.push({ fiber: f.sibling, path: path.concat('sibling') });
       }
     } catch {}
+    cachedHostReduxStore = null;
+    cachedHostReduxRootEl = null;
+    cachedHostReduxProviderFiber = null;
+    cachedHostReduxPath = null;
     return null;
+  }
+
+  function findVisibleConversationView() {
+    try {
+      const views = Array.from(document.querySelectorAll('[data-testid="conversation-view"]')).filter(
+        (v) => !v.closest?.('[data-testid="subagent-tab-conversation"], [data-testid="side-panel-v2"]')
+      );
+      if (views.length === 0) return null;
+      const isHiddenView = (v) => {
+        if (v.getAttribute?.('data-visible') === 'false') return true;
+        if (v.getAttribute?.('aria-hidden') === 'true') return true;
+        if (v.hidden === true) return true;
+        if (v.style?.display === 'none' || v.style?.visibility === 'hidden') return true;
+        if (typeof getComputedStyle === 'function') {
+          try {
+            const cs = getComputedStyle(v);
+            if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return true;
+          } catch {}
+        }
+        return false;
+      };
+      if (views.length === 1) {
+        return isHiddenView(views[0]) ? null : views[0];
+      }
+      const nonHidden = views.filter((v) => !isHiddenView(v));
+      if (nonHidden.length === 0) return null;
+      if (nonHidden.length === 1) return nonHidden[0];
+
+      // Multiple visible conversation views: disambiguate using route or Redux active cascadeId first
+      let authCid = '';
+      try {
+        const m = String(location?.pathname || '').match(/\/c\/([0-9a-f-]{8,})/i);
+        if (m && m[1]) authCid = normalizeCascadeId(m[1]) || m[1];
+      } catch {}
+      if (!authCid) {
+        try {
+          const storeCid = findHostReduxStore()?.getState?.()?.conversation?.convoState?.cascadeId;
+          if (typeof storeCid === 'string' && storeCid.trim()) {
+            authCid = normalizeCascadeId(storeCid) || storeCid.trim();
+          }
+        } catch {}
+      }
+      if (authCid) {
+        const matchedByAuth = nonHidden.find((v) => {
+          const vCid = normalizeCascadeId(v.getAttribute?.('data-cascade-id'));
+          if (vCid && sameCascadeId(vCid, authCid)) return true;
+          const boxCid = resolveCascadeId(v.querySelector?.('[data-testid="agent-input-box"]'));
+          return Boolean(boxCid && sameCascadeId(boxCid, authCid));
+        });
+        if (matchedByAuth) return matchedByAuth;
+      }
+
+      const explicitVisible = nonHidden.find((v) => v.getAttribute?.('data-visible') === 'true' || v.getAttribute?.('data-active') === 'true');
+      if (explicitVisible) return explicitVisible;
+      const withRect = nonHidden.find((v) => {
+        if (typeof v.getBoundingClientRect !== 'function') return false;
+        const r = v.getBoundingClientRect();
+        return Boolean(r && r.width > 0 && r.height > 0);
+      });
+      return withRect || nonHidden[0] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function layoutHasCascadeId(node, targetCid) {
+    if (!node || typeof node !== 'object' || !targetCid) return false;
+    if (typeof node.cascadeId === 'string' && sameCascadeId(node.cascadeId, targetCid)) return true;
+    if (Array.isArray(node.children)) {
+      for (const ch of node.children) {
+        if (layoutHasCascadeId(ch, targetCid)) return true;
+      }
+    }
+    return false;
+  }
+
+  function doesHostWindowOwnConversation(targetCid, store) {
+    const cleanCid = normalizeCascadeId(targetCid);
+    if (!cleanCid) return false;
+    try {
+      const m = String(location?.pathname || '').match(/\/c\/([0-9a-f-]{8,})/i);
+      if (m && m[1] && sameCascadeId(m[1], cleanCid)) return true;
+    } catch {}
+    try {
+      const views = Array.from(document.querySelectorAll('[data-testid="conversation-view"]'));
+      for (const v of views) {
+        if (v.closest?.('[data-testid="subagent-tab-conversation"], [data-testid="side-panel-v2"]')) continue;
+        const vCid = normalizeCascadeId(v.getAttribute?.('data-cascade-id'));
+        if (vCid && sameCascadeId(vCid, cleanCid)) return true;
+      }
+      const boxes = Array.from(document.querySelectorAll('[data-testid="agent-input-box"]'));
+      for (const b of boxes) {
+        if (b.closest?.('[data-testid="subagent-tab-conversation"], [data-testid="side-panel-v2"]')) continue;
+        const bCid = resolveCascadeId(b);
+        if (bCid && sameCascadeId(bCid, cleanCid)) return true;
+      }
+    } catch {}
+    try {
+      const state = store?.getState?.();
+      if (state) {
+        const activeFromStore = state.conversation?.convoState?.cascadeId;
+        if (activeFromStore && sameCascadeId(activeFromStore, cleanCid)) return true;
+        if (layoutHasCascadeId(state.multiConvoLayout?.rootNode, cleanCid)) return true;
+        if (state.sidePanelV2?.conversationPanes && state.sidePanelV2.conversationPanes[cleanCid]) return true;
+        if (state.sideQuestion?.states && state.sideQuestion.states[cleanCid]) return true;
+      }
+    } catch {}
+    return false;
   }
 
   function resolveActiveConversationIdForHost(preferredId, store) {
@@ -2682,6 +2956,15 @@
       if (fromLayout) return normalizeCascadeId(fromLayout) || fromLayout;
     } catch {}
     try {
+      const visibleView = findVisibleConversationView();
+      if (visibleView) {
+        const attrId = normalizeCascadeId(visibleView.getAttribute?.('data-cascade-id'));
+        if (attrId) return attrId;
+        const box = visibleView.querySelector?.('[data-testid="agent-input-box"]');
+        const fromBox = resolveCascadeId(box);
+        if (fromBox) return fromBox;
+        return '';
+      }
       const primaryBox = Array.from(document.querySelectorAll('[data-testid="agent-input-box"]')).find(
         (b) => !b.closest?.('[data-testid="subagent-tab-conversation"]') && !b.closest?.('[data-testid="side-panel-v2"]')
       );
@@ -2713,7 +2996,14 @@
 
   function getSideQuestionsState(preferredConversationId = '') {
     const store = findHostReduxStore();
-    const cid = resolveActiveConversationIdForHost(preferredConversationId, store);
+    const rawPref = String(preferredConversationId || '').trim();
+    if (rawPref) {
+      const reqCid = normalizeCascadeId(rawPref);
+      if (!reqCid || !doesHostWindowOwnConversation(reqCid, store)) {
+        return { ok: false, reason: 'conversation_not_found', action: 'conversation_not_found', items: [] };
+      }
+    }
+    const cid = resolveActiveConversationIdForHost(rawPref, store);
     if (!store || !cid) {
       return { ok: true, conversationId: cid || '', items: [] };
     }
@@ -2896,39 +3186,70 @@
 
   function openSideQuestion(opts = {}) {
     const store = findHostReduxStore();
-    const cid = resolveActiveConversationIdForHost(opts?.conversationId || '', store);
+    const rawCid = String(opts?.conversationId || '').trim();
+    if (rawCid) {
+      const reqCid = normalizeCascadeId(rawCid);
+      if (!reqCid || !doesHostWindowOwnConversation(reqCid, store)) {
+        return {
+          ok: false,
+          action: 'conversation_not_found',
+          reason: 'conversation_not_found',
+          conversationId: '',
+        };
+      }
+    }
+    const cid = resolveActiveConversationIdForHost(rawCid, store);
     if (opts?.forceNew) {
       const res = fillBtwCommand({ conversationId: cid });
       return {
         ok: Boolean(res?.ok),
-        action: res?.ok ? 'composer_btw' : (res?.reason || 'composer_not_found'),
+        action: res?.ok ? 'composer_btw' : (res?.action || res?.reason || 'composer_not_found'),
         reason: res?.ok ? '' : (res?.reason || 'composer_not_found'),
         conversationId: cid,
       };
     }
 
     const snap = getSideQuestionsState(cid);
+    if (snap && snap.ok === false) {
+      return {
+        ok: false,
+        action: snap.action || 'conversation_not_found',
+        reason: snap.reason || 'conversation_not_found',
+        conversationId: '',
+      };
+    }
     const items = Array.isArray(snap.items) ? snap.items : [];
     const reqCascadeId = String(opts?.cascadeId || '').trim();
     const reqTabId = String(opts?.tabId || '').trim();
-    const reqIndex = Number.isInteger(opts?.index) ? opts.index : null;
+    const hasExplicitIndex = opts?.index !== undefined && opts?.index !== null && opts?.index !== '';
+    const reqIndex = Number.isInteger(opts?.index) && opts.index >= 0 ? opts.index : null;
+    const hasExplicitTarget = Boolean(reqCascadeId || reqTabId || hasExplicitIndex);
 
     let target = null;
     if (reqCascadeId) {
-      target = items.find((it) => it.cascadeId === reqCascadeId) || { cascadeId: reqCascadeId, tabId: reqTabId || `side_question__${reqCascadeId}` };
+      target = items.find((it) => it.cascadeId === reqCascadeId) || null;
     } else if (reqTabId) {
-      target = items.find((it) => it.tabId === reqTabId) || { cascadeId: '', tabId: reqTabId };
-    } else if (reqIndex !== null) {
-      target = items.find((it) => it.index === reqIndex) || items[0] || null;
+      target = items.find((it) => it.tabId === reqTabId) || null;
+    } else if (hasExplicitIndex) {
+      target = reqIndex !== null ? (items.find((it) => it.index === reqIndex) || null) : null;
     } else {
       target = items[0] || null;
+    }
+
+    if (hasExplicitTarget && (!target || !store || !cid)) {
+      return {
+        ok: false,
+        action: 'side_question_not_found',
+        reason: 'side_question_not_found',
+        conversationId: cid,
+      };
     }
 
     if (!target || !store || !cid) {
       const res = fillBtwCommand({ conversationId: cid });
       return {
         ok: Boolean(res?.ok),
-        action: res?.ok ? 'composer_btw' : (res?.reason || 'composer_not_found'),
+        action: res?.ok ? 'composer_btw' : (res?.action || res?.reason || 'composer_not_found'),
         reason: res?.ok ? '' : (res?.reason || 'composer_not_found'),
         conversationId: cid,
       };
@@ -3079,7 +3400,28 @@
         }
         return true;
       }
-      clearComposerAndInsertSlashCommand(ed, '/compact');
+      const slashState = classifyComposerSlashState(ed);
+      if (slashState.state === 'standalone_slash' && slashState.cmd === 'compact') {
+        ed.focus();
+        if (presetText && !slashState.hasPreset) {
+          insertCompactPresetAfterChip(ed, card, presetText);
+        } else {
+          syncCompactGuideHint(card, ui);
+        }
+        return true;
+      }
+      if (slashState.state === 'draft') {
+        try {
+          ed.focus?.();
+        } catch {}
+        return false;
+      }
+      if (!clearComposerAndInsertSlashCommand(ed, '/compact')) {
+        try {
+          ed.focus?.();
+        } catch {}
+        return false;
+      }
       const delays = [60, 100, 140, 200, 250];
       let step = 0;
       const schedulePresetOrHint = () => {
@@ -4905,17 +5247,16 @@
           fiberProps.setSelectedModel(opt);
         } catch {}
       }
+      const commitGen = effortConfigGeneration;
       const syncBadgeDom = () => {
+        if (destroyed || !isEffortSliderEnabled() || commitGen !== effortConfigGeneration) return;
         let targetBadge = badgeEl && badgeEl.isConnected ? badgeEl : null;
         if (!targetBadge && modelBtn) {
           targetBadge = findModelEffortBadgeSpan(modelBtn, { preferTagged: true });
         }
         let resolvedDisplay = effortDisplay;
-        if (targetBadge) {
-          if (!hasRealModelSetter && !isOrchSelected) {
-            const ctxSuffix = (targetBadge.textContent || '').match(/(\s*[·•]\s*.+)$/)?.[1] || '';
-            targetBadge.textContent = ' ' + effortDisplay + ctxSuffix;
-          } else if (effortId === 'xhigh') {
+        if (targetBadge && hasRealModelSetter) {
+          if (effortId === 'xhigh') {
             const hostTxt = stripEffortBadgeSuffix(targetBadge.textContent);
             if (/\bextra\s+high\b/i.test(hostTxt)) {
               resolvedDisplay = 'Extra High';
@@ -4930,22 +5271,20 @@
           if (!targetBadge.classList.contains('ag-cs-effort-badge')) {
             targetBadge.classList.add('ag-cs-effort-badge');
           }
+          if (modelBtn) modelBtn._agCsHasEffortTagged = true;
           openEffortAnchor = targetBadge;
           openEffortBadgeEl = targetBadge;
         }
         if (resolvedDisplay !== effortDisplay && typeof onHostResolved === 'function') {
           onHostResolved(resolvedDisplay);
         }
-        if (modelBtn && !hasRealModelSetter && !isOrchSelected) {
-          const aria = modelBtn.getAttribute('aria-label') || '';
-          if (aria) {
-            modelBtn.setAttribute('aria-label', fullLabel || aria.replace(/\b(Low|Medium|High|Extra High|XHigh|Max)\)?$/i, effortDisplay));
-          }
-        }
       };
       syncBadgeDom();
+      cancelPendingEffortBadgeRaf();
       if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(() => {
+        pendingEffortBadgeRaf = requestAnimationFrame(() => {
+          pendingEffortBadgeRaf = 0;
+          if (destroyed || !isEffortSliderEnabled() || commitGen !== effortConfigGeneration) return;
           syncBadgeDom();
           scheduleSync();
         });
@@ -7318,12 +7657,13 @@
   }
 
   function openStudioPane(opts = {}) {
-    if (getEffectivePinRightPane() === 'studio' && pinnedDock.el && pinnedDock.el.isConnected && findLiveStudioSlot()) {
+    const found = getEffectivePinRightPane() === 'studio' && pinnedDock.el && pinnedDock.el.isConnected ? findLiveStudioSlot() : null;
+    if (found) {
       if (pinnedDock.collapsed) {
         setPinnedDockCollapsed(false);
         return { ok: true, status: 'dock_expanded' };
       }
-      syncPinnedStudioDockPosition();
+      syncPinnedStudioDockPosition(found);
       return { ok: true, status: 'already_docked' };
     }
     return openRightSidecarPane('studio', opts);
@@ -7478,7 +7818,34 @@
     return firstMatch;
   }
 
+  const boundConvoSyncIframes = new Set();
+
+  function detachConvoSyncIframe(iframe) {
+    if (!iframe) return;
+    if (iframe._agCsConvoSyncLoadHandler && typeof iframe.removeEventListener === 'function') {
+      try {
+        iframe.removeEventListener('load', iframe._agCsConvoSyncLoadHandler);
+      } catch {}
+    }
+    delete iframe._agCsConvoSyncLoadHandler;
+    delete iframe._agCsConvoSyncLoadBound;
+    delete iframe._agCsPostedCid;
+    delete iframe._agCsPostedState;
+    boundConvoSyncIframes.delete(iframe);
+  }
+
+  function detachAllConvoSyncIframes() {
+    for (const iframe of Array.from(boundConvoSyncIframes)) {
+      detachConvoSyncIframe(iframe);
+    }
+    boundConvoSyncIframes.clear();
+  }
+
   function releaseDockedStudioSlot({ keepHidden = false } = {}) {
+    if (pinnedDock.iframeEl) {
+      detachConvoSyncIframe(pinnedDock.iframeEl);
+      pinnedDock.iframeEl = null;
+    }
     if (pinnedDock.slotEl) {
       try {
         pinnedDock.slotEl.removeAttribute('data-ag-cs-docked-slot');
@@ -7503,8 +7870,8 @@
     }
   }
 
-  function hideStudioSlotWhileCollapsed() {
-    const found = findLiveStudioSlot();
+  function hideStudioSlotWhileCollapsed(preFound = null) {
+    const found = preFound || findLiveStudioSlot();
     if (pinnedDock.hiddenSlotEl && pinnedDock.hiddenSlotEl !== found?.slot) {
       try {
         pinnedDock.hiddenSlotEl.removeAttribute('data-ag-cs-dock-hidden');
@@ -7660,9 +8027,15 @@
 
   function getActiveConversationIdFast() {
     try {
-      const cv = document.querySelector('[data-testid="conversation-view"]');
-      const attrId = normalizeCascadeId(cv?.getAttribute?.('data-cascade-id'));
-      if (attrId) return attrId;
+      const cv = findVisibleConversationView();
+      if (cv) {
+        const attrId = normalizeCascadeId(cv.getAttribute?.('data-cascade-id'));
+        if (attrId) return attrId;
+        const box = cv.querySelector?.('[data-testid="agent-input-box"]');
+        const boxId = box ? resolveCascadeId(box, { viewScopedOnly: true }) : '';
+        if (boxId) return boxId;
+        return '';
+      }
     } catch {}
     try {
       const m = String(location?.pathname || '').match(/\/c\/([0-9a-f-]{8,})/i);
@@ -7671,22 +8044,76 @@
     return resolveActiveConversationIdForHost('', findHostReduxStore());
   }
 
-  function syncDockedIframeConversation(iframe, activeCid) {
-    if (!iframe || !activeCid) return;
+  function resolveStudioIframeTargetOrigin(iframe, slot) {
+    const sidecarId = slot?.getAttribute?.('data-sidecar-id') || '';
+    if (sidecarId && sidecarId !== 'agy-claude-studio/studio') return null;
+    const iframeUrl = iframe?.getAttribute?.('src') || iframe?.src || '';
+    const slotUrl = slot?.getAttribute?.('data-sidecar-url') || '';
+    const rawUrl = iframeUrl || slotUrl;
+    if (!rawUrl) return null;
     try {
+      const parsed = new URL(rawUrl);
+      if (iframeUrl && slotUrl) {
+        const parsedSlot = new URL(slotUrl);
+        if (parsed.protocol !== parsedSlot.protocol) return null;
+        if (parsed.origin && parsed.origin !== 'null' && parsedSlot.origin && parsedSlot.origin !== 'null' && parsed.origin !== parsedSlot.origin) {
+          return null;
+        }
+        if (parsed.protocol === 'plugin:' && parsed.hostname !== parsedSlot.hostname) {
+          return null;
+        }
+      }
+      const isHttp = /^https?:$/i.test(parsed.protocol);
+      const isLoopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '[::1]' || parsed.hostname === '::1';
+      const hostMatches = /^agy-claude-studio--studio(?:$|-)/i.test(parsed.hostname || '');
+      const pathMatches = /^\/agy-claude-studio--studio(?:\/|$)/i.test(parsed.pathname || '');
+      if (isHttp && parsed.origin && parsed.origin !== 'null') {
+        if (hostMatches || (isLoopback && (sidecarId === 'agy-claude-studio/studio' || pathMatches))) {
+          return parsed.origin;
+        }
+        return null;
+      }
+      if (parsed.protocol === 'plugin:' && hostMatches) {
+        return '*';
+      }
+    } catch {}
+    return null;
+  }
+
+  function syncDockedIframeConversation(iframe, activeCid) {
+    if (!iframe) return;
+    try {
+      const slot = typeof iframe.closest === 'function' ? iframe.closest('[data-testid="sidecar-iframe-slot"]') : null;
+      if (!slot) return;
+      if (slot.hasAttribute?.('data-sidecar-id') && slot.getAttribute('data-sidecar-id') !== 'agy-claude-studio/studio') {
+        return;
+      }
+      const targetOrigin = resolveStudioIframeTargetOrigin(iframe, slot);
+      if (!targetOrigin) return;
       const win = iframe.contentWindow;
       if (!win || typeof win.postMessage !== 'function') return;
       if (!iframe._agCsConvoSyncLoadBound && typeof iframe.addEventListener === 'function') {
-        iframe._agCsConvoSyncLoadBound = true;
-        iframe.addEventListener('load', () => {
+        const onLoad = () => {
+          if (destroyed || !iframe.isConnected || pinnedDock.iframeEl !== iframe) return;
           iframe._agCsPostedCid = '';
+          iframe._agCsPostedState = '';
           const liveCid = getActiveConversationIdFast();
-          if (liveCid) syncDockedIframeConversation(iframe, liveCid);
-        });
+          syncDockedIframeConversation(iframe, liveCid || '');
+        };
+        iframe._agCsConvoSyncLoadBound = true;
+        iframe._agCsConvoSyncLoadHandler = onLoad;
+        boundConvoSyncIframes.add(iframe);
+        iframe.addEventListener('load', onLoad);
       }
-      if (iframe._agCsPostedCid && sameCascadeId(iframe._agCsPostedCid, activeCid)) return;
-      iframe._agCsPostedCid = activeCid;
-      win.postMessage({ type: 'ag-cs:active-conversation', conversationId: activeCid }, '*');
+      const nextCid = activeCid ? (normalizeCascadeId(activeCid) || String(activeCid).trim()) : '';
+      const stateKey = nextCid ? `cid:${nextCid}` : 'unbound';
+      if (iframe._agCsPostedState === stateKey) return;
+      iframe._agCsPostedState = stateKey;
+      iframe._agCsPostedCid = nextCid;
+      const payload = nextCid
+        ? { type: 'ag-cs:active-conversation', conversationId: nextCid }
+        : { type: 'ag-cs:active-conversation', conversationId: '', unbound: true };
+      win.postMessage(payload, targetOrigin);
     } catch {}
   }
 
@@ -7723,20 +8150,23 @@
     return { ...chosen, activeCid, matched };
   }
 
-  function syncPinnedStudioDockPosition() {
+  function syncPinnedStudioDockPosition(preFound = null) {
     if (destroyed || !pinnedDock.el || !pinnedDock.el.isConnected) return;
     if (pinnedDock.collapsed) {
       releaseDockedStudioSlot({ keepHidden: true });
-      hideStudioSlotWhileCollapsed();
+      hideStudioSlotWhileCollapsed(preFound);
       return;
     }
-    const found = findLiveStudioSlot();
+    const found = preFound || findLiveStudioSlot();
     if (!found) {
       releaseDockedStudioSlot();
       return;
     }
     if (pinnedDock.slotEl && pinnedDock.slotEl !== found.slot) {
       releaseDockedStudioSlot();
+    }
+    if (pinnedDock.iframeEl && pinnedDock.iframeEl !== found.iframe) {
+      detachConvoSyncIframe(pinnedDock.iframeEl);
     }
     if (pinnedDock.hiddenSlotEl && pinnedDock.hiddenSlotEl !== found.slot) {
       try {
@@ -7772,10 +8202,9 @@
       found.slot.setAttribute('data-ag-cs-docked-slot', '1');
     }
     pinnedDock.slotEl = found.slot;
+    pinnedDock.iframeEl = found.iframe;
     pinnedDock.overlayEl = found.overlay;
-    if (found.activeCid) {
-      syncDockedIframeConversation(found.iframe, found.activeCid);
-    }
+    syncDockedIframeConversation(found.iframe, found.activeCid || '');
   }
 
   function scheduleDockPositionSync() {
@@ -7870,9 +8299,9 @@
 
     if (pinnedDock.collapsed) {
       releaseDockedStudioSlot({ keepHidden: true });
-      hideStudioSlotWhileCollapsed();
+      hideStudioSlotWhileCollapsed(opts.preFound || null);
     } else {
-      syncPinnedStudioDockPosition();
+      syncPinnedStudioDockPosition(opts.preFound || null);
       if (stateChanged) {
         trackDockTransition(240);
       }
@@ -8193,7 +8622,7 @@
       }
     }
 
-    applyPinnedDockStateToDom();
+    applyPinnedDockStateToDom({ preFound: found });
   }
 
   function commitComposerHud(card, footer, data, { isPrimary = false, turnBadgeData = undefined } = {}) {
@@ -8266,18 +8695,25 @@
       const modelBtn = card.querySelector('[data-testid="model-selector-trigger"]');
       if (modelBtn) {
         if (!isEffortSliderEnabled()) {
-          if (openEffortPop && openEffortModelBtn === modelBtn) {
-            closeEffortPopover();
-          }
-          for (const el of modelBtn.querySelectorAll('.ag-cs-effort-badge, [data-ag-cs-effort]')) {
-            if (el.hasAttribute('data-ag-cs-effort')) el.removeAttribute('data-ag-cs-effort');
-            if (el.classList.contains('ag-cs-effort-badge')) el.classList.remove('ag-cs-effort-badge');
-          }
-          if (modelBtn.hasAttribute('data-ag-cs-has-effort')) {
-            modelBtn.removeAttribute('data-ag-cs-has-effort');
-          }
-          if (modelBtn.style?.getPropertyValue?.('--ag-cs-effort-cut')) {
-            modelBtn.style.removeProperty('--ag-cs-effort-cut');
+          if (
+            modelBtn._agCsHasEffortTagged ||
+            modelBtn.hasAttribute('data-ag-cs-has-effort') ||
+            modelBtn.style?.getPropertyValue?.('--ag-cs-effort-cut')
+          ) {
+            if (openEffortPop && openEffortModelBtn === modelBtn) {
+              closeEffortPopover();
+            }
+            for (const el of modelBtn.querySelectorAll('.ag-cs-effort-badge, [data-ag-cs-effort]')) {
+              if (el.hasAttribute('data-ag-cs-effort')) el.removeAttribute('data-ag-cs-effort');
+              if (el.classList.contains('ag-cs-effort-badge')) el.classList.remove('ag-cs-effort-badge');
+            }
+            if (modelBtn.hasAttribute('data-ag-cs-has-effort')) {
+              modelBtn.removeAttribute('data-ag-cs-has-effort');
+            }
+            if (modelBtn.style?.getPropertyValue?.('--ag-cs-effort-cut')) {
+              modelBtn.style.removeProperty('--ag-cs-effort-cut');
+            }
+            modelBtn._agCsHasEffortTagged = false;
           }
         } else {
         if (isModelButtonLocked(modelBtn) && openEffortPop && openEffortModelBtn === modelBtn) {
@@ -8327,6 +8763,7 @@
           if (modelBtn.getAttribute('data-ag-cs-has-effort') !== '1') {
             modelBtn.setAttribute('data-ag-cs-has-effort', '1');
           }
+          modelBtn._agCsHasEffortTagged = true;
           let effortCut = 0;
           if (typeof modelBtn.getBoundingClientRect === 'function' && typeof activeEffortSpan.getBoundingClientRect === 'function') {
             const btnRect = modelBtn.getBoundingClientRect();
@@ -9688,6 +10125,7 @@
 
   function findInterceptedModelTrigger(ev) {
     if (cfg.periodicSelector === false || !periodicCore) return null;
+    if (!isEffortSliderEnabled()) return null;
     if (ev && typeof ev.button === 'number' && ev.button !== 0) return null;
     const t = ev?.target;
     if (!t || !t.closest) return null;
@@ -10026,13 +10464,31 @@
   function isDockStateAttrMutation(m) {
     if (!m || m.type !== 'attributes') return false;
     const attr = m.attributeName;
-    if (attr !== 'data-aux-pane-open' && attr !== 'data-active-tab-id') return false;
+    if (
+      attr !== 'data-aux-pane-open' &&
+      attr !== 'data-active-tab-id' &&
+      attr !== 'data-cascade-id' &&
+      attr !== 'data-visible'
+    ) {
+      return false;
+    }
     const targetEl = m.target && typeof m.target.closest === 'function' ? m.target : m.target?.parentElement;
     if (!targetEl || typeof targetEl.closest !== 'function') return false;
     if (attr === 'data-aux-pane-open') {
       return Boolean(
         targetEl.hasAttribute?.('data-aux-pane-open') ||
           targetEl.closest('[data-testid="aux-pane-split"], [data-aux-pane-open]')
+      );
+    }
+    if (attr === 'data-cascade-id') {
+      return Boolean(
+        targetEl.matches?.('[data-testid="conversation-view"], [data-testid="agent-input-box"]') ||
+          targetEl.closest('[data-testid="conversation-view"]')
+      );
+    }
+    if (attr === 'data-visible') {
+      return Boolean(
+        targetEl.matches?.('[data-testid="sidecar-iframe-slot"], [data-testid="conversation-view"]')
       );
     }
     return Boolean(
@@ -10176,6 +10632,11 @@
     destroyed = true;
     cancelScheduledSync();
     cancelScheduledDockSync();
+    cancelPendingEffortBadgeRaf();
+    detachAllConvoSyncIframes();
+    cachedHostReduxStore = null;
+    cachedHostReduxRootEl = null;
+    cachedHostReduxProviderFiber = null;
     if (pollTimer !== null) {
       clearInterval(pollTimer);
       pollTimer = null;
@@ -10241,7 +10702,7 @@
       characterData: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'data-aux-pane-open', 'data-active-tab-id'],
+      attributeFilter: ['class', 'data-aux-pane-open', 'data-active-tab-id', 'data-cascade-id', 'data-visible'],
     });
     for (const [evName, handler] of DOC_LISTENERS) {
       document.addEventListener(evName, handler, true);
@@ -10600,6 +11061,9 @@
     },
     fillBtwCommand(scopeEl, opts) {
       return fillBtwCommand(scopeEl, opts);
+    },
+    fillCompactCommand(scopeEl) {
+      return fillCompactCommand(scopeEl);
     },
     getSideQuestionsState(conversationId) {
       return getSideQuestionsState(conversationId);

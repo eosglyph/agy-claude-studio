@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { getNotifyConfigApi, saveNotifyConfigApi, startStudioSidecar, registerStudioApis, performStudioSelfUpdate, runSubprocessReinject, spawnDetachedSafe, createRemoteLocaleManifestCache, requiresBackendRestart, openSideQuestionInHost } from '../sidecars/studio/main.mjs';
+import { getNotifyConfigApi, saveNotifyConfigApi, startStudioSidecar, registerStudioApis, performStudioSelfUpdate, runSubprocessReinject, spawnDetachedSafe, createRemoteLocaleManifestCache, requiresBackendRestart, queryHostSideQuestions, openSideQuestionInHost, getLiveTasksApi } from '../sidecars/studio/main.mjs';
 
 const require = createRequire(import.meta.url);
 const notify = require('../src/notify-core.js');
@@ -290,6 +290,13 @@ test('requiresBackendRestart only flags persistent backend files and UI refreshe
     'src/notify-core.js',
     'src/i18n-sync.js',
     'src/sidecar-core.js',
+    'src/inject.js',
+    'src/remove.js',
+    'src/periodic-sync.js',
+    'src/periodic-core.js',
+    'scripts/unknown-backend-helper.mjs',
+    'package.json',
+    'plugin.json',
   ]) {
     assert.equal(requiresBackendRestart(file), true, `expected backend restart for ${file}`);
   }
@@ -298,10 +305,13 @@ test('requiresBackendRestart only flags persistent backend files and UI refreshe
     'src/style.css',
     'src/usage-core.js',
     'src/effort-core.js',
-    'src/periodic-core.js',
-    'package.json',
-    'plugin.json',
+    'src/i18n-core.js',
+    'src/ripple-core.js',
+    'src/mascot-core.js',
     'sidecars/studio/index.html',
+    'locales/zh-CN.json',
+    'skills/studio-doctor/SKILL.md',
+    'README.md',
   ]) {
     assert.equal(requiresBackendRestart(file), false, `did not expect backend restart for ${file}`);
   }
@@ -375,6 +385,75 @@ test('openSideQuestionInHost stops immediately on draft_present and continues on
   );
   assert.deepEqual(fallbackRes, { ok: true, status: 'opened' });
   assert.deepEqual(evaluatedTargets, ['win-1', 'win-2']);
+
+  // Multi-port cross-window sorting: matching conversationId on second port is prioritized before non-matching window on first port
+  const crossPortTargets = [];
+  const multiPortCdp = {
+    readActivePorts: () => [9222, 9223],
+    async listPages(port) {
+      if (port === 9222) {
+        return [{ url: 'vscode-webview://win-a', webSocketDebuggerUrl: 'ws://127.0.0.1:9222/win-a' }];
+      }
+      return [{ url: 'vscode-webview://conv-target', webSocketDebuggerUrl: 'ws://127.0.0.1:9223/win-b' }];
+    },
+    isAntigravityPageTarget: () => true,
+    CdpSession: {
+      async connect(wsUrl) {
+        const id = wsUrl.split('/').pop();
+        return {
+          async evaluate(expr) {
+            crossPortTargets.push(id);
+            if (expr.includes('getSideQuestionsState')) {
+              return id === 'win-b'
+                ? { ok: true, conversationId: 'conv-target', items: [{ question: 'Q1' }] }
+                : { ok: false, reason: 'conversation_not_found' };
+            }
+            return id === 'win-b'
+              ? { ok: true, status: 'opened', conversationId: 'conv-target' }
+              : { ok: false, reason: 'conversation_not_found' };
+          },
+          close() {},
+        };
+      },
+    },
+  };
+
+  const crossOpen = await openSideQuestionInHost({ conversationId: 'conv-target' }, { cdpClient: multiPortCdp });
+  assert.equal(crossOpen.ok, true);
+  assert.deepEqual(crossPortTargets, ['win-b']);
+
+  crossPortTargets.length = 0;
+  const crossQuery = await queryHostSideQuestions('conv-target', { cdpClient: multiPortCdp });
+  assert.equal(crossQuery.ok, true);
+  assert.equal(crossQuery.conversationId, 'conv-target');
+  assert.deepEqual(crossPortTargets, ['win-b']);
+});
+
+test('getLiveTasksApi does not backfill sideQuestions when unbound is true', async () => {
+  const res = await getLiveTasksApi({
+    allowCdpFallback: false,
+    conversationId: '',
+    unbound: true,
+    fetchFn: async (url) => {
+      if (String(url).includes('ListConversations')) {
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              conversations: [
+                { id: 'old-conv-1', state: { runState: 'RUN_STATE_IDLE', summary: 'Old chat' } },
+              ],
+            };
+          },
+        };
+      }
+      return { ok: true, status: 200, async json() { return { trajectorySummaries: {} }; } };
+    },
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.sideQuestionConvoId, '');
+  assert.deepEqual(res.sideQuestions, []);
 });
 
 test('spawnDetachedSafe preserves caller options.env while stripping Sidecar credentials', async () => withDataDir(async (root) => {

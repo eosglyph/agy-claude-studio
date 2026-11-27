@@ -1,7 +1,7 @@
 // Aux Pane Sidecar UI server for Claude Studio (agy-claude-studio).
 // Uses sidecar_sdk and cleans up cleanly via host /healthz watchdog when Antigravity exits.
 import { execFile, execFileSync, spawn } from 'node:child_process';
-import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, opendirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -330,40 +330,49 @@ async function showScriptOutputInHostChat(data) {
   return lastResult;
 }
 
-async function queryHostSideQuestions(preferredConversationId = '') {
+async function collectSortedCdpCandidates(cdpClient = cdp, preferredConversationId = '') {
   const reqId = String(preferredConversationId || '').trim();
-  const ports = cdp.readActivePorts();
-  let fallback = { ok: false, conversationId: reqId, items: [] };
+  const ports = cdpClient.readActivePorts();
+  const all = [];
   for (const port of ports) {
     let pages = [];
     try {
-      pages = await cdp.listPages(port);
+      pages = await cdpClient.listPages(port);
     } catch {
       continue;
     }
-    const candidates = pages.filter((p) => p?.webSocketDebuggerUrl && cdp.isAntigravityPageTarget(p));
-    candidates.sort((a, b) => {
-      const aMatch = reqId && String(a.url || '').includes(reqId) ? 1 : 0;
-      const bMatch = reqId && String(b.url || '').includes(reqId) ? 1 : 0;
-      return bMatch - aMatch;
-    });
-    for (const p of candidates) {
-      let sess = null;
-      try {
-        sess = await cdp.CdpSession.connect(p.webSocketDebuggerUrl);
-        const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.getSideQuestionsState === "function") ? api.getSideQuestionsState(${JSON.stringify(reqId)}) : null; })()`;
-        const res = await sess.evaluate(expr, false);
-        if (res && res.ok) {
-          if (!reqId ? (Array.isArray(res.items) && res.items.length > 0) : res.conversationId === reqId) {
-            return res;
-          }
-          if (!fallback.ok) fallback = res;
+    for (const p of pages) {
+      if (!p?.webSocketDebuggerUrl || !cdpClient.isAntigravityPageTarget(p)) continue;
+      const urlMatch = reqId && String(p.url || '').includes(reqId) ? 1 : 0;
+      all.push({ port, page: p, urlMatch });
+    }
+  }
+  all.sort((a, b) => b.urlMatch - a.urlMatch);
+  return all;
+}
+
+async function queryHostSideQuestions(preferredConversationId = '', { cdpClient = cdp } = {}) {
+  const reqId = String(preferredConversationId || '').trim();
+  const candidates = await collectSortedCdpCandidates(cdpClient, reqId);
+  let fallback = { ok: false, conversationId: reqId, items: [] };
+  for (const { page: p } of candidates) {
+    let sess = null;
+    try {
+      sess = await cdpClient.CdpSession.connect(p.webSocketDebuggerUrl);
+      const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.getSideQuestionsState === "function") ? api.getSideQuestionsState(${JSON.stringify(reqId)}) : null; })()`;
+      const res = await sess.evaluate(expr, false);
+      if (res && res.ok && res.owned !== false) {
+        if (!reqId) {
+          if (Array.isArray(res.items) && res.items.length > 0) return res;
+          if (!fallback.ok && res.conversationId) fallback = res;
+        } else if (res.conversationId === reqId) {
+          return res;
         }
-      } catch {
-        // try next target
-      } finally {
-        sess?.close();
       }
+    } catch {
+      // try next target
+    } finally {
+      sess?.close();
     }
   }
   return fallback;
@@ -376,44 +385,31 @@ function shouldContinueSideQuestionSearch(res) {
 }
 
 async function openSideQuestionInHost(data = {}, { cdpClient = cdp } = {}) {
+  const hasExplicitIndex = data?.index !== undefined && data?.index !== null && data?.index !== '';
   const payload = {
     conversationId: String(data?.conversationId || '').trim(),
     cascadeId: String(data?.cascadeId || '').trim(),
     tabId: String(data?.tabId || '').trim(),
-    index: Number.isInteger(data?.index) ? data.index : null,
+    index: hasExplicitIndex ? data.index : null,
     forceNew: Boolean(data?.forceNew),
   };
-  const ports = cdpClient.readActivePorts();
+  const candidates = await collectSortedCdpCandidates(cdpClient, payload.conversationId);
   let lastResult = { ok: false, status: 'cdp_unavailable' };
-  for (const port of ports) {
-    let pages = [];
+  for (const { page: p } of candidates) {
+    let sess = null;
     try {
-      pages = await cdpClient.listPages(port);
-    } catch {
-      continue;
-    }
-    const candidates = pages.filter((p) => p?.webSocketDebuggerUrl && cdpClient.isAntigravityPageTarget(p));
-    candidates.sort((a, b) => {
-      const aMatch = payload.conversationId && String(a.url || '').includes(payload.conversationId) ? 1 : 0;
-      const bMatch = payload.conversationId && String(b.url || '').includes(payload.conversationId) ? 1 : 0;
-      return bMatch - aMatch;
-    });
-    for (const p of candidates) {
-      let sess = null;
-      try {
-        sess = await cdpClient.CdpSession.connect(p.webSocketDebuggerUrl);
-        const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.openSideQuestion === "function") ? api.openSideQuestion(${JSON.stringify(payload)}) : { ok: false, status: "not_injected" }; })()`;
-        const res = await sess.evaluate(expr, false);
-        if (res && res.ok) return res;
-        if (res) {
-          lastResult = res;
-          if (!shouldContinueSideQuestionSearch(res)) return res;
-        }
-      } catch {
-        // try next window
-      } finally {
-        sess?.close();
+      sess = await cdpClient.CdpSession.connect(p.webSocketDebuggerUrl);
+      const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.openSideQuestion === "function") ? api.openSideQuestion(${JSON.stringify(payload)}) : { ok: false, status: "not_injected" }; })()`;
+      const res = await sess.evaluate(expr, false);
+      if (res && res.ok) return res;
+      if (res) {
+        lastResult = res;
+        if (!shouldContinueSideQuestionSearch(res)) return res;
       }
+    } catch {
+      // try next window
+    } finally {
+      sess?.close();
     }
   }
   return lastResult;
@@ -937,8 +933,53 @@ const UPDATE_NOT_APPLIED = Object.freeze({
   ok: false, filesUpdated: false, reinjectOk: null, reinjectError: '', needsRestart: false,
 });
 
+const NON_BACKEND_EXEMPT_EXACT = new Set([
+  'src/ui-runtime.js',
+  'src/style.css',
+  'src/usage-core.js',
+  'src/effort-core.js',
+  'src/i18n-core.js',
+  'src/ripple-core.js',
+  'src/mascot-core.js',
+  'sidecars/studio/index.html',
+]);
+
 function requiresBackendRestart(file) {
-  return /^(?:plugin[\\/]|sidecars[\\/].+\.m?js$|src[\\/](?:cdp|lifecycle|watcher-core|scripts-core|notify-core|i18n-sync|sidecar-core)\.js$)/i.test(file);
+  const norm = String(file || '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  if (!norm) return false;
+  const lower = norm.toLowerCase();
+  if (NON_BACKEND_EXEMPT_EXACT.has(lower)) return false;
+  if (/^(?:locales|skills|docs|\.github)\//i.test(norm)) return false;
+  if (/^(?:readme|changelog|license)(?:\.[^/]+)?$/i.test(norm)) return false;
+  if (/\.(?:md|txt|css|html|svg|png|jpg|jpeg|webp|ico|woff2?|ttf)$/i.test(lower)) return false;
+  return true;
+}
+
+function isManifestRuntimeChanged(relPath, srcPath, dstPath) {
+  const norm = String(relPath || '').trim().replace(/\\/g, '/').toLowerCase();
+  if (norm !== 'plugin.json' && norm !== 'package.json') return true;
+  try {
+    const nextJson = JSON.parse(readFileSync(srcPath, 'utf8'));
+    const prevJson = JSON.parse(readFileSync(dstPath, 'utf8'));
+    if (!nextJson || typeof nextJson !== 'object' || !prevJson || typeof prevJson !== 'object') return true;
+    if (norm === 'plugin.json') {
+      const stripVersion = (obj) => {
+        const copy = { ...obj };
+        delete copy.version;
+        return JSON.stringify(copy);
+      };
+      return stripVersion(nextJson) !== stripVersion(prevJson);
+    }
+    const runtimeKeys = ['main', 'bin', 'type', 'exports', 'imports', 'scripts', 'dependencies', 'optionalDependencies', 'peerDependencies', 'engines'];
+    for (const k of runtimeKeys) {
+      if (JSON.stringify(nextJson[k] ?? null) !== JSON.stringify(prevJson[k] ?? null)) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 async function activateUpdate(reinjectFn, filesUpdated, backendChanged) {
@@ -1045,9 +1086,13 @@ async function performArchiveSelfUpdate({
 
     const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
     const files = getArchiveCopyPlan(sourceRoot, installRoot, isProtected);
-    const backendChanged = files.some(({ src, dst, exists }) =>
-      requiresBackendRestart(relative(installRoot, dst)) && (!exists || !readFileSync(src).equals(readFileSync(dst)))
-    );
+    const backendChanged = files.some(({ src, dst, exists }) => {
+      const rel = relative(installRoot, dst);
+      if (!requiresBackendRestart(rel)) return false;
+      if (!exists) return true;
+      if (readFileSync(src).equals(readFileSync(dst))) return false;
+      return isManifestRuntimeChanged(rel, src, dst);
+    });
     applyArchiveCopyPlan(files, join(tmpRoot, 'backup'));
 
     try {
@@ -1969,11 +2014,14 @@ async function getLiveTasksApi({
   fetchFn = typeof fetch === 'function' ? fetch : null,
   allowCdpFallback = true,
   conversationId = '',
+  unbound = false,
 } = {}) {
   const reqConvoId = String(conversationId || '').trim();
-  const sideQPromise = allowCdpFallback
-    ? queryHostSideQuestions(reqConvoId).catch(() => ({ ok: false, conversationId: reqConvoId, items: [] }))
-    : Promise.resolve({ ok: false, conversationId: reqConvoId, items: [] });
+  const isUnbound = Boolean(unbound);
+  const sideQPromise =
+    allowCdpFallback && !isUnbound
+      ? queryHostSideQuestions(reqConvoId).catch(() => ({ ok: false, conversationId: reqConvoId, items: [] }))
+      : Promise.resolve({ ok: false, conversationId: '', items: [] });
   const sumPromise = callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 2500 }).catch(() => ({
     ok: false,
   }));
@@ -1990,12 +2038,12 @@ async function getLiveTasksApi({
         sumRes?.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
           ? sumRes.data.trajectorySummaries
           : {};
-      const sideQMatchesReq = !reqConvoId || !sideQ?.conversationId || sideQ.conversationId === reqConvoId;
-      const activeConvoId = reqConvoId || sideQ?.conversationId || '';
+      const sideQMatchesReq = !isUnbound && (!reqConvoId || !sideQ?.conversationId || sideQ.conversationId === reqConvoId);
+      const activeConvoId = isUnbound ? '' : reqConvoId || sideQ?.conversationId || '';
       return {
         ...fallback,
         sideQuestionConvoId: activeConvoId,
-        sideQuestions: mergeSideQuestionItems(sideQMatchesReq ? sideQ?.items : [], activeConvoId, summaries),
+        sideQuestions: isUnbound ? [] : mergeSideQuestionItems(sideQMatchesReq ? sideQ?.items : [], activeConvoId, summaries),
       };
     }
     return {
@@ -2125,9 +2173,13 @@ async function getLiveTasksApi({
     );
   }
 
-  const sideQMatchesReq = !reqConvoId || !sideQ?.conversationId || sideQ.conversationId === reqConvoId;
-  const activeConvoId = reqConvoId || sideQ?.conversationId || running.find((r) => !r.isSideQuestion)?.id || recent[0]?.id || '';
-  const mergedSideQuestions = mergeSideQuestionItems(sideQMatchesReq ? sideQ?.items : [], activeConvoId, summaries);
+  const sideQMatchesReq = !isUnbound && (!reqConvoId || !sideQ?.conversationId || sideQ.conversationId === reqConvoId);
+  const activeConvoId = isUnbound
+    ? ''
+    : reqConvoId || sideQ?.conversationId || running.find((r) => !r.isSideQuestion)?.id || recent[0]?.id || '';
+  const mergedSideQuestions = isUnbound
+    ? []
+    : mergeSideQuestionItems(sideQMatchesReq ? sideQ?.items : [], activeConvoId, summaries);
 
   return {
     ok: true,
@@ -2287,6 +2339,17 @@ function getWorktreeBranchTieRank(branch) {
   return 2;
 }
 
+const MAX_WORKTREE_SCAN_ENTRIES = 64;
+const MAX_GIT_POINTER_BYTES = 4096;
+const WORKSPACE_GIT_META_CACHE_TTL_MS = 4000;
+const workspaceGitMetaDisplayCache = new Map();
+
+function readSmallTextFile(filePath, maxBytes = MAX_GIT_POINTER_BYTES) {
+  const st = statSync(filePath);
+  if (!st.isFile() || st.size > maxBytes) return '';
+  return readFileSync(filePath, 'utf8').trim();
+}
+
 function discoverContainerWorktrees(workspaceDir) {
   const found = new Map();
   let commonDir = '';
@@ -2316,7 +2379,7 @@ function discoverContainerWorktrees(workspaceDir) {
     let resolvedCommon = rawCommonDir;
     if (!resolvedCommon && existsSync(join(rawGitDir, 'commondir'))) {
       try {
-        const relCommon = readFileSync(join(rawGitDir, 'commondir'), 'utf8').trim();
+        const relCommon = readSmallTextFile(join(rawGitDir, 'commondir'));
         if (relCommon) resolvedCommon = resolve(rawGitDir, relCommon);
       } catch {}
     }
@@ -2336,6 +2399,7 @@ function discoverContainerWorktrees(workspaceDir) {
         relPath,
         mtimeMs,
         active: false,
+        inferredRecent: false,
       });
     }
   };
@@ -2345,36 +2409,47 @@ function discoverContainerWorktrees(workspaceDir) {
   const repoWorktreesDir = join(repoGitDir, 'worktrees');
   if (existsSync(repoWorktreesDir)) {
     if (!commonDir && existsSync(repoGitDir)) commonDir = repoGitDir;
+    let dir = null;
     try {
-      for (const ent of readdirSync(repoWorktreesDir, { withFileTypes: true })) {
+      dir = opendirSync(repoWorktreesDir);
+      let scanned = 0;
+      let ent = null;
+      while ((ent = dir.readSync()) !== null) {
+        if (++scanned > MAX_WORKTREE_SCAN_ENTRIES) break;
         if (!ent.isDirectory()) continue;
         const wtGitDir = join(repoWorktreesDir, ent.name);
         const gitdirFile = join(wtGitDir, 'gitdir');
         if (!existsSync(gitdirFile)) continue;
         try {
-          const ptr = readFileSync(gitdirFile, 'utf8').trim();
+          const ptr = readSmallTextFile(gitdirFile);
           if (!ptr) continue;
           const resolvedGitFile = resolve(wtGitDir, ptr);
           const wtPath = basename(resolvedGitFile).toLowerCase() === '.git' ? dirname(resolvedGitFile) : resolvedGitFile;
           registerWorktree(wtPath, wtGitDir, repoGitDir);
         } catch {}
       }
-    } catch {}
+    } catch {} finally {
+      try { dir?.closeSync(); } catch {}
+    }
   }
 
   // Source 2: worktree/*/.git and worktrees/*/.git
   for (const containerName of ['worktree', 'worktrees']) {
     const containerDir = join(rootReal, containerName);
     if (!existsSync(containerDir)) continue;
+    let dir = null;
     try {
-      for (const ent of readdirSync(containerDir, { withFileTypes: true })) {
+      dir = opendirSync(containerDir);
+      let scanned = 0;
+      let ent = null;
+      while ((ent = dir.readSync()) !== null) {
+        if (++scanned > MAX_WORKTREE_SCAN_ENTRIES) break;
         if (!ent.isDirectory()) continue;
         const wtPath = join(containerDir, ent.name);
         const dotGit = join(wtPath, '.git');
         if (!existsSync(dotGit)) continue;
         try {
-          if (!statSync(dotGit).isFile()) continue;
-          const ptr = readFileSync(dotGit, 'utf8').trim();
+          const ptr = readSmallTextFile(dotGit);
           const m = ptr.match(/^gitdir:\s*(.+)$/i);
           if (!m) continue;
           const wtGitDir = resolve(wtPath, m[1].trim());
@@ -2382,7 +2457,9 @@ function discoverContainerWorktrees(workspaceDir) {
           registerWorktree(wtPath, wtGitDir);
         } catch {}
       }
-    } catch {}
+    } catch {} finally {
+      try { dir?.closeSync(); } catch {}
+    }
   }
 
   const list = Array.from(found.values()).sort((a, b) => {
@@ -2392,11 +2469,47 @@ function discoverContainerWorktrees(workspaceDir) {
     return a.name.localeCompare(b.name);
   });
 
-  if (list.length > 0) {
-    list[0].active = true;
+  return { worktrees: list, commonDir };
+}
+
+function selectActiveContainerWorktree(worktrees, wsMeta = null) {
+  if (!Array.isArray(worktrees) || worktrees.length === 0) return null;
+  const promote = (hit, inferredRecent) => {
+    hit.active = true;
+    hit.inferredRecent = inferredRecent;
+    const idx = worktrees.indexOf(hit);
+    if (idx > 0) {
+      worktrees.splice(idx, 1);
+      worktrees.unshift(hit);
+    }
+    return hit;
+  };
+  const win = process.platform === 'win32';
+  const explicitCwdRaw = String(wsMeta?.cwd || wsMeta?.worktreePath || '').trim();
+  if (explicitCwdRaw) {
+    try {
+      const cwdReal = realpathSync.native(resolve(explicitCwdRaw));
+      const cwdNorm = win ? cwdReal.toLowerCase() : cwdReal;
+      const matches = worktrees.filter((wt) => {
+        const wtNorm = win ? wt.path.toLowerCase() : wt.path;
+        if (cwdNorm === wtNorm) return true;
+        const prefix = wtNorm.endsWith(sep) ? wtNorm : `${wtNorm}${sep}`;
+        return cwdNorm.startsWith(prefix);
+      });
+      if (matches.length > 0) {
+        matches.sort((a, b) => b.path.length - a.path.length);
+        return promote(matches[0], false);
+      }
+    } catch {}
   }
 
-  return { worktrees: list, commonDir };
+  const fallbackBranch = String(wsMeta?.branchName || '').trim();
+  if (fallbackBranch) {
+    const branchMatches = worktrees.filter((wt) => wt.branch === fallbackBranch);
+    if (branchMatches.length === 1) return promote(branchMatches[0], false);
+  }
+
+  return promote(worktrees[0], true);
 }
 
 function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
@@ -2404,6 +2517,7 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
   const metaOriginUrl = String(wsMeta?.repository?.gitOriginUrl || '').trim();
   let branch = fallbackBranch;
   let isWorktree = false;
+  let inferredRecent = false;
   let worktreePath = '';
   let worktreeName = '';
   let worktrees = [];
@@ -2416,7 +2530,7 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
       if (existsSync(gitDir)) {
         const st = statSync(gitDir);
         if (st.isFile()) {
-          const ptr = readFileSync(gitDir, 'utf8').trim();
+          const ptr = readSmallTextFile(gitDir);
           const m = ptr.match(/^gitdir:\s*(.+)$/i);
           if (m) {
             gitDir = resolve(workspaceDir, m[1].trim());
@@ -2433,7 +2547,7 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
         }
         if (isWorktree && existsSync(join(gitDir, 'commondir'))) {
           try {
-            const relCommon = readFileSync(join(gitDir, 'commondir'), 'utf8').trim();
+            const relCommon = readSmallTextFile(join(gitDir, 'commondir'));
             if (relCommon) commonDir = resolve(gitDir, relCommon);
           } catch {}
         }
@@ -2447,9 +2561,10 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
       } else {
         const discovered = discoverContainerWorktrees(workspaceDir);
         if (discovered.worktrees.length > 0) {
-          const activeWt = discovered.worktrees[0];
+          const activeWt = selectActiveContainerWorktree(discovered.worktrees, wsMeta);
           branch = activeWt.branch;
           isWorktree = true;
+          inferredRecent = Boolean(activeWt.inferredRecent);
           worktreePath = activeWt.path;
           worktreeName = activeWt.name;
           worktrees = discovered.worktrees;
@@ -2465,6 +2580,7 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
   return {
     branch,
     isWorktree,
+    inferredRecent,
     worktreePath,
     worktreeName,
     worktrees,
@@ -2472,6 +2588,22 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
     repoHost: normalized.host,
     isGitHub: normalized.isGitHub,
   };
+}
+
+function getCachedWorkspaceGitMeta(workspaceDir, wsMeta = null) {
+  const key = `${String(workspaceDir || '')}\0${String(wsMeta?.cwd || wsMeta?.worktreePath || '')}\0${String(wsMeta?.branchName || '')}\0${String(wsMeta?.repository?.gitOriginUrl || '')}`;
+  const now = Date.now();
+  const hit = workspaceGitMetaDisplayCache.get(key);
+  if (hit && now - hit.at < WORKSPACE_GIT_META_CACHE_TTL_MS) {
+    return hit.value;
+  }
+  const value = inspectWorkspaceGitMeta(workspaceDir, wsMeta);
+  workspaceGitMetaDisplayCache.set(key, { at: now, value });
+  if (workspaceGitMetaDisplayCache.size > 64) {
+    const oldest = workspaceGitMetaDisplayCache.keys().next().value;
+    if (oldest !== undefined) workspaceGitMetaDisplayCache.delete(oldest);
+  }
+  return value;
 }
 
 function resolveAppDataDir(customDir) {
@@ -2832,7 +2964,7 @@ async function getConversationInspectorApi({
   const fullPath = decodeFileUriToPath(ws?.workspaceFolderAbsoluteUri || '');
   const workspaceName = fullPath ? basename(fullPath) : '';
   const parentPath = fullPath ? dirname(fullPath) : '';
-  const gitMeta = inspectWorkspaceGitMeta(fullPath, ws);
+  const gitMeta = getCachedWorkspaceGitMeta(fullPath, ws);
 
   const environment = {
     host: 'local',
@@ -2841,6 +2973,7 @@ async function getConversationInspectorApi({
     fullPath,
     branch: gitMeta.branch,
     isWorktree: gitMeta.isWorktree,
+    inferredRecent: Boolean(gitMeta.inferredRecent),
     worktreePath: gitMeta.worktreePath || '',
     worktreeName: gitMeta.worktreeName || '',
     worktrees: Array.isArray(gitMeta.worktrees) ? gitMeta.worktrees : [],
@@ -3025,12 +3158,20 @@ function spawnDetachedSafe(cmd, args, options, spawnFn = spawn) {
 async function collectKnownWorkspaceAllowlist({ env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null } = {}) {
   const dirs = new Set();
   const urls = new Set();
+  const scannedRoots = new Set();
   const addDir = (p, wsMeta = null) => {
+    if (wsMeta?.repository?.gitOriginUrl) {
+      const norm = normalizeGitRemoteToWebUrl(wsMeta.repository.gitOriginUrl);
+      if (norm.url) urls.add(norm.url.toLowerCase());
+    }
     const clean = decodeFileUriToPath(p);
     if (!clean) return;
     try {
       const real = realpathSync.native(clean);
-      dirs.add(process.platform === 'win32' ? real.toLowerCase() : real);
+      const key = process.platform === 'win32' ? real.toLowerCase() : real;
+      if (scannedRoots.has(key)) return;
+      scannedRoots.add(key);
+      dirs.add(key);
       const gitMeta = inspectWorkspaceGitMeta(real, wsMeta);
       if (Array.isArray(gitMeta.worktrees)) {
         for (const wt of gitMeta.worktrees) {
@@ -3045,10 +3186,6 @@ async function collectKnownWorkspaceAllowlist({ env = process.env, fetchFn = typ
       }
       if (gitMeta.repoWebUrl) urls.add(gitMeta.repoWebUrl.toLowerCase());
     } catch {}
-    if (wsMeta?.repository?.gitOriginUrl) {
-      const norm = normalizeGitRemoteToWebUrl(wsMeta.repository.gitOriginUrl);
-      if (norm.url) urls.add(norm.url.toLowerCase());
-    }
   };
   try {
     const sumRes = await callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 3000 });
@@ -3355,7 +3492,10 @@ function registerStudioApis(app, ResponseClass = globalThis.Response) {
   api('/api/notify', async (data) => saveNotifyConfigApi(data));
   api('/api/notify/test', async (data) => testNotifyApi(data));
   api('/api/live-tasks', async (data) =>
-    getLiveTasksApi({ conversationId: String(data?.conversationId || '').trim() })
+    getLiveTasksApi({
+      conversationId: String(data?.conversationId || '').trim(),
+      unbound: Boolean(data?.unbound),
+    })
   );
   api('/api/side-question/open', async (data) => openSideQuestionInHost(data));
   api('/api/conversation-inspector', async (data) => {
@@ -3474,6 +3614,7 @@ if (isSameEntryPath(invokedPath, currentPath)) {
 export {
   buildSafeChildEnv,
   requiresBackendRestart,
+  queryHostSideQuestions,
   openSideQuestionInHost,
   createRemoteLocaleManifestCache,
   spawnDetachedSafe,

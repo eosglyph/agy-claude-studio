@@ -20,6 +20,7 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const CHANGELOG_URL = 'https://antigravity.google/docs/changelog';
 const GOOGLE_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/single';
 const MYMEMORY_TRANSLATE_URL = 'https://api.mymemory.translated.net/get';
+const TRANSLATED_CACHE_VERSION = 2;
 
 const args = new Set(process.argv.slice(2));
 const shouldPush = args.has('--push');
@@ -214,8 +215,13 @@ function buildTranslationCacheKey(rel, targetLang) {
 }
 
 async function translateReleasesWithCache(releases, targetLang, state, { translateLineFn = translateLineDetailed } = {}) {
-  if (!state.translatedCache || typeof state.translatedCache !== 'object') {
+  if (
+    !state.translatedCache ||
+    typeof state.translatedCache !== 'object' ||
+    state.translatedCacheVersion !== TRANSLATED_CACHE_VERSION
+  ) {
     state.translatedCache = {};
+    state.translatedCacheVersion = TRANSLATED_CACHE_VERSION;
   }
   const translated = [];
   for (const rel of releases) {

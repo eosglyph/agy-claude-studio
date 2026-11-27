@@ -218,3 +218,38 @@ test('translateViaMyMemory uses requested targetLang and rejects non-200 respons
     /mymemory_status_429/
   );
 });
+
+test('translateReleasesWithCache invalidates legacy cache without current translatedCacheVersion', async () => {
+  const rel = {
+    version: 'v2.35.3',
+    date: 'November 25, 2026',
+    headline: 'Release title',
+    bullets: ['Fixed crash.'],
+  };
+  const legacyKey = buildTranslationCacheKey(rel, 'ja');
+  const legacyHash = buildReleaseContentHash(rel);
+  const state = {
+    translatedCache: {
+      [legacyKey]: {
+        contentHash: legacyHash,
+        targetLang: 'ja',
+        headlineSrc: rel.headline,
+        headlineZh: '发布标题（旧缓存误存中文）',
+        bullets: ['修复崩溃（旧缓存误存中文）'],
+      },
+    },
+  };
+
+  let calls = 0;
+  const translated = await translateReleasesWithCache([rel], 'ja', state, {
+    translateLineFn: async (line, lang) => {
+      calls += 1;
+      return { text: `[${lang}] ${line}`, failed: false };
+    },
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(state.translatedCacheVersion, 2);
+  assert.equal(translated[0].headlineZh, '[ja] Release title');
+  assert.equal(translated[0].bulletsZh[0], '[ja] Fixed crash.');
+});
