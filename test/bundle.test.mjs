@@ -338,9 +338,9 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     // Interactive Thinking Effort Slider Popover (Claude Code & ChatGPT Codex Styles — NO inline style switch)
     assert.equal(sandbox.globalThis.__agCsPerfAssets, undefined);
 
-    // Switch to Claude Code effort style explicitly to test Claude slider popover
+    // Switch to Claude Code effort style with explicit dark palette to test dark Claude slider popover
     doc.hidden = true;
-    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'claude-dark', effortSliderStyle: 'claude' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
 
@@ -354,19 +354,19 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.ok(effortPop.innerHTML.includes('ag-cs-effort-value-slot'));
     assert.equal(effortPop.innerHTML.includes('ag-cs-effort-style-switch'), false);
 
-    // Light theme (even under obsidian/claude palettes) must update popover theme attributes to "light"
-    body.className = 'theme-light';
+    // Explicit light palette (obsidian / claude) must update popover theme attributes to "light" even under dark host
+    body.className = 'theme-dark';
     doc.hidden = true;
     sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude', palette: 'obsidian' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(effortPop.getAttribute('data-effort-theme'), 'light');
-    body.className = 'theme-dark';
 
-    // Switch Effort Slider to ChatGPT (Codex) style via settings refresh
+    // Switch Effort Slider to ChatGPT (Codex) style via settings refresh (with host palette under body.theme-dark -> dark)
     doc.hidden = true;
     sandbox.window.__agClaudeStudio.refreshConfig({
       ...cdp.DEFAULT_CONFIG,
+      palette: 'host',
       usageStatsEnabled: true,
       effortSliderStyle: 'chatgpt',
     });

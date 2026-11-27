@@ -8,11 +8,7 @@
 /* Specificity (0,3,2) cleanly overrides Claudized-Antigravity (0,1,2) and
    Antigravity's inline style on <html> when palette !== "host". */
 
-/* 1a. Obsidian Blue-Dark (Default — matches Figure 1 / dsh-claude-style DeepSeek Dark) */
-html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body.theme-dark),
-html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body.dark),
-html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark,
-html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark,
+/* 1a. Obsidian Blue-Dark (Explicit Dark — forces dark regardless of host light/dark) */
 html[data-ag-cs-style][data-ag-cs-palette="obsidian-dark"],
 html[data-ag-cs-style][data-ag-cs-palette="obsidian-dark"]:has(> body),
 html[data-ag-cs-style][data-ag-cs-palette="obsidian-dark"] > body,
@@ -133,7 +129,16 @@ html[data-ag-cs-style][data-ag-cs-palette="obsidian-dark"] > body.light {
   --vscode-textLink-foreground: #8fa4ff !important;
 }
 
-/* 1b. Obsidian Cool-Light */
+/* 1b. Obsidian Cool-Light (Explicit Light — forces light regardless of host light/dark) */
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body),
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body.theme-dark),
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body.dark-theme),
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body.dark),
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark,
 html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body.theme-light),
 html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body.light-theme),
 html[data-ag-cs-style][data-ag-cs-palette="obsidian"]:has(> body.light),
@@ -155,8 +160,11 @@ html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.light {
   --card: #ffffff !important;
   --card-border: #d4d8e3 !important;
   --border: #e3e6ef !important;
+  --popover: #ffffff !important;
+  --popover-foreground: #131416 !important;
   --glass: #ffffff !important;
   --glass-border: #d4d8e3 !important;
+  --glass-shadow: 0 20px 44px -12px rgb(15 23 42 / 0.14), 0 3px 10px -2px rgb(15 23 42 / 0.08) !important;
 
   --secondary: #f0f1f4 !important;
   --secondary-foreground: #4c515a !important;
@@ -167,6 +175,10 @@ html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.light {
   --primary: #4d6bfe !important;
   --primary-foreground: #fbfcff !important;
   --link: #3b56d9 !important;
+  --error: #dc3545 !important;
+  --warning: #ac830b !important;
+  --success: #1f8b4c !important;
+  --code-foreground: #1f2937 !important;
   --home-glow: transparent !important;
   --scrim: rgba(19, 20, 22, 0.36) !important;
   --glass-highlight: transparent !important;
@@ -193,9 +205,16 @@ html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.light {
   --ag-sidebar-text-strong: #131416;
   --ag-sidebar-label: #646871;
 
+  --focus-ring-color: rgba(77, 107, 254, 0.45) !important;
+  --focus-ring-offset-color: #fbfcff !important;
+  --bg-selection: rgba(77, 107, 254, 0.22) !important;
+  --bg-selection-overlay: rgba(77, 107, 254, 0.18) !important;
+  --bg-cursor-line: rgba(19, 20, 22, 0.04) !important;
+
   --ag-cs-canvas: #fbfcff;
   --ag-cs-sidebar: #f7f9ff;
   --ag-cs-composer-bg: #ffffff;
+  --ag-cs-popover-bg: #ffffff;
   --ag-cs-panel-bg: rgba(241, 243, 249, 0.94);
   --ag-cs-tile-bg: rgba(226, 229, 238, 0.72);
   --ag-cs-tile-border: transparent;
@@ -225,13 +244,19 @@ html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.light {
   --ag-cs-warn-bg: rgba(154, 91, 19, 0.06);
   --ag-cs-scroll: rgba(209, 210, 213, 0.9);
   --ag-cs-scroll-hover: rgba(134, 135, 138, 0.8);
+
+  /* VS Code bridge overrides */
+  --vscode-editor-background: #fbfcff !important;
+  --vscode-editorGutter-background: #fbfcff !important;
+  --vscode-sideBar-background: #f7f9ff !important;
+  --vscode-panel-background: #fbfcff !important;
+  --vscode-titleBar-activeBackground: #f7f9ff !important;
+  --vscode-button-background: #4d6bfe !important;
+  --vscode-button-hoverBackground: #3b56d9 !important;
+  --vscode-textLink-foreground: #3b56d9 !important;
 }
 
-/* 1c. Claude Charcoal-Dark */
-html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body.theme-dark),
-html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body.dark),
-html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark,
-html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark,
+/* 1c. Claude Charcoal-Dark (Explicit Dark — forces dark regardless of host light/dark) */
 html[data-ag-cs-style][data-ag-cs-palette="claude-dark"],
 html[data-ag-cs-style][data-ag-cs-palette="claude-dark"]:has(> body),
 html[data-ag-cs-style][data-ag-cs-palette="claude-dark"] > body,
@@ -352,7 +377,16 @@ html[data-ag-cs-style][data-ag-cs-palette="claude-dark"] > body.light {
   --vscode-textLink-foreground: #8ab4f8 !important;
 }
 
-/* 1d. Claude Classic Light */
+/* 1d. Claude Classic Light (Explicit Light — forces light regardless of host light/dark) */
+html[data-ag-cs-style][data-ag-cs-palette="claude"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body),
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body,
+html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body.theme-dark),
+html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body.dark-theme),
+html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body.dark),
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark,
 html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body.theme-light),
 html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body.light-theme),
 html[data-ag-cs-style][data-ag-cs-palette="claude"]:has(> body.light),
@@ -374,8 +408,11 @@ html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.light {
   --card: #ffffff !important;
   --card-border: #dedede !important;
   --border: #e9e9e9 !important;
+  --popover: #ffffff !important;
+  --popover-foreground: #161616 !important;
   --glass: #ffffff !important;
   --glass-border: #dedede !important;
+  --glass-shadow: 0 20px 44px -12px rgb(15 23 42 / 0.14), 0 3px 10px -2px rgb(15 23 42 / 0.08) !important;
 
   --secondary: #f4f4f4 !important;
   --secondary-foreground: #504b4c !important;
@@ -386,6 +423,10 @@ html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.light {
   --primary: #d97757 !important;
   --primary-foreground: #ffffff !important;
   --link: #184f95 !important;
+  --error: #dc3545 !important;
+  --warning: #ac830b !important;
+  --success: #1f8b4c !important;
+  --code-foreground: #2b2523 !important;
   --home-glow: transparent !important;
   --scrim: rgba(22, 22, 22, 0.32) !important;
   --glass-highlight: transparent !important;
@@ -412,9 +453,16 @@ html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.light {
   --ag-sidebar-text-strong: #161616;
   --ag-sidebar-label: #70696b;
 
+  --focus-ring-color: rgba(217, 119, 87, 0.45) !important;
+  --focus-ring-offset-color: #ffffff !important;
+  --bg-selection: rgba(217, 119, 87, 0.22) !important;
+  --bg-selection-overlay: rgba(217, 119, 87, 0.18) !important;
+  --bg-cursor-line: rgba(22, 22, 22, 0.04) !important;
+
   --ag-cs-canvas: #ffffff;
   --ag-cs-sidebar: #fafafa;
   --ag-cs-composer-bg: #ffffff;
+  --ag-cs-popover-bg: #ffffff;
   --ag-cs-panel-bg: rgba(244, 244, 244, 0.94);
   --ag-cs-tile-bg: rgba(224, 224, 224, 0.72);
   --ag-cs-tile-border: transparent;
@@ -444,6 +492,16 @@ html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.light {
   --ag-cs-warn-bg: rgba(154, 91, 19, 0.06);
   --ag-cs-scroll: rgba(213, 213, 213, 0.9);
   --ag-cs-scroll-hover: rgba(138, 138, 138, 0.8);
+
+  /* VS Code bridge overrides */
+  --vscode-editor-background: #ffffff !important;
+  --vscode-editorGutter-background: #ffffff !important;
+  --vscode-sideBar-background: #fafafa !important;
+  --vscode-panel-background: #ffffff !important;
+  --vscode-titleBar-activeBackground: #fafafa !important;
+  --vscode-button-background: #d97757 !important;
+  --vscode-button-hoverBackground: #c6613f !important;
+  --vscode-textLink-foreground: #184f95 !important;
 }
 
 /* 1e. Host palette fallback variables */
@@ -507,8 +565,8 @@ html[data-ag-cs-style] {
   --ag-cs-data-9: #65616c;
   --ag-cs-col-max: max(30vw, var(--max-conversation-width, 48rem));
 }
-html[data-ag-cs-style]:has(> body.theme-dark),
-html[data-ag-cs-style]:has(> body.dark),
+html[data-ag-cs-style][data-ag-cs-palette="host"]:has(> body.theme-dark),
+html[data-ag-cs-style][data-ag-cs-palette="host"]:has(> body.dark),
 html[data-ag-cs-style][data-ag-cs-palette="obsidian-dark"],
 html[data-ag-cs-style][data-ag-cs-palette="claude-dark"] {
   --ag-cs-data-0: #82aaff;
@@ -581,6 +639,93 @@ html[data-ag-cs-style][data-ag-cs-palette$="-dark"] > body.theme-light .token.ma
 html[data-ag-cs-style][data-ag-cs-palette$="-dark"] > body.light-theme .token.macro,
 html[data-ag-cs-style][data-ag-cs-palette$="-dark"] > body.light .token.macro {
   color: rgb(253, 151, 31) !important;
+}
+
+/* 1g. Forced-light neutralization of host .theme-dark Prism syntax & code block styles */
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark {
+  --syntax-default-fg: var(--foreground) !important;
+  --syntax-comment: slategray !important;
+  --syntax-punctuation: #71717a !important;
+  --syntax-property: #905 !important;
+  --syntax-deleted: #905 !important;
+  --syntax-inserted: #5c8a00 !important;
+  --syntax-tag: #905 !important;
+  --syntax-constant: #905 !important;
+  --syntax-number: #905 !important;
+  --syntax-string: #5c8a00 !important;
+  --syntax-attr-name: #5c8a00 !important;
+  --syntax-builtin: #5c8a00 !important;
+  --syntax-operator: #9a6e3a !important;
+  --syntax-variable: #b45309 !important;
+  --syntax-attr-value: #07a !important;
+  --syntax-keyword: #07a !important;
+  --syntax-function: #dd4a68 !important;
+  --syntax-class-name: #dd4a68 !important;
+  --syntax-regex: #b45309 !important;
+}
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark pre[class*="language-"] {
+  color: var(--syntax-default-fg) !important;
+  text-shadow: none !important;
+}
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark :not(pre) > code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme :not(pre) > code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark :not(pre) > code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark :not(pre) > code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme :not(pre) > code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme pre[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark :not(pre) > code[class*="language-"],
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark pre[class*="language-"] {
+  background: var(--secondary) !important;
+}
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark .token.reference,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme .token.reference,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark .token.reference,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark .token.reference,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme .token.reference,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark .token.reference {
+  color: #905 !important;
+}
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark .token.type,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark .token.definition,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme .token.type,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme .token.definition,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark .token.type,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark .token.definition,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark .token.type,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark .token.definition,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme .token.type,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme .token.definition,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark .token.type,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark .token.definition {
+  color: #dd4a68 !important;
+}
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.theme-dark .token.macro,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark-theme .token.macro,
+html[data-ag-cs-style][data-ag-cs-palette="obsidian"] > body.dark .token.macro,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.theme-dark .token.macro,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark-theme .token.macro,
+html[data-ag-cs-style][data-ag-cs-palette="claude"] > body.dark .token.macro {
+  color: #b45309 !important;
 }
 
 /* ── 2. Shell, Sidebar Hairline & Scrollbars ────────────────────────────── */
@@ -4204,8 +4349,8 @@ html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"] .surface
     0 8px 24px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 11%, rgba(15, 23, 42, 0.08)),
     inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
 }
-html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full,
-html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"]:has(> body.dark) .surface-composer-card > div.relative.w-full,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"][data-ag-cs-palette="host"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"][data-ag-cs-palette="host"]:has(> body.dark) .surface-composer-card > div.relative.w-full,
 html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"][data-ag-cs-palette$="-dark"] .surface-composer-card > div.relative.w-full {
   background: color-mix(in srgb, var(--ag-cs-composer-bg, var(--card, #1c1f28)) 72%, transparent) !important;
   border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 36%, rgba(255, 255, 255, 0.14)) !important;
@@ -4230,17 +4375,17 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] .settings-modal-container div.roun
     0 10px 28px rgba(15, 23, 42, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
 }
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .ag-cs-home-panel,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .ag-cs-home-panel,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.theme-dark) .ag-cs-home-panel,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.dark) .ag-cs-home-panel,
 html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette$="-dark"] .ag-cs-home-panel,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .ag-cs-ctx-popover,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .ag-cs-ctx-popover,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.theme-dark) .ag-cs-ctx-popover,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.dark) .ag-cs-ctx-popover,
 html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette$="-dark"] .ag-cs-ctx-popover,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .ag-cs-effort-popover,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .ag-cs-effort-popover,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.theme-dark) .ag-cs-effort-popover,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.dark) .ag-cs-effort-popover,
 html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette$="-dark"] .ag-cs-effort-popover,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .ag-cs-ps-drawer,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .ag-cs-ps-drawer,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.theme-dark) .ag-cs-ps-drawer,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.dark) .ag-cs-ps-drawer,
 html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette$="-dark"] .ag-cs-ps-drawer {
   box-shadow:
     0 14px 36px rgba(0, 0, 0, 0.48),
@@ -4297,8 +4442,8 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="new-tab-search-input
     0 8px 24px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 16%, rgba(0, 0, 0, 0.08)),
     inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
 }
-html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full:focus-within,
-html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"]:has(> body.dark) .surface-composer-card > div.relative.w-full:focus-within,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"][data-ag-cs-palette="host"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full:focus-within,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"][data-ag-cs-palette="host"]:has(> body.dark) .surface-composer-card > div.relative.w-full:focus-within,
 html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"][data-ag-cs-palette$="-dark"] .surface-composer-card > div.relative.w-full:focus-within {
   border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 62%, transparent) !important;
   box-shadow:
@@ -4312,11 +4457,11 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] .agy-user-bubble {
     0 3px 14px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 10%, rgba(0, 0, 0, 0.08)),
     inset 0 1px 0 rgba(255, 255, 255, 0.55) !important;
 }
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) [data-testid="user-message-bubble"],
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) [data-testid="user-message-bubble"],
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.theme-dark) [data-testid="user-message-bubble"],
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.dark) [data-testid="user-message-bubble"],
 html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette$="-dark"] [data-testid="user-message-bubble"],
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .agy-user-bubble,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .agy-user-bubble,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.theme-dark) .agy-user-bubble,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette="host"]:has(> body.dark) .agy-user-bubble,
 html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-palette$="-dark"] .agy-user-bubble {
   box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.34),

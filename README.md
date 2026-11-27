@@ -273,7 +273,7 @@ All settings can be adjusted in real time from the right-side **Claude Studio** 
 | --- | --- | --- | --- | --- |
 | Basic | `language` | `'zh-CN'` \| `'zh-TW'` \| `'yue'` \| `'en'` \| `'ja'` | `'zh-CN'` | UI & Studio panel language |
 | Basic | `homeLayout` | `'studio'` \| `'classic'` \| `'off'` | `'studio'` | New conversation home screen layout |
-| Basic | `palette` | `'claude'` \| `'claude-dark'` \| `'obsidian'` \| `'obsidian-dark'` \| `'host'` | `'claude'` | Solid color theme palette (auto or explicit dark) |
+| Basic | `palette` | `'claude'` \| `'claude-dark'` \| `'obsidian'` \| `'obsidian-dark'` \| `'host'` | `'claude'` | Explicit light/dark color theme palette, or `'host'` to follow Antigravity native appearance |
 | UI Polish | `glassEffect` | `boolean` | `true` | Frosted glassmorphism borders, floating image viewer pills & ambient glow |
 | UI Polish | `sidebarRestyle` / `sidebarCompact` | `boolean` | `true` | Claude-style sidebar density & hover polish |
 | UI Polish | `composerRestyle` / `placeholderStyle` | `boolean` / `'studio'` \| `'host'` | `true` / `'studio'` | Minimalist composer & prompt placeholder copy |

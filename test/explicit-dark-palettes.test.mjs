@@ -36,27 +36,46 @@ test('CONFIG_VALIDATORS and sanitizeConfig accept explicit dark palettes while s
 test('style.css forces pure dark tokens for obsidian-dark & claude-dark and guards all body.theme-light overrides', () => {
   const css = fs.readFileSync(path.join(ROOT_DIR, 'src', 'style.css'), 'utf8');
 
-  // 1a Obsidian Dark explicit selectors & key dark tokens
+  // 1a Obsidian Dark explicit selectors & key dark tokens (and NO obsidian/claude rule forcing dark)
+  assert.doesNotMatch(
+    css,
+    /html\[data-ag-cs-style\]\[data-ag-cs-palette="(?:obsidian|claude)"\](?::has\(>\s*body\.(?:theme-dark|dark)\)|\s*>\s*body\.(?:theme-dark|dark))[^}]*color-scheme:\s*dark/
+  );
   assert.match(
     css,
     /html\[data-ag-cs-style\]\[data-ag-cs-palette="obsidian-dark"\]\s*>\s*body\.theme-light[\s\S]*?color-scheme:\s*dark\s*!important;[\s\S]*?--background:\s*#13161d\s*!important;[\s\S]*?--foreground:\s*#f4f9ff\s*!important;/
+  );
+  // 1b Obsidian Light explicit selectors & key light tokens under body.theme-dark
+  assert.match(
+    css,
+    /html\[data-ag-cs-style\]\[data-ag-cs-palette="obsidian"\]\s*>\s*body\.theme-dark[\s\S]*?color-scheme:\s*light\s*!important;[\s\S]*?--background:\s*#fbfcff\s*!important;[\s\S]*?--foreground:\s*#131416\s*!important;/
   );
   // 1c Claude Dark explicit selectors & key dark tokens
   assert.match(
     css,
     /html\[data-ag-cs-style\]\[data-ag-cs-palette="claude-dark"\]\s*>\s*body\.theme-light[\s\S]*?color-scheme:\s*dark\s*!important;[\s\S]*?--background:\s*#191919\s*!important;[\s\S]*?--foreground:\s*#fdfdfd\s*!important;/
   );
-
-  // Categorical chart dark palette includes both explicit dark palettes
+  // 1d Claude Light explicit selectors & key light tokens under body.theme-dark
   assert.match(
     css,
-    /html\[data-ag-cs-style\]\[data-ag-cs-palette="obsidian-dark"\],\s*html\[data-ag-cs-style\]\[data-ag-cs-palette="claude-dark"\]\s*\{\s*--ag-cs-data-0:\s*#82aaff;/
+    /html\[data-ag-cs-style\]\[data-ag-cs-palette="claude"\]\s*>\s*body\.theme-dark[\s\S]*?color-scheme:\s*light\s*!important;[\s\S]*?--background:\s*#ffffff\s*!important;[\s\S]*?--foreground:\s*#161616\s*!important;/
+  );
+
+  // Categorical chart dark palette includes both explicit dark palettes & host-only theme-dark
+  assert.match(
+    css,
+    /html\[data-ag-cs-style\]\[data-ag-cs-palette="host"\]:has\(>\s*body\.theme-dark\)[\s\S]*?html\[data-ag-cs-style\]\[data-ag-cs-palette="obsidian-dark"\],\s*html\[data-ag-cs-style\]\[data-ag-cs-palette="claude-dark"\]\s*\{\s*--ag-cs-data-0:\s*#82aaff;/
   );
 
   // Forced-dark neutralization of host .theme-light Prism syntax & code block backgrounds
   assert.match(
     css,
     /html\[data-ag-cs-style\]\[data-ag-cs-palette\$="-dark"\]\s*>\s*body\.theme-light[\s\S]*?--syntax-default-fg:\s*#f8f8f2\s*!important;/
+  );
+  // Forced-light neutralization of host .theme-dark Prism syntax & code block backgrounds
+  assert.match(
+    css,
+    /html\[data-ag-cs-style\]\[data-ag-cs-palette="claude"\]\s*>\s*body\.theme-dark[\s\S]*?--syntax-default-fg:\s*var\(--foreground\)\s*!important;/
   );
 
   // Section 11 effort popover must NOT contain any unguarded body.theme-light / body.light-theme / body.light rules
@@ -65,9 +84,11 @@ test('style.css forces pure dark tokens for obsidian-dark & claude-dark and guar
   );
   assert.equal(unguardedLightEffort, null, 'Effort popover light-body selectors must be guarded against -dark palettes');
 
-  // Section 13 dark glassEffect overrides must also apply to explicit -dark palettes
+  // Section 13 dark glassEffect overrides must also apply to explicit -dark palettes and scope host dark rules to palette="host"
   const darkGlassHits = css.match(/\[data-ag-cs-glass="on"\](?:\[data-ag-cs-composer="on"\])?\[data-ag-cs-palette\$="-dark"\]/g) || [];
   assert.ok(darkGlassHits.length >= 8, `Expected dark glassEffect selectors for -dark palettes, found ${darkGlassHits.length}`);
+  const unguardedDarkGlass = css.match(/html\[data-ag-cs-style\]\[data-ag-cs-glass="on"\](?:\[data-ag-cs-composer="on"\])?:has\(>\s*body\.(?:theme-dark|dark)\)/g);
+  assert.equal(unguardedDarkGlass, null, 'Dark glassEffect body.theme-dark rules must be scoped to palette="host" so explicit light palettes stay light');
 });
 
 test('ui-runtime treats claude-dark and obsidian-dark as dark theme even under body.theme-light', async () => {
@@ -308,10 +329,30 @@ test('ui-runtime treats claude-dark and obsidian-dark as dark theme even under b
     assert.ok(psDrawer);
     assert.equal(psDrawer.getAttribute('data-ps-theme'), 'dark', 'obsidian-dark forces Periodic Table dark');
 
-    // Switch back to auto obsidian under body.theme-light -> returns to light
+    // Switch back to explicit light obsidian under body.theme-light -> returns to light
     win.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'obsidian', effortSliderStyle: 'claude' });
     assert.equal(html.getAttribute('data-ag-cs-palette'), 'obsidian');
-    assert.equal(psDrawer.getAttribute('data-ps-theme'), 'light', 'Switching back to auto obsidian restores light');
+    assert.equal(psDrawer.getAttribute('data-ps-theme'), 'light', 'Switching back to obsidian restores light');
+
+    // Now switch host body to dark mode (body.theme-dark):
+    // claude & obsidian MUST force light; host follows dark; claude-dark / obsidian-dark stay dark
+    body.className = 'theme-dark';
+    win.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'claude', effortSliderStyle: 'claude' });
+    assert.equal(psDrawer.getAttribute('data-ps-theme'), 'light', 'claude forces Periodic Table light under body.theme-dark');
+
+    win.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'obsidian', effortSliderStyle: 'claude' });
+    assert.equal(psDrawer.getAttribute('data-ps-theme'), 'light', 'obsidian forces Periodic Table light under body.theme-dark');
+    win.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
+    const darkHostLightPop = body.querySelector('.ag-cs-effort-popover');
+    assert.ok(darkHostLightPop);
+    assert.equal(darkHostLightPop.getAttribute('data-effort-theme'), 'light', 'obsidian forces effort popover light under body.theme-dark');
+
+    win.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'claude', effortSliderStyle: 'claude' });
+    assert.equal(darkHostLightPop.getAttribute('data-effort-theme'), 'light', 'claude forces effort popover light under body.theme-dark');
+
+    win.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'host', effortSliderStyle: 'claude' });
+    assert.equal(darkHostLightPop.getAttribute('data-effort-theme'), 'dark', 'host follows dark theme under body.theme-dark');
+    assert.equal(psDrawer.getAttribute('data-ps-theme'), 'dark', 'host follows dark theme on Periodic Table under body.theme-dark');
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, win);
   } finally {
@@ -336,12 +377,17 @@ test('Studio sidecar HTML exposes all 5 palettes in all 5 locales and syncs data
     );
   }
 
-  // Verify Studio CSS defines explicit dark variables and overrides inline body colors
+  // Verify Studio CSS defines explicit light & dark variables and overrides inline body colors
+  assert.match(html, /:root\[data-palette="claude"\]\s*\{[\s\S]*?--bg:\s*#fafafa;/);
+  assert.match(html, /:root\[data-palette="obsidian"\]\s*\{[\s\S]*?--bg:\s*#f7f9ff;/);
   assert.match(html, /:root\[data-palette="claude-dark"\]\s*\{[\s\S]*?--bg:\s*#1f1f1f;/);
   assert.match(html, /:root\[data-palette="obsidian-dark"\]\s*\{[\s\S]*?--bg:\s*#13161d;/);
-  assert.match(html, /:root\[data-palette="claude-dark"\]\s+body,\s*:root\[data-palette="obsidian-dark"\]\s+body\s*\{[\s\S]*?background:\s*var\(--bg\)\s*!important;/);
+  assert.match(
+    html,
+    /:root\[data-palette="claude"\]\s+body,\s*:root\[data-palette="obsidian"\]\s+body,\s*:root\[data-palette="claude-dark"\]\s+body,\s*:root\[data-palette="obsidian-dark"\]\s+body\s*\{[\s\S]*?background:\s*var\(--bg\)\s*!important;/
+  );
 
-  // Extract and run parseColorLuminance + syncHostThemeAttr under simulated light host
+  // Extract and run parseColorLuminance + syncHostThemeAttr under simulated light & dark hosts
   const fnMatch = html.match(
     /function parseColorLuminance\(raw\)[\s\S]*?function syncHostThemeAttr\(overrideBg\) \{[\s\S]*?\n    \}/
   );
@@ -354,6 +400,7 @@ test('Studio sidecar HTML exposes all 5 palettes in all 5 locales and syncs data
     getAttribute(k) { return attrs.get(k) ?? null; },
     removeAttribute(k) { attrs.delete(k); },
   };
+  let mockHostBg = '#ffffff';
   const sandbox = {
     currentConfig: { palette: 'claude' },
     document: {
@@ -362,19 +409,19 @@ test('Studio sidecar HTML exposes all 5 palettes in all 5 locales and syncs data
     },
     getComputedStyle(el) {
       if (el === rootEl) {
-        return { getPropertyValue: (k) => (k === '--background' ? '#ffffff' : '') };
+        return { getPropertyValue: (k) => (k === '--background' ? mockHostBg : '') };
       }
-      return { backgroundColor: 'rgb(250, 250, 250)' };
+      return { backgroundColor: mockHostBg === '#ffffff' ? 'rgb(250, 250, 250)' : 'rgb(20, 21, 24)' };
     },
     window: { matchMedia: () => ({ matches: true }) },
   };
 
   vm.runInNewContext(fnMatch[0], sandbox);
 
-  // Light host + auto claude -> light
+  // Light host + explicit claude (light) -> light with data-palette="claude"
   sandbox.syncHostThemeAttr('#ffffff');
   assert.equal(rootEl.getAttribute('data-theme'), 'light');
-  assert.equal(rootEl.getAttribute('data-palette'), null);
+  assert.equal(rootEl.getAttribute('data-palette'), 'claude');
 
   // Light host + claude-dark -> forced dark even if theme-change sends #ffffff
   sandbox.currentConfig = { palette: 'claude-dark' };
@@ -388,9 +435,28 @@ test('Studio sidecar HTML exposes all 5 palettes in all 5 locales and syncs data
   assert.equal(rootEl.getAttribute('data-theme'), 'dark');
   assert.equal(rootEl.getAttribute('data-palette'), 'obsidian-dark');
 
-  // Switch back to host/claude -> restores light theme cleanly
+  // Dark host (#141518) + claude (light) -> forced light with data-palette="claude"
+  mockHostBg = '#141518';
+  sandbox.currentConfig = { palette: 'claude' };
+  sandbox.syncHostThemeAttr('#141518');
+  assert.equal(rootEl.getAttribute('data-theme'), 'light');
+  assert.equal(rootEl.getAttribute('data-palette'), 'claude');
+
+  // Dark host (#141518) + obsidian (light) -> forced light with data-palette="obsidian"
+  sandbox.currentConfig = { palette: 'obsidian' };
+  sandbox.syncHostThemeAttr('#141518');
+  assert.equal(rootEl.getAttribute('data-theme'), 'light');
+  assert.equal(rootEl.getAttribute('data-palette'), 'obsidian');
+
+  // Dark host (#141518) + host -> follows dark host cleanly without data-palette
   sandbox.currentConfig = { palette: 'host' };
-  sandbox.syncHostThemeAttr();
+  sandbox.syncHostThemeAttr('#141518');
+  assert.equal(rootEl.getAttribute('data-theme'), 'dark');
+  assert.equal(rootEl.getAttribute('data-palette'), null);
+
+  // Light host (#ffffff) + host -> follows light host cleanly without data-palette
+  mockHostBg = '#ffffff';
+  sandbox.syncHostThemeAttr('#ffffff');
   assert.equal(rootEl.getAttribute('data-theme'), 'light');
   assert.equal(rootEl.getAttribute('data-palette'), null);
 });
