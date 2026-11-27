@@ -174,7 +174,7 @@ const DEFAULT_CONFIG = {
 // Shared declarative schema consumed by inject.js and installer build manifests.
 const CONFIG_VALIDATORS = {
   language: ['zh-CN', 'zh-TW', 'yue', 'en', 'ja'],
-  palette: ['obsidian', 'claude', 'host'],
+  palette: ['obsidian', 'obsidian-dark', 'claude', 'claude-dark', 'host'],
   glassEffect: 'boolean',
   homeLayout: ['studio', 'classic', 'off'],
   homeRipple: 'boolean',
@@ -281,9 +281,12 @@ function sanitizeConfig(raw) {
   if (raw.usageStatsEnabled === undefined && typeof raw.usageMonitorCompat === 'boolean') {
     out.usageStatsEnabled = !raw.usageMonitorCompat;
   }
-  if (raw.paletteEnabled === false && raw.palette !== 'obsidian' && raw.palette !== 'claude') {
+  if (
+    raw.paletteEnabled === false &&
+    (!CONFIG_VALIDATORS.palette.includes(raw.palette) || raw.palette === 'host')
+  ) {
     out.palette = 'host';
-  } else if (out.palette !== 'obsidian' && out.palette !== 'claude' && out.palette !== 'host') {
+  } else if (!CONFIG_VALIDATORS.palette.includes(out.palette)) {
     out.palette = 'obsidian';
   }
   out.i18nIgnoreSelectors = sanitizeSelectorList(out.i18nIgnoreSelectors);

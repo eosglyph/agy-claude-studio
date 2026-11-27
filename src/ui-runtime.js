@@ -77,17 +77,35 @@
     return false;
   }
 
+  function isExplicitDarkPalette(val) {
+    return val === 'obsidian-dark' || val === 'claude-dark';
+  }
+
   function normalizePaletteId(val) {
-    return val === 'claude' ? 'claude' : val === 'host' ? 'host' : 'obsidian';
+    if (
+      val === 'claude' ||
+      val === 'claude-dark' ||
+      val === 'obsidian' ||
+      val === 'obsidian-dark' ||
+      val === 'host'
+    ) {
+      return val;
+    }
+    return 'obsidian';
   }
 
   function getEffectivePalette() {
-    return normalizePaletteId(cfg.palette);
+    return normalizePaletteId(cfg && cfg.palette);
   }
 
   function getPaletteDisplayName(val, lang) {
     const ui = uiText(lang);
-    return val === 'claude' ? 'Claude' : val === 'host' ? (ui.optHost || 'Host') : (ui.optObsidian || 'Obsidian');
+    const p = normalizePaletteId(val);
+    if (p === 'claude-dark') return ui.optClaudeDark || 'Claude (Dark)';
+    if (p === 'claude') return 'Claude';
+    if (p === 'obsidian-dark') return ui.optObsidianDark || 'Obsidian (Dark)';
+    if (p === 'host') return ui.optHost || 'Host';
+    return ui.optObsidian || 'Obsidian';
   }
 
   function isUsageStatsEnabled() {
@@ -344,6 +362,7 @@
   }
 
   function isDarkTheme() {
+    if (isExplicitDarkPalette(getEffectivePalette())) return true;
     const b = document.body?.classList;
     const h = document.documentElement?.classList;
     if (b?.contains('theme-light') || b?.contains('light-theme') || b?.contains('light')) return false;
