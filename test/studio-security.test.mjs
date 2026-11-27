@@ -30,6 +30,8 @@ test('Studio has matching authenticated POST routes and will not start without a
   for (const [, route] of html.matchAll(/apiFetch\('(\/api\/[^']+)'/g)) {
     assert.equal(routes.get(route), 'POST', route);
   }
+  assert.match(html, /apiFetch\('\/api\/i18n-pack\/sync',\s*\{\s*body:\s*JSON\.stringify\(\{\s*lang:/);
+  assert.match(html, /apiFetch\('\/api\/i18n-pack\/reset',\s*\{\s*body:\s*JSON\.stringify\(\{\s*lang:/);
   const start = html.indexOf('const apiFetch =');
   const end = html.indexOf('const COLLAPSED_STORAGE_KEY', start);
   const sandbox = { window: {} };

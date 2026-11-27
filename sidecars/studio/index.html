@@ -5438,7 +5438,9 @@
       const btn = triggerBtn || document.getElementById('btn-sync-i18n-pack');
       if (btn) btn.disabled = true;
       try {
-        const res = await apiFetch('/api/i18n-pack/sync', { lang: langToSync });
+        const res = await apiFetch('/api/i18n-pack/sync', {
+          body: JSON.stringify({ lang: langToSync }),
+        });
         const data = await res.json();
         const t = getT();
         if (!res.ok || !data?.ok) {
@@ -5464,7 +5466,9 @@
       const btn = triggerBtn || document.getElementById('btn-reset-i18n-pack');
       if (btn) btn.disabled = true;
       try {
-        const res = await apiFetch('/api/i18n-pack/reset', { lang: langToReset });
+        const res = await apiFetch('/api/i18n-pack/reset', {
+          body: JSON.stringify({ lang: langToReset }),
+        });
         const data = await res.json();
         if (!res.ok || !data?.ok) {
           throw new Error(data?.error || 'Error');
