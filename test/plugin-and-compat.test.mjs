@@ -2956,6 +2956,7 @@ test('compactPreset continue mode and persistent /btw side-question restore & co
         const walk = (n) => {
           for (const c of n.children) {
             const ok = parts.some((p) => {
+              if (p === '*') return true;
               if (p === '[data-testid="agent-input-box"] .surface-composer-card') return c.classList.contains('surface-composer-card');
               if (p === '[data-testid="agent-input-box"]') return c.getAttribute('data-testid') === 'agent-input-box';
               if (p === '[data-testid="agent-input-box"] [contenteditable="true"]') return c.getAttribute('contenteditable') === 'true';
@@ -3470,5 +3471,459 @@ test('Environment git metadata detects worktree & normalizes remotes, and perfor
     assert.equal(blockedUrl.error, 'url_not_allowed');
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test('Dock reacts to real MutationObserver attribute changes, guards narrow windows before clicking host, debounces pending host commits, and avoids steady-state rAF loops', async () => {
+  const timers = new Set();
+  const docListeners = new Map();
+  let observerCb = null;
+
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      parentNode: null,
+      children,
+      childNodes: children,
+      isConnected: true,
+      clicks: 0,
+      _rect: opts.rect || { left: 0, top: 0, width: 1200, height: 900, right: 1200, bottom: 900 },
+      _text: opts.text || '',
+      style: {
+        _props: {},
+        setProperty(k, v) { this._props[k] = String(v); },
+        getPropertyValue(k) { return this._props[k] || ''; },
+        removeProperty(k) { delete this._props[k]; },
+      },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      get firstElementChild() { return children[0] || null; },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      append(...nodes) { for (const n of nodes) this.appendChild(n); },
+      insertBefore(c, ref) {
+        if (c.parentElement) {
+          const old = c.parentElement.children.indexOf(c);
+          if (old >= 0) c.parentElement.children.splice(old, 1);
+        }
+        c.parentElement = this;
+        c.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+          this.parentNode = null;
+        }
+      },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      removeEventListener(ev, fn) {
+        const list = listeners.get(ev);
+        if (!list) return;
+        const i = list.indexOf(fn);
+        if (i >= 0) list.splice(i, 1);
+      },
+      click() {
+        this.clicks += 1;
+        for (const fn of [...(listeners.get('click') || [])]) fn({ target: this });
+      },
+      getBoundingClientRect() { return this._rect; },
+      closest(sel) {
+        const sels = sel.split(',').map((s) => s.trim());
+        let cur = this;
+        while (cur) {
+          for (const s of sels) {
+            if (s === '[data-testid="aux-pane-split"]' && cur.getAttribute('data-testid') === 'aux-pane-split') return cur;
+            if (s === '[data-aux-pane-open]' && cur.hasAttribute('data-aux-pane-open')) return cur;
+            if (s === '[data-side-panel-strip]' && cur.hasAttribute('data-side-panel-strip')) return cur;
+            if (s === '[data-testid="sidecar-iframe-slot"]' && cur.getAttribute('data-testid') === 'sidecar-iframe-slot') return cur;
+            if (s === '[data-tab-id]' && cur.hasAttribute('data-tab-id')) return cur;
+          }
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const parts = sel.split(',').map((s) => s.trim());
+        const walk = (n) => {
+          for (const c of n.children) {
+            const ok = parts.some((p) => {
+              if (p === '[data-testid="conversation-view"]') return c.getAttribute('data-testid') === 'conversation-view';
+              if (p === '[data-testid="aux-pane-split"]') return c.getAttribute('data-testid') === 'aux-pane-split';
+              if (p === '[data-aux-pane-open]') return c.hasAttribute('data-aux-pane-open');
+              if (p === '[data-side-panel-strip]') return c.hasAttribute('data-side-panel-strip');
+              if (p === '[data-testid="toggle-aux-sidebar"]') return c.getAttribute('data-testid') === 'toggle-aux-sidebar';
+              if (p === '[data-testid="side-panel-new-tab-button"]') return c.getAttribute('data-testid') === 'side-panel-new-tab-button';
+              if (p === 'iframe[src*="agy-claude-studio--studio"]') return c.tagName === 'IFRAME' && (c.getAttribute('src') || '').includes('agy-claude-studio--studio');
+              if (p === '[data-testid="sidecar-iframe-slot"]') return c.getAttribute('data-testid') === 'sidecar-iframe-slot';
+              if (p === '.ag-cs-pinned-dock') return c.classList.contains('ag-cs-pinned-dock');
+              if (p === '.ag-cs-dock-body') return c.classList.contains('ag-cs-dock-body');
+              if (p === 'button') return c.tagName === 'BUTTON';
+              return false;
+            });
+            if (ok) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const html = makeEl('html');
+  const head = html.appendChild(makeEl('head'));
+  const body = html.appendChild(makeEl('body', { className: 'theme-dark' }));
+  const convo = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'conversation-view' } }));
+  const split = convo.appendChild(makeEl('div', {
+    attrs: { 'data-testid': 'aux-pane-split' },
+    rect: { left: 0, top: 0, width: 1200, height: 900, right: 1200, bottom: 900 },
+  }));
+  split.appendChild(makeEl('div', { className: 'chat-col' }));
+  split.appendChild(makeEl('div', { className: 'native-splitter' }));
+  const auxPane = split.appendChild(makeEl('div', { attrs: { 'data-aux-pane-open': 'true' } }));
+  const strip = auxPane.appendChild(makeEl('div', { attrs: { 'data-side-panel-strip': '1', 'data-active-tab-id': 'browser__1' } }));
+  const browserBtn = strip.appendChild(makeEl('button', { attrs: { 'data-tab-id': 'browser__1' }, text: 'Browser' }));
+  strip.appendChild(makeEl('button', { attrs: { 'data-tab-id': 'sidecar__agy-claude-studio/studio__/' }, text: 'Claude Studio' }));
+  const newTabBtn = strip.appendChild(makeEl('button', { attrs: { 'data-testid': 'side-panel-new-tab-button' } }));
+  const toggleAuxBtn = body.appendChild(makeEl('button', { attrs: { 'data-testid': 'toggle-aux-sidebar' } }));
+  const overlay = body.appendChild(makeEl('div', { rect: { left: 0, top: 0, width: 1200, height: 900, right: 1200, bottom: 900 } }));
+  const studioSlot = overlay.appendChild(makeEl('div', { attrs: { 'data-testid': 'sidecar-iframe-slot' } }));
+  studioSlot.appendChild(makeEl('iframe', { attrs: { src: 'plugin://agy-claude-studio--studio/' } }));
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    hidden: false,
+    createElement: (t) => makeEl(t, { rect: { left: 450, top: 40, width: 310, height: 860, right: 760, bottom: 900 } }),
+    getElementById: (id) => html.querySelectorAll('*').find((e) => e.getAttribute('id') === id) || null,
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener(ev, fn) {
+      if (!docListeners.has(ev)) docListeners.set(ev, []);
+      docListeners.get(ev).push(fn);
+    },
+    removeEventListener(ev, fn) {
+      const list = docListeners.get(ev);
+      if (!list) return;
+      const i = list.indexOf(fn);
+      if (i >= 0) list.splice(i, 1);
+    },
+  };
+
+  let rafCalls = 0;
+  const sandbox = {
+    document: doc,
+    location: { href: 'https://127.0.0.1:2015/c/44444444-4444-4444-8444-444444444444', protocol: 'https:', hostname: '127.0.0.1', pathname: '/c/44444444-4444-4444-8444-444444444444' },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class {
+      constructor(cb) { observerCb = cb; }
+      observe() {}
+      disconnect() {}
+    },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => {
+      rafCalls += 1;
+      const id = setTimeout(() => fn(Date.now()), 5);
+      timers.add(id);
+      return id;
+    },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' }), sandbox);
+    assert.ok(split.querySelector('.ag-cs-pinned-dock'), 'Dock mounted initially');
+    await new Promise((r) => setTimeout(r, 270));
+
+    // P2-1: Steady-state refreshConfig must NOT start a new 240ms rAF tracking loop (at most 1 rAF for scheduleSync itself)
+    const rafBeforeSteady = rafCalls;
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    await new Promise((r) => setTimeout(r, 80));
+    assert.ok(rafCalls - rafBeforeSteady <= 1, `Steady-state sync must not run 240ms rAF loop (got ${rafCalls - rafBeforeSteady} rAFs)`);
+
+    // P1-5: Pure attribute mutation on data-active-tab-id / data-aux-pane-open wakes Dock sync via MutationObserver
+    strip.setAttribute('data-active-tab-id', 'sidecar__agy-claude-studio/studio__/');
+    observerCb([{ type: 'attributes', target: strip, attributeName: 'data-active-tab-id' }]);
+    await new Promise((r) => setTimeout(r, 25));
+    assert.equal(browserBtn.clicks, 1, 'Attribute mutation triggered Dock sync to bounce back to browser tab');
+
+    // P1-4 (delayed commit): While React has not committed data-active-tab-id yet, a second sync must NOT re-click browserBtn
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(browserBtn.clicks, 1, 'Pending host action prevents duplicate click before React commits');
+
+    // React commits one frame later
+    strip.setAttribute('data-active-tab-id', 'browser__1');
+    observerCb([{ type: 'attributes', target: strip, attributeName: 'data-active-tab-id' }]);
+    await new Promise((r) => setTimeout(r, 25));
+    assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false);
+
+    // P1-4 (narrow window): Width below 900px in 3-column mode must tear down Dock WITHOUT clicking host buttons
+    const clicksBeforeNarrow = {
+      browser: browserBtn.clicks,
+      toggle: toggleAuxBtn.clicks,
+      newTab: newTabBtn.clicks,
+    };
+    split._rect = { left: 0, top: 0, width: 820, height: 900, right: 820, bottom: 900 };
+    strip.setAttribute('data-active-tab-id', 'sidecar__agy-claude-studio/studio__/');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.querySelector('.ag-cs-pinned-dock'), null, 'Narrow 3-column window tears down Dock');
+    assert.equal(browserBtn.clicks, clicksBeforeNarrow.browser, 'Must not click otherTabBtn on narrow window');
+    assert.equal(toggleAuxBtn.clicks, clicksBeforeNarrow.toggle, 'Must not click toggleAuxBtn on narrow window');
+    assert.equal(newTabBtn.clicks, clicksBeforeNarrow.newTab, 'Must not click newTabBtn on narrow window');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('/btw draft protection preserves non-empty drafts, handles restore errors without overwriting, and cancels delayed restore timers on destroy/switch', async () => {
+  const timers = new Set();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      parentNode: null,
+      children,
+      childNodes: children,
+      isConnected: true,
+      clicks: 0,
+      focusCount: 0,
+      _text: opts.text || '',
+      style: { _props: {}, setProperty(k, v) { this._props[k] = String(v); }, getPropertyValue(k) { return this._props[k] || ''; }, removeProperty(k) { delete this._props[k]; } },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      append(...nodes) { for (const n of nodes) this.appendChild(n); },
+      insertBefore(c) { return this.appendChild(c); },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+          this.parentNode = null;
+        }
+      },
+      focus() { this.focusCount += 1; },
+      click() { this.clicks += 1; },
+      dispatchEvent() {},
+      addEventListener() {},
+      removeEventListener() {},
+      getBoundingClientRect: () => ({ left: 10, top: 8, width: 60, height: 22, right: 70, bottom: 30 }),
+      closest(sel) {
+        const sels = sel.split(',').map((s) => s.trim());
+        let cur = this;
+        while (cur) {
+          for (const s of sels) {
+            if (s === '[data-testid="conversation-view"]' && cur.getAttribute('data-testid') === 'conversation-view') return cur;
+            if (s === '[data-testid="agent-input-box"]' && cur.getAttribute('data-testid') === 'agent-input-box') return cur;
+            if (s === '.surface-composer-card' && cur.classList.contains('surface-composer-card')) return cur;
+            if (s === '[data-cascade-id]' && cur.hasAttribute('data-cascade-id')) return cur;
+          }
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const parts = sel.split(',').map((s) => s.trim());
+        const walk = (n) => {
+          for (const c of n.children) {
+            const ok = parts.some((p) => {
+              if (p === '*') return true;
+              if (p === '[data-testid="agent-input-box"] .surface-composer-card') return c.classList.contains('surface-composer-card');
+              if (p === '[data-testid="agent-input-box"]') return c.getAttribute('data-testid') === 'agent-input-box';
+              if (p === '.surface-composer-card') return c.classList.contains('surface-composer-card');
+              if (p === '[contenteditable="true"]') return c.getAttribute('contenteditable') === 'true';
+              if (p === '[data-side-panel-strip]') return c.hasAttribute('data-side-panel-strip');
+              if (p === '[data-aux-pane-open="true"]') return c.getAttribute('data-aux-pane-open') === 'true';
+              if (p === '[data-testid="agent-input-box"] [contenteditable="true"]') {
+                return c.getAttribute('contenteditable') === 'true' && Boolean(c.closest('[data-testid="agent-input-box"]'));
+              }
+              if (p === 'button') return c.tagName === 'BUTTON';
+              return false;
+            });
+            if (ok) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  let shouldThrowOnDispatch = false;
+  let activeCid = '11111111-1111-4111-8111-111111111111';
+  const store = {
+    getState: () => ({
+      conversation: { convoState: { cascadeId: activeCid } },
+      sideQuestion: {
+        states: {
+          '11111111-1111-4111-8111-111111111111': {
+            minimized: false,
+            history: [{ cascadeId: 'sq-1', question: 'Why?' }],
+          },
+        },
+      },
+      sidePanelV2: { panes: {} },
+    }),
+    dispatch: () => {
+      if (shouldThrowOnDispatch) throw new Error('host dispatch failed');
+    },
+  };
+
+  const html = makeEl('html');
+  const head = html.appendChild(makeEl('head'));
+  const body = html.appendChild(makeEl('body', { className: 'theme-dark' }));
+  const root = body.appendChild(makeEl('div', { attrs: { id: 'root' } }));
+  root.__reactContainer$test = { current: { memoizedProps: { value: { store } } } };
+
+  const convo1 = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'conversation-view', 'data-cascade-id': '11111111-1111-4111-8111-111111111111' } }));
+  const box1 = convo1.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box', 'data-cascade-id': '11111111-1111-4111-8111-111111111111' } }));
+  const card1 = box1.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  const ed1 = card1.appendChild(makeEl('div', { attrs: { contenteditable: 'true' }, text: 'unsent user draft' }));
+
+  const convo2 = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'conversation-view', 'data-cascade-id': '22222222-2222-4222-8222-222222222222' } }));
+  const box2 = convo2.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box', 'data-cascade-id': '22222222-2222-4222-8222-222222222222' } }));
+  const card2 = box2.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  const ed2 = card2.appendChild(makeEl('div', { attrs: { contenteditable: 'true' }, text: '' }));
+
+  const sidePane = body.appendChild(makeEl('div', { attrs: { 'data-aux-pane-open': 'true' } }));
+  const strip = sidePane.appendChild(makeEl('div', { attrs: { 'data-side-panel-strip': '1', 'data-active-tab-id': 'browser__1' } }));
+  const sqTabBtn = strip.appendChild(makeEl('button', { attrs: { 'data-tab-id': 'side_question__sq-1' } }));
+  const sqBox = sidePane.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+  const sqEditor = sqBox.appendChild(makeEl('div', { attrs: { contenteditable: 'true' } }));
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    hidden: false,
+    createElement: (t) => makeEl(t),
+    createTextNode: (t) => ({ nodeType: 3, textContent: String(t ?? '') }),
+    getElementById: (id) => html.querySelectorAll('*').find((e) => e.getAttribute('id') === id) || null,
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+
+  const sandbox = {
+    document: doc,
+    location: { href: 'https://127.0.0.1:2015/', protocol: 'https:', hostname: '127.0.0.1', pathname: '/' },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(cdp.buildInjectExpression(cdp.DEFAULT_CONFIG), sandbox);
+
+    // 1. Non-empty draft in convo1 is preserved
+    const draftRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: '11111111-1111-4111-8111-111111111111' });
+    assert.equal(draftRes.ok, false);
+    assert.equal(draftRes.reason, 'draft_present');
+    assert.equal(ed1.textContent, 'unsent user draft', 'Draft text must never be overwritten');
+
+    const forceNewRes = sandbox.window.__agClaudeStudio.openSideQuestion({ forceNew: true, conversationId: '11111111-1111-4111-8111-111111111111' });
+    assert.equal(forceNewRes.ok, false);
+    assert.equal(forceNewRes.action, 'draft_present');
+    assert.equal(ed1.textContent, 'unsent user draft');
+
+    // 2. Empty composer in convo2 is targeted cleanly without touching convo1
+    const c2Res = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: '22222222-2222-4222-8222-222222222222' });
+    assert.equal(c2Res.ok, true);
+    assert.equal(ed2.textContent, '/btw');
+    assert.equal(ed1.textContent, 'unsent user draft');
+
+    // 3. Restore error returns explicit restore_failed and never overwrites draft
+    shouldThrowOnDispatch = true;
+    const errRes = sandbox.window.__agClaudeStudio.openSideQuestion({ conversationId: '11111111-1111-4111-8111-111111111111', cascadeId: 'sq-1' });
+    assert.equal(errRes.ok, false);
+    assert.equal(errRes.action, 'restore_failed');
+    assert.equal(ed1.textContent, 'unsent user draft', 'Restore error must not overwrite user draft');
+
+    // 4. Destroy cancels pending 40-140ms restore timers so they do not click tabs or steal focus
+    shouldThrowOnDispatch = false;
+    const okRes = sandbox.window.__agClaudeStudio.openSideQuestion({ conversationId: '11111111-1111-4111-8111-111111111111', cascadeId: 'sq-1' });
+    assert.equal(okRes.ok, true);
+    const clicksAtRestore = sqTabBtn.clicks;
+    const focusAtRestore = sqEditor.focusCount;
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    await new Promise((r) => setTimeout(r, 180));
+    assert.equal(sqTabBtn.clicks, clicksAtRestore, 'Destroyed runtime must not fire delayed tab click');
+    assert.equal(sqEditor.focusCount, focusAtRestore, 'Destroyed runtime must not steal focus after unmount');
+  } finally {
+    for (const id of timers) clearTimeout(id);
   }
 });
