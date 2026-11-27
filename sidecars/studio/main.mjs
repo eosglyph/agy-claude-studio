@@ -93,31 +93,41 @@ function detectUsageMonitorInstalled(pluginDirs) {
 }
 
 const REMOTE_LOCALE_MANIFEST_TTL_MS = 10 * 60 * 1000;
-let remoteLocaleManifestCache = { at: 0, value: null, inFlight: null };
+const REMOTE_LOCALE_RETRY_MS = 30_000;
 
-function getRemoteLocaleManifestNonBlocking() {
-  const now = Date.now();
-  if (now - remoteLocaleManifestCache.at >= REMOTE_LOCALE_MANIFEST_TTL_MS && !remoteLocaleManifestCache.inFlight) {
-    remoteLocaleManifestCache.inFlight = i18nSync
-      .fetchRemoteLocaleManifest({
-        userAgent: `agy-claude-studio/${cdp.PLUGIN_VERSION}`,
-        timeoutMs: 5000,
-      })
-      .then((manifest) => {
-        if (manifest) {
-          remoteLocaleManifestCache.value = manifest;
-        }
-        remoteLocaleManifestCache.at = Date.now();
-      })
-      .catch(() => {
-        remoteLocaleManifestCache.at = Date.now();
-      })
-      .finally(() => {
-        remoteLocaleManifestCache.inFlight = null;
-      });
+function createRemoteLocaleManifestCache(fetchManifest, now = Date.now) {
+  let value = null;
+  let lastSuccessAt = -Infinity;
+  let lastAttemptAt = -Infinity;
+  let inFlight = null;
+
+  function recordSuccess(manifest) {
+    const locales = manifest?.locales;
+    if (!locales || typeof locales !== 'object' || Array.isArray(locales) || Object.keys(locales).length === 0) return;
+    value = manifest;
+    lastSuccessAt = now();
   }
-  return remoteLocaleManifestCache.value;
+
+  function read() {
+    const time = now();
+    const stale = time - lastSuccessAt >= REMOTE_LOCALE_MANIFEST_TTL_MS;
+    if (stale && !inFlight && time - lastAttemptAt >= REMOTE_LOCALE_RETRY_MS) {
+      const previous = value;
+      lastAttemptAt = time;
+      inFlight = Promise.resolve().then(fetchManifest).then((manifest) => {
+        // A manual sync may have supplied newer data while this request was pending.
+        if (value === previous) recordSuccess(manifest);
+      }).catch(() => {}).finally(() => { inFlight = null; });
+    }
+    return { value, stale };
+  }
+  return { read, recordSuccess };
 }
+
+const remoteLocaleManifestCache = createRemoteLocaleManifestCache(() => i18nSync.fetchRemoteLocaleManifest({
+  userAgent: `agy-claude-studio/${cdp.PLUGIN_VERSION}`,
+  timeoutMs: 5000,
+}));
 
 async function getStudioStatus() {
   const config = cdp.readConfig();
@@ -149,6 +159,7 @@ async function getStudioStatus() {
   const hostInfo = !activePort ? lifecycle.resolveDesktopHostExecutable() : { found: false };
   const canRelaunch = Boolean(hostInfo.found || process.platform === 'win32' || process.platform === 'darwin');
 
+  const remoteManifest = remoteLocaleManifestCache.read();
   const compatInfo = cdp.readI18nCompatData();
   const updateState = await inspectGitRepoStateAsyncCached(PLUGIN_ROOT_DIR);
   const hasPluginManifest = existsSync(join(PLUGIN_ROOT_DIR, 'plugin.json'));
@@ -179,9 +190,12 @@ async function getStudioStatus() {
       pluginCount: compatInfo.plugins.length,
       selectorCount: compatInfo.selectors.length,
     },
-    i18nPack: i18nSync.getLocalePackStatus(config.language, cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR, {
-      remoteManifest: getRemoteLocaleManifestNonBlocking(),
-    }),
+    i18nPack: {
+      ...i18nSync.getLocalePackStatus(config.language, cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR, {
+        remoteManifest: remoteManifest.value,
+      }),
+      stale: remoteManifest.stale,
+    },
     notify: notifyCore.getNotifyStatusSummary(resolveNotifyDir()),
     update: {
       isGitRepo: updateState.isGitRepo,
@@ -452,10 +466,10 @@ function inspectGitRepoState(pluginDir = PLUGIN_ROOT_DIR, execFn = execFileSync)
   const isGitRepo = Boolean(pluginDir && existsSync(join(pluginDir, '.git')));
   if (!isGitRepo) return { isGitRepo: false, gitClean: false, branch: '' };
   try {
-    const statusOut = String(execFn('git', ['status', '--porcelain'], { cwd: pluginDir, encoding: 'utf8', timeout: 5000 })).trim();
+    const statusOut = String(execFn('git', ['status', '--porcelain'], { cwd: pluginDir, env: buildSafeChildEnv(), encoding: 'utf8', timeout: 5000 })).trim();
     let branch = '';
     try {
-      branch = String(execFn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: pluginDir, encoding: 'utf8', timeout: 5000 })).trim();
+      branch = String(execFn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: pluginDir, env: buildSafeChildEnv(), encoding: 'utf8', timeout: 5000 })).trim();
     } catch {}
     return { isGitRepo: true, gitClean: statusOut.length === 0, branch };
   } catch {
@@ -468,7 +482,7 @@ const gitStateAsyncCache = new Map(); // resolvedDir -> { at, value, promise }
 
 function execGitAsync(args, cwd, timeoutMs = 5000) {
   return new Promise((resolvePromise, rejectPromise) => {
-    execFile('git', args, { cwd, encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
+    execFile('git', args, { cwd, env: buildSafeChildEnv(), encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
       if (err) return rejectPromise(err);
       resolvePromise(String(stdout || '').trim());
     });
@@ -856,6 +870,10 @@ function applyArchiveCopyPlan(files, backupDir) {
   }
 }
 
+function buildSafeChildEnv(baseEnv = process.env) {
+  return Object.fromEntries(Object.entries(baseEnv).filter(([key]) => !/^ANTIGRAVITY_SIDECAR_/i.test(key)));
+}
+
 /**
  * Run the newly installed src/inject.js in a fresh Node subprocess so
  * post-upgrade reinjection never uses stale in-memory require() caches.
@@ -875,6 +893,7 @@ function runSubprocessReinject(
       [injectScript],
       {
         cwd: rootDir,
+        env: buildSafeChildEnv(),
         timeout: timeoutMs,
         windowsHide: true,
         encoding: 'utf8',
@@ -904,6 +923,32 @@ function runSubprocessReinject(
   });
 }
 
+const RELEASE_TAG = /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+const UPDATE_NOT_APPLIED = Object.freeze({
+  ok: false, filesUpdated: false, reinjectOk: null, reinjectError: '', needsRestart: false,
+});
+
+function requiresBackendRestart(file) {
+  return /^(?:src[\\/].+\.js|plugin[\\/]|sidecars[\\/].+\.m?js|(?:plugin|package)\.json$)/i.test(file);
+}
+
+async function activateUpdate(reinjectFn, filesUpdated, backendChanged) {
+  try {
+    const result = await reinjectFn();
+    if (result?.ok === false || (typeof result?.code === 'number' && result.code !== 0)) {
+      throw new Error(result.error || result.stderr || `Reinjection failed (code ${result.code ?? 'unknown'})`);
+    }
+    return {
+      filesUpdated,
+      reinjectOk: true,
+      reinjectError: backendChanged ? 'Restart Antigravity to load the updated plugin backend.' : '',
+      needsRestart: backendChanged,
+    };
+  } catch (err) {
+    return { filesUpdated, reinjectOk: false, reinjectError: err?.message || String(err), needsRestart: true };
+  }
+}
+
 async function performArchiveSelfUpdate({
   pluginDir,
   pluginDataDir,
@@ -914,10 +959,10 @@ async function performArchiveSelfUpdate({
   timeoutMs = 30000,
 } = {}) {
   if (!isValidStudioPluginDir(pluginDir)) {
-    return { ok: false, reason: 'not_git_repo', releaseUrl: LATEST_RELEASE_WEB_URL };
+    return { ...UPDATE_NOT_APPLIED, reason: 'not_git_repo', releaseUrl: LATEST_RELEASE_WEB_URL };
   }
   if (!fetchFn) {
-    return { ok: false, reason: 'fetch_unavailable', releaseUrl: LATEST_RELEASE_WEB_URL };
+    return { ...UPDATE_NOT_APPLIED, reason: 'fetch_unavailable', releaseUrl: LATEST_RELEASE_WEB_URL };
   }
 
   let cleanTag = String(targetTag || '').trim();
@@ -925,7 +970,7 @@ async function performArchiveSelfUpdate({
     const chk = await checkStudioUpdate({ fetchFn, pluginDir, execFn, forceRefresh: true });
     if (!chk.ok || !chk.latestTag) {
       return {
-        ok: false,
+        ...UPDATE_NOT_APPLIED,
         reason: 'update_check_failed',
         error: chk?.error || 'Could not resolve latest release tag',
         releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -933,8 +978,8 @@ async function performArchiveSelfUpdate({
     }
     cleanTag = chk.latestTag;
   }
-  if (!/^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(cleanTag)) {
-    return { ok: false, reason: 'invalid_tag', error: `Invalid release tag: ${cleanTag}`, releaseUrl: LATEST_RELEASE_WEB_URL };
+  if (!RELEASE_TAG.test(cleanTag)) {
+    return { ...UPDATE_NOT_APPLIED, reason: 'invalid_tag', error: `Invalid release tag: ${cleanTag}`, releaseUrl: LATEST_RELEASE_WEB_URL };
   }
 
   const normalizedTag = cleanTag.startsWith('v') ? cleanTag : `v${cleanTag}`;
@@ -955,7 +1000,7 @@ async function performArchiveSelfUpdate({
       });
       if (!res.ok) {
         return {
-          ok: false,
+          ...UPDATE_NOT_APPLIED,
           reason: 'archive_download_failed',
           error: `HTTP ${res.status}`,
           releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -968,7 +1013,7 @@ async function performArchiveSelfUpdate({
 
     if (!buf || buf.length < 100) {
       return {
-        ok: false,
+        ...UPDATE_NOT_APPLIED,
         reason: 'archive_download_failed',
         error: 'Downloaded archive is empty',
         releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -977,12 +1022,12 @@ async function performArchiveSelfUpdate({
 
     writeFileSync(archivePath, buf);
     mkdirSync(extractDir, { recursive: true });
-    execFn('tar', ['-xzf', archivePath, '-C', extractDir], { encoding: 'utf8', timeout: timeoutMs });
+    execFn('tar', ['-xzf', archivePath, '-C', extractDir], { env: buildSafeChildEnv(), encoding: 'utf8', timeout: timeoutMs });
 
     const sourceRoot = findExtractedStudioRoot(extractDir);
     if (!sourceRoot) {
       return {
-        ok: false,
+        ...UPDATE_NOT_APPLIED,
         reason: 'archive_invalid',
         error: 'Release archive missing valid plugin.json',
         releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -991,6 +1036,9 @@ async function performArchiveSelfUpdate({
 
     const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
     const files = getArchiveCopyPlan(sourceRoot, installRoot, isProtected);
+    const backendChanged = files.some(({ src, dst, exists }) =>
+      requiresBackendRestart(relative(installRoot, dst)) && (!exists || !readFileSync(src).equals(readFileSync(dst)))
+    );
     applyArchiveCopyPlan(files, join(tmpRoot, 'backup'));
 
     try {
@@ -1004,12 +1052,10 @@ async function performArchiveSelfUpdate({
     } catch {}
 
     updateCheckCache = { at: 0, value: null };
-    try {
-      await reinjectFn();
-    } catch {}
 
     return {
       ok: true,
+      ...(await activateUpdate(reinjectFn, true, backendChanged)),
       mode: 'archive',
       updated: true,
       version: nextVersion,
@@ -1017,7 +1063,7 @@ async function performArchiveSelfUpdate({
     };
   } catch (err) {
     return {
-      ok: false,
+      ...UPDATE_NOT_APPLIED,
       reason: 'archive_update_failed',
       error: err?.message || String(err),
       releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -1051,50 +1097,66 @@ async function performStudioSelfUpdate({
       });
     }
     return {
-      ok: false,
+      ...UPDATE_NOT_APPLIED,
       reason: 'not_git_repo',
       releaseUrl: LATEST_RELEASE_WEB_URL,
     };
   }
   if (!gitState.gitClean) {
     return {
-      ok: false,
+      ...UPDATE_NOT_APPLIED,
       reason: 'dirty_worktree',
       branch: gitState.branch,
       releaseUrl: LATEST_RELEASE_WEB_URL,
     };
   }
   try {
-    const options = { cwd: pluginDir, encoding: 'utf8', timeout: 25000 };
-    execFn('git', ['fetch', '--tags', 'origin'], options);
-    const upstream = String(execFn('git', ['rev-parse', '--verify', '@{upstream}^{commit}'], options)).trim();
-    if (!/^[a-f0-9]{40,64}$/.test(upstream)) throw new Error('Invalid upstream commit');
-    const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
-    const changes = String(execFn('git', ['diff', '--name-only', '--no-renames', '-z', 'HEAD', upstream, '--'], options));
-    if (changes.split('\0').some((file) => file && isProtected(resolve(installRoot, file), true))) {
-      return { ok: false, reason: 'protected_data_path', releaseUrl: LATEST_RELEASE_WEB_URL };
+    const options = { cwd: pluginDir, env: buildSafeChildEnv(), encoding: 'utf8', timeout: 25000 };
+    const requested = String(targetTag || '').trim();
+    if (requested && !RELEASE_TAG.test(requested)) {
+      return { ...UPDATE_NOT_APPLIED, reason: 'invalid_tag', error: `Invalid release tag: ${requested}` };
     }
-    const pullOut = String(execFn('git', ['merge', '--ff-only', '--no-overwrite-ignore', upstream], options)).trim();
+    const tag = requested && (requested.startsWith('v') ? requested : `v${requested}`);
+    const ref = tag ? `refs/tags/${tag}` : '@{upstream}';
+    if (tag) execFn('git', ['fetch', 'origin', `${ref}:${ref}`], options);
+    else execFn('git', ['fetch', '--tags', 'origin'], options);
+    const target = String(execFn('git', ['rev-parse', '--verify', `${ref}^{commit}`], options)).trim();
+    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(target)) throw new Error(`Invalid commit for ${ref}`);
+    if (tag) {
+      try {
+        execFn('git', ['merge-base', '--is-ancestor', 'HEAD', target], options);
+      } catch (err) {
+        if (err.status !== 1) throw err;
+        return { ...UPDATE_NOT_APPLIED, reason: 'not_fast_forward', error: `Cannot fast-forward HEAD to ${tag}` };
+      }
+    }
+    const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
+    const diff = execFn('git', ['diff', '--name-only', '--no-renames', '-z', 'HEAD', target, '--'], options);
+    const changes = String(diff).split('\0').filter(Boolean);
+    if (changes.some((file) => isProtected(resolve(installRoot, file), true))) {
+      return { ...UPDATE_NOT_APPLIED, reason: 'protected_data_path', releaseUrl: LATEST_RELEASE_WEB_URL };
+    }
+    const pullOut = String(execFn('git', ['merge', '--ff-only', '--no-overwrite-ignore', target], options)).trim();
+    const updated = !/already up[ -]to[ -]date/i.test(pullOut);
     let nextVersion = cdp.PLUGIN_VERSION;
     try {
       const pkg = JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8'));
       if (pkg?.version) nextVersion = String(pkg.version);
     } catch {}
     updateCheckCache = { at: 0, value: null };
-    try {
-      await reinjectFn();
-    } catch {}
     return {
       ok: true,
+      ...(await activateUpdate(reinjectFn, updated, updated && changes.some(requiresBackendRestart))),
       mode: 'git',
-      updated: !/already up to date/i.test(pullOut),
+      tag,
+      updated,
       output: pullOut,
       version: nextVersion,
       branch: gitState.branch,
     };
   } catch (err) {
     return {
-      ok: false,
+      ...UPDATE_NOT_APPLIED,
       reason: 'git_pull_failed',
       error: err?.message || String(err),
       releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -1189,10 +1251,7 @@ async function syncI18nPackApi({
       fetchFn,
       userAgent: `agy-claude-studio/${cdp.PLUGIN_VERSION}`,
     });
-    if (syncRes.remoteManifest) {
-      remoteLocaleManifestCache.value = syncRes.remoteManifest;
-      remoteLocaleManifestCache.at = Date.now();
-    }
+    remoteLocaleManifestCache.recordSuccess(syncRes.remoteManifest);
     try {
       await reinjectFn();
     } catch {}
@@ -2749,7 +2808,7 @@ function spawnDetachedSafe(cmd, args, options, spawnFn = spawn) {
     let child;
     let timer;
     try {
-      child = spawnFn(cmd, args, { detached: true, stdio: 'ignore', shell: false, ...options });
+      child = spawnFn(cmd, args, { detached: true, stdio: 'ignore', shell: false, ...options, env: buildSafeChildEnv() });
       child.once('error', (err) => {
         clearTimeout(timer);
         done({ ok: false, error: err?.code || 'launcher_failed' });
@@ -3203,6 +3262,9 @@ if (isSameEntryPath(invokedPath, currentPath)) {
 }
 
 export {
+  buildSafeChildEnv,
+  createRemoteLocaleManifestCache,
+  spawnDetachedSafe,
   registerStudioApis,
   detectUsageMonitorInstalled,
   compareSemver,

@@ -227,9 +227,9 @@ function startMcpPluginHost() {
   } catch {}
   try {
     const cleanupRes = cleanupLegacyFlatRootFiles(PLUGIN_ROOT);
-    if (!cleanupRes.skipped && (cleanupRes.removed.length > 0 || cleanupRes.errors.length > 0)) {
+    if (!cleanupRes.skipped && (cleanupRes.removed.length > 0 || cleanupRes.preserved.length > 0 || cleanupRes.errors.length > 0)) {
       appendSafeLog(
-        `Legacy root cleanup: removed=${cleanupRes.removed.length} errors=${cleanupRes.errors.length}`
+        `Legacy root cleanup: removed=${cleanupRes.removed.length} preserved=${cleanupRes.preserved.length} errors=${cleanupRes.errors.length}`
       );
     }
   } catch {}

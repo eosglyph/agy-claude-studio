@@ -2963,6 +2963,7 @@
         tabSettings: '设置',
         upgradePill: (v) => `↓ 升级 v${v}`,
         upgradeRunning: '升级中…',
+        upgradeNeedsRestart: '文件已更新，但需要重启 Antigravity 以完成激活。',
         upgradeReloading: (v) => `已升级至 v${v}，正在重载…`,
         upgradeDirtyGit: '检测到本地有未提交修改，已为你打开发布页手动更新',
         upgradeManual: '当前安装目录不支持原地覆盖，已打开发布页',
@@ -3129,6 +3130,7 @@
         tabSettings: '設定',
         upgradePill: (v) => `↓ 升級 v${v}`,
         upgradeRunning: '升級中…',
+        upgradeNeedsRestart: '檔案已更新，請重新啟動 Antigravity 以完成啟用。',
         upgradeReloading: (v) => `已升級至 v${v}，正在重新載入…`,
         upgradeDirtyGit: '偵測到本機有未提交變更，已開啟發佈頁供手動更新',
         upgradeManual: '目前安裝目錄不支援原地覆蓋，已開啟發佈頁',
@@ -3295,6 +3297,7 @@
         tabSettings: '設定',
         upgradePill: (v) => `↓ 升級 v${v}`,
         upgradeRunning: '升級緊…',
+        upgradeNeedsRestart: '檔案已更新，請重新啟動 Antigravity 完成啟用。',
         upgradeReloading: (v) => `已升級至 v${v}，重新載入緊…`,
         upgradeDirtyGit: '搵到本機有未提交改動，已開返發佈頁手動更新',
         upgradeManual: '目前安裝目錄唔支援原地覆蓋，已開啟發佈頁',
@@ -3461,6 +3464,7 @@
         tabSettings: 'Settings',
         upgradePill: (v) => `↓ v${v}`,
         upgradeRunning: 'Updating…',
+        upgradeNeedsRestart: 'Files updated. Restart Antigravity to activate the update.',
         upgradeReloading: (v) => `Updated to v${v}, reloading…`,
         upgradeDirtyGit: 'Local uncommitted changes detected; opened release page instead',
         upgradeManual: 'In-place update unavailable here; opened release page',
@@ -3627,6 +3631,7 @@
         tabSettings: '設定',
         upgradePill: (v) => `↓ v${v}`,
         upgradeRunning: '更新中…',
+        upgradeNeedsRestart: 'ファイルを更新しました。Antigravity を再起動して更新を有効にしてください。',
         upgradeReloading: (v) => `v${v} へ更新しました。再読み込み中…`,
         upgradeDirtyGit: '未コミットの変更があるためリリースページを開きました',
         upgradeManual: '上書き更新できないためリリースページを開きました',
@@ -5442,6 +5447,10 @@
         }
         const nextVer = data.version || lastUpdateCheck?.latestVersion || '';
         lastUpdateCheck = { hasUpdate: false, currentVersion: nextVer };
+        if (data.reinjectOk === false || data.needsRestart === true) {
+          showToast(t.upgradeNeedsRestart);
+          return;
+        }
         showToast(t.upgradeReloading(nextVer));
         await refreshStatus();
         setTimeout(() => {

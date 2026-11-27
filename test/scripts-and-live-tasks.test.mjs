@@ -477,7 +477,7 @@ test('getConversationInspectorApi returns real environment, context breakdown, c
 
 test('performStudioSelfUpdate supports non-git release archive auto-upgrade while preserving PLUGIN_DATA', async () => {
   const { execFileSync } = await import('node:child_process');
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-arch-'));
+  const tmpDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-arch-')));
   try {
     const pluginDir = path.join(tmpDir, 'installed-plugin');
     const pluginDataDir = path.join(pluginDir, 'sidecars', 'custom-data');
@@ -522,6 +522,9 @@ test('performStudioSelfUpdate supports non-git release archive auto-upgrade whil
     assert.equal(updRes.ok, true);
     assert.equal(updRes.mode, 'archive');
     assert.equal(updRes.version, '2.2.0');
+    assert.equal(updRes.filesUpdated, true);
+    assert.equal(updRes.reinjectOk, true);
+    assert.equal(updRes.needsRestart, true);
     assert.equal(reinjected, true);
     assert.equal(fs.readFileSync(path.join(pluginDir, 'marker.txt'), 'utf8'), 'new-v2.2.0');
     assert.equal(fs.readFileSync(path.join(pluginDir, 'sidecars', 'marker.txt'), 'utf8'), 'updated sibling');
