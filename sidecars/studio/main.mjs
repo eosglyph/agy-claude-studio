@@ -2176,11 +2176,167 @@ function readGitConfigOriginUrl(gitDir, commonDir) {
   return '';
 }
 
+function parseGitHeadBranch(gitDir) {
+  try {
+    const headPath = join(gitDir, 'HEAD');
+    if (!existsSync(headPath)) return '';
+    const head = readFileSync(headPath, 'utf8').trim();
+    const refMatch = head.match(/^ref:\s*refs\/heads\/(.+)$/);
+    if (refMatch) return refMatch[1].trim();
+    if (/^[0-9a-f]{7,40}$/i.test(head)) return head.slice(0, 7);
+  } catch {}
+  return '';
+}
+
+function readGitDirActivityMs(gitDir) {
+  let latest = 0;
+  for (const rel of ['index', 'HEAD', join('logs', 'HEAD')]) {
+    try {
+      const p = join(gitDir, rel);
+      if (!existsSync(p)) continue;
+      const mtime = Number(statSync(p).mtimeMs || 0);
+      if (mtime > latest) latest = mtime;
+    } catch {}
+  }
+  return latest;
+}
+
+function isPathSameOrInside(rootCanonical, candidateCanonical, win = process.platform === 'win32') {
+  if (!rootCanonical || !candidateCanonical) return false;
+  const a = win ? rootCanonical.toLowerCase() : rootCanonical;
+  const b = win ? candidateCanonical.toLowerCase() : candidateCanonical;
+  const rel = relative(a, b);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+function getWorktreeBranchTieRank(branch) {
+  const b = String(branch || '').trim().toLowerCase();
+  if (!b) return -1;
+  if (b === 'main' || b === 'master') return 0;
+  if (b === 'dev' || b === 'develop') return 1;
+  return 2;
+}
+
+function discoverContainerWorktrees(workspaceDir) {
+  const found = new Map();
+  let commonDir = '';
+  let rootReal = '';
+  const win = process.platform === 'win32';
+  try {
+    rootReal = realpathSync.native(resolve(workspaceDir));
+  } catch {
+    return { worktrees: [], commonDir: '' };
+  }
+
+  const registerWorktree = (rawWtPath, rawGitDir, rawCommonDir = '') => {
+    if (!rawWtPath || !rawGitDir) return;
+    let wtReal = '';
+    try {
+      wtReal = realpathSync.native(resolve(rawWtPath));
+      if (!statSync(wtReal).isDirectory()) return;
+    } catch {
+      return;
+    }
+    if (!isPathSameOrInside(rootReal, wtReal, win)) return;
+    if (!existsSync(rawGitDir)) return;
+
+    const branch = parseGitHeadBranch(rawGitDir);
+    if (!branch) return;
+
+    let resolvedCommon = rawCommonDir;
+    if (!resolvedCommon && existsSync(join(rawGitDir, 'commondir'))) {
+      try {
+        const relCommon = readFileSync(join(rawGitDir, 'commondir'), 'utf8').trim();
+        if (relCommon) resolvedCommon = resolve(rawGitDir, relCommon);
+      } catch {}
+    }
+    if (!commonDir && resolvedCommon && existsSync(resolvedCommon)) {
+      commonDir = resolvedCommon;
+    }
+
+    const key = win ? wtReal.toLowerCase() : wtReal;
+    const mtimeMs = readGitDirActivityMs(rawGitDir);
+    const relPath = relative(rootReal, wtReal).split(sep).join('/');
+    const prev = found.get(key);
+    if (!prev || mtimeMs > prev.mtimeMs) {
+      found.set(key, {
+        name: basename(wtReal),
+        branch,
+        path: wtReal,
+        relPath,
+        mtimeMs,
+        active: false,
+      });
+    }
+  };
+
+  // Source 1: .repo/.git/worktrees/*
+  const repoGitDir = join(rootReal, '.repo', '.git');
+  const repoWorktreesDir = join(repoGitDir, 'worktrees');
+  if (existsSync(repoWorktreesDir)) {
+    if (!commonDir && existsSync(repoGitDir)) commonDir = repoGitDir;
+    try {
+      for (const ent of readdirSync(repoWorktreesDir, { withFileTypes: true })) {
+        if (!ent.isDirectory()) continue;
+        const wtGitDir = join(repoWorktreesDir, ent.name);
+        const gitdirFile = join(wtGitDir, 'gitdir');
+        if (!existsSync(gitdirFile)) continue;
+        try {
+          const ptr = readFileSync(gitdirFile, 'utf8').trim();
+          if (!ptr) continue;
+          const resolvedGitFile = resolve(wtGitDir, ptr);
+          const wtPath = basename(resolvedGitFile).toLowerCase() === '.git' ? dirname(resolvedGitFile) : resolvedGitFile;
+          registerWorktree(wtPath, wtGitDir, repoGitDir);
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // Source 2: worktree/*/.git and worktrees/*/.git
+  for (const containerName of ['worktree', 'worktrees']) {
+    const containerDir = join(rootReal, containerName);
+    if (!existsSync(containerDir)) continue;
+    try {
+      for (const ent of readdirSync(containerDir, { withFileTypes: true })) {
+        if (!ent.isDirectory()) continue;
+        const wtPath = join(containerDir, ent.name);
+        const dotGit = join(wtPath, '.git');
+        if (!existsSync(dotGit)) continue;
+        try {
+          if (!statSync(dotGit).isFile()) continue;
+          const ptr = readFileSync(dotGit, 'utf8').trim();
+          const m = ptr.match(/^gitdir:\s*(.+)$/i);
+          if (!m) continue;
+          const wtGitDir = resolve(wtPath, m[1].trim());
+          if (!/[\\/]worktrees[\\/]/i.test(wtGitDir) && !existsSync(join(wtGitDir, 'commondir'))) continue;
+          registerWorktree(wtPath, wtGitDir);
+        } catch {}
+      }
+    } catch {}
+  }
+
+  const list = Array.from(found.values()).sort((a, b) => {
+    if (b.mtimeMs !== a.mtimeMs) return b.mtimeMs - a.mtimeMs;
+    const rankDiff = getWorktreeBranchTieRank(b.branch) - getWorktreeBranchTieRank(a.branch);
+    if (rankDiff !== 0) return rankDiff;
+    return a.name.localeCompare(b.name);
+  });
+
+  if (list.length > 0) {
+    list[0].active = true;
+  }
+
+  return { worktrees: list, commonDir };
+}
+
 function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
   const fallbackBranch = String(wsMeta?.branchName || '').trim();
   const metaOriginUrl = String(wsMeta?.repository?.gitOriginUrl || '').trim();
   let branch = fallbackBranch;
   let isWorktree = false;
+  let worktreePath = '';
+  let worktreeName = '';
+  let worktrees = [];
   let rawOriginUrl = metaOriginUrl;
 
   if (workspaceDir && existsSync(workspaceDir)) {
@@ -2196,6 +2352,12 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
             gitDir = resolve(workspaceDir, m[1].trim());
             if (/[\\/]worktrees[\\/]/i.test(gitDir) || existsSync(join(gitDir, 'commondir'))) {
               isWorktree = true;
+              try {
+                worktreePath = realpathSync.native(resolve(workspaceDir));
+              } catch {
+                worktreePath = resolve(workspaceDir);
+              }
+              worktreeName = basename(worktreePath);
             }
           }
         }
@@ -2207,15 +2369,23 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
         }
         if (!commonDir) commonDir = gitDir;
 
-        const headPath = join(gitDir, 'HEAD');
-        if (existsSync(headPath)) {
-          const head = readFileSync(headPath, 'utf8').trim();
-          const refMatch = head.match(/^ref:\s*refs\/heads\/(.+)$/);
-          if (refMatch) branch = refMatch[1].trim();
-          else if (/^[0-9a-f]{7,40}$/i.test(head)) branch = head.slice(0, 7);
-        }
+        const parsedBranch = parseGitHeadBranch(gitDir);
+        if (parsedBranch) branch = parsedBranch;
         if (!rawOriginUrl) {
           rawOriginUrl = readGitConfigOriginUrl(gitDir, commonDir);
+        }
+      } else {
+        const discovered = discoverContainerWorktrees(workspaceDir);
+        if (discovered.worktrees.length > 0) {
+          const activeWt = discovered.worktrees[0];
+          branch = activeWt.branch;
+          isWorktree = true;
+          worktreePath = activeWt.path;
+          worktreeName = activeWt.name;
+          worktrees = discovered.worktrees;
+          if (!rawOriginUrl && discovered.commonDir) {
+            rawOriginUrl = readGitConfigOriginUrl(discovered.commonDir, discovered.commonDir);
+          }
         }
       }
     } catch {}
@@ -2225,6 +2395,9 @@ function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
   return {
     branch,
     isWorktree,
+    worktreePath,
+    worktreeName,
+    worktrees,
     repoWebUrl: normalized.url,
     repoHost: normalized.host,
     isGitHub: normalized.isGitHub,
@@ -2598,6 +2771,9 @@ async function getConversationInspectorApi({
     fullPath,
     branch: gitMeta.branch,
     isWorktree: gitMeta.isWorktree,
+    worktreePath: gitMeta.worktreePath || '',
+    worktreeName: gitMeta.worktreeName || '',
+    worktrees: Array.isArray(gitMeta.worktrees) ? gitMeta.worktrees : [],
     repoWebUrl: gitMeta.repoWebUrl,
     repoHost: gitMeta.repoHost,
     isGitHub: gitMeta.isGitHub,
@@ -2786,6 +2962,17 @@ async function collectKnownWorkspaceAllowlist({ env = process.env, fetchFn = typ
       const real = realpathSync.native(clean);
       dirs.add(process.platform === 'win32' ? real.toLowerCase() : real);
       const gitMeta = inspectWorkspaceGitMeta(real, wsMeta);
+      if (Array.isArray(gitMeta.worktrees)) {
+        for (const wt of gitMeta.worktrees) {
+          if (!wt?.path) continue;
+          try {
+            const wtReal = realpathSync.native(wt.path);
+            if (isPathSameOrInside(real, wtReal, process.platform === 'win32')) {
+              dirs.add(process.platform === 'win32' ? wtReal.toLowerCase() : wtReal);
+            }
+          } catch {}
+        }
+      }
       if (gitMeta.repoWebUrl) urls.add(gitMeta.repoWebUrl.toLowerCase());
     } catch {}
     if (wsMeta?.repository?.gitOriginUrl) {
@@ -2877,6 +3064,18 @@ async function performEnvironmentActionApi(
       try {
         const real = realpathSync.native(resolve(String(d)));
         dirAllow.add(win ? real.toLowerCase() : real);
+        const gitMeta = inspectWorkspaceGitMeta(real);
+        if (Array.isArray(gitMeta.worktrees)) {
+          for (const wt of gitMeta.worktrees) {
+            if (!wt?.path) continue;
+            try {
+              const wtReal = realpathSync.native(wt.path);
+              if (isPathSameOrInside(real, wtReal, win)) {
+                dirAllow.add(win ? wtReal.toLowerCase() : wtReal);
+              }
+            } catch {}
+          }
+        }
       } catch {}
     }
   } else {
