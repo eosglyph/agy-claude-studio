@@ -173,7 +173,7 @@ Whether upgrading manually, running the installer, or delegating the upgrade to 
    - If running the Windows 1-Click Installer (`Claude-Studio-v<version>-Windows-x64.exe`), legacy cleanup and migration are handled completely automatically.
    - If upgrading manually or via an AI coding assistant from `v2.1` / `v2.2` / `agy-claude-style`: perform a read-only check first for any running `agy-claude-style-watcher.exe` process or legacy Startup / Add-or-Remove-Programs entries. Ask the user for confirmation before stopping or uninstalling the legacy watcher. Once the legacy watcher has exited, enable the new native plugin (which cleanly unloads and stops injecting whenever toggled off in Plugins).
 3. **Hot-Refresh & Verify**:
-   If Antigravity is already running with `--remote-debugging-port=0`, run `node inject.js` from the plugin directory to hot-refresh active windows without restarting. **Never force-kill a running Antigravity process without explicit user confirmation.** After enabling the plugin, run `studio-setup` or `studio-doctor` to confirm everything is operational.
+   If Antigravity is already running with `--remote-debugging-port=0`, run `npm run inject` (or `node src/inject.js`) from the plugin directory to hot-refresh active windows without restarting. **Never force-kill a running Antigravity process without explicit user confirmation.** After enabling the plugin, run `studio-setup` or `studio-doctor` to confirm everything is operational.
 
 ---
 
@@ -191,7 +191,7 @@ Download `Claude-Studio-v<version>-Windows-x64.exe` from [GitHub Releases](https
 
 Download `Claude-Studio-v<version>-plugin.zip` from [GitHub Releases](https://github.com/eosglyph/agy-claude-studio/releases):
 - Extract the archive into `~/.gemini/config/plugins/` (creating `~/.gemini/config/plugins/agy-claude-studio`).
-- Fully quit Antigravity (including the system tray icon) and relaunch with `--remote-debugging-port=0` (or run `launch.bat` / `./launch.sh`).
+- Fully quit Antigravity (including the system tray icon) and relaunch with `--remote-debugging-port=0` (or run `npm run launch` / `node src/inject.js --launch`).
 - Confirm **`Claude Studio`** is enabled under **Customizations → Plugins**.
 
 > **Platform Note**: The maintainer does not currently have access to physical Mac hardware. macOS and Linux users are encouraged to install via the universal `plugin.zip` or by asking Gemini in Antigravity. Real-hardware feedback is warmly welcomed!
@@ -301,7 +301,7 @@ All settings can be adjusted in real time from the right-side **Claude Studio** 
 <details>
 <summary><b>1. Not injecting automatically after updating to Antigravity 2.33.0+?</b></summary>
 
-Starting in `2.33.0`, Antigravity disables the CDP remote debugging port by default. Fully quit Antigravity (including the background system tray icon) and relaunch it with `--remote-debugging-port=0`, or use the one-click relaunch button in the Studio panel / `launch.bat` / `./launch.sh`. You can also ask Gemini *"Diagnose Claude Studio"* to trigger the `studio-doctor` skill for automated troubleshooting.
+Starting in `2.33.0`, Antigravity disables the CDP remote debugging port by default. Fully quit Antigravity (including the background system tray icon) and relaunch it with `--remote-debugging-port=0`, or use the one-click relaunch button in the Studio panel / `npm run launch` (`node src/inject.js --launch`). You can also ask Gemini *"Diagnose Claude Studio"* to trigger the `studio-doctor` skill for automated troubleshooting.
 
 </details>
 
@@ -346,22 +346,26 @@ agy-claude-studio/
 ├── plugin/mcp-host.js                          # Native lifecycle host (PID reuse check & hot takeover)
 ├── sidecars/studio/                            # 3-Tab right Aux Pane (Chat | Tools | Settings)
 ├── skills/                                     # 4 native skills (setup, doctor, notify, translation-protect)
-├── cdp.js / lifecycle.js                       # CDP client, config migration, process guard & host watchdog
-├── watcher-core.js / inject.js                 # Multi-window hot-reload controller & CLI injection entry
-├── style.css / ui-runtime.js                   # Core theme styles & UI runtime (home, periodic table, slider, /compact)
-├── sidecar-core.js                             # Lightweight reversible translation runtime for Swarm sidecar (/swarm)
-├── periodic-core.js / periodic-sync.js         # Gemini 4 Periodic Table catalog & direct AI Studio sync
-├── effort-core.js                              # Dual-style 60fps reasoning effort slider math model
-├── notify-core.js / scripts/notify-stop.mjs    # 8-channel mobile push engine & Stop hook runner
-├── scripts-core.js / scripts/fetch-agy-changelog.mjs # Local scripts toolbox & Antigravity changelog fetcher
-├── scripts/WindowsFileAction.cs                # Native Windows file action helper (flicker-free Explorer selection & open)
-├── i18n-core.js / i18n-locales.js / i18n-sync.js # 5-language localization engine, locale pack loader & sync pipeline
+├── src/                                        # Core runtime, CDP lifecycle, UI modules & localization engine
+│   ├── cdp.js / lifecycle.js                   # CDP client, config migration, process guard & host watchdog
+│   ├── watcher-core.js / inject.js / remove.js # Multi-window hot-reload controller & CLI inject/remove entries
+│   ├── style.css / ui-runtime.js               # Core theme styles & UI runtime (home, periodic table, slider, /compact)
+│   ├── sidecar-core.js                         # Lightweight reversible translation runtime for Swarm sidecar (/swarm)
+│   ├── periodic-core.js / periodic-sync.js     # Gemini 4 Periodic Table catalog & direct AI Studio sync
+│   ├── effort-core.js                          # Dual-style 60fps reasoning effort slider math model
+│   ├── notify-core.js / scripts-core.js        # 8-channel mobile push engine & local scripts toolbox
+│   ├── i18n-core.js / i18n-locales.js / i18n-sync.js # 5-language localization engine, locale pack loader & sync pipeline
+│   ├── usage-core.js                           # Built-in trajectory parser, token breakdown & heatmap engine
+│   ├── mascot-core.js / crab-assets.js         # Clawd state machine & 19 dual-layer pixel sprite sets
+│   └── ripple-core.js                          # Home ASCII noise field & 2D wave solver
 ├── locales/                                    # Bundled and on-demand language pack dictionaries
-├── usage-core.js                               # Built-in trajectory parser, token breakdown & heatmap engine
-├── mascot-core.js / crab-assets.js             # Clawd state machine & 19 dual-layer pixel sprite sets
-├── ripple-core.js                              # Home ASCII noise field & 2D wave solver
+├── i18n-compat.json                            # Built-in translation protection rules for companion plugins
 ├── installer/ & companion/                     # Windows (C#) / macOS (Swift) installers & companion scripts
-├── scripts/ & test/                            # Build pipelines & node:test automated test suite
+├── scripts/                                    # Stop hook, changelog fetcher, Windows helper & build pipelines
+│   ├── notify-stop.mjs / fetch-agy-changelog.mjs # Stop hook runner & Antigravity changelog fetcher
+│   ├── WindowsFileAction.cs                    # Native Windows file action helper (flicker-free Explorer selection & open)
+│   └── build-*.mjs                             # Installer, macOS, locale-pack & release build scripts
+├── test/                                       # node:test automated test suite
 └── assets/                                     # Icons, animated banners & UI screenshots
 ```
 
