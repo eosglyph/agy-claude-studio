@@ -1803,6 +1803,87 @@ async function triggerDesktopHostRelaunch({
   };
 }
 
+// Migration cleanup list for pre-v2.2.4 installs that still have flat root files
+// alongside the new src/ layout. Safe to remove in v2.4+ once users have upgraded.
+const LEGACY_FLAT_ROOT_FILES = Object.freeze([
+  'cdp.js',
+  'crab-assets.js',
+  'effort-core.js',
+  'i18n-core.js',
+  'i18n-locales.js',
+  'i18n-sync.js',
+  'inject.js',
+  'lifecycle.js',
+  'mascot-core.js',
+  'notify-core.js',
+  'periodic-core.js',
+  'periodic-sync.js',
+  'remove.js',
+  'ripple-core.js',
+  'scripts-core.js',
+  'sidecar-core.js',
+  'style.css',
+  'ui-runtime.js',
+  'usage-core.js',
+  'watcher-core.js',
+  'autostart-off.bat',
+  'autostart-on.bat',
+  'inject.bat',
+  'inject.sh',
+  'launch.bat',
+  'launch.sh',
+  'remove.bat',
+  'remove.sh',
+  'watch-hidden.vbs',
+  'watch.bat',
+  'watch.sh',
+]);
+
+/**
+ * Remove legacy flat root files left over from pre-v2.2.4 installations.
+ * Safe to remove this migration hook in v2.4+.
+ */
+function cleanupLegacyFlatRootFiles(rootDir) {
+  if (!rootDir || typeof rootDir !== 'string') {
+    return { skipped: true, reason: 'invalid_root', removed: [], errors: [] };
+  }
+  const resolvedRoot = path.resolve(rootDir);
+  // Protect git repositories and git worktrees (.git can be a directory or a file).
+  if (fs.existsSync(path.join(resolvedRoot, '.git'))) {
+    return { skipped: true, reason: 'git_repo', removed: [], errors: [] };
+  }
+  // Only clean up after the new src/ layout has been written completely.
+  if (!fs.existsSync(path.join(resolvedRoot, 'src', 'cdp.js'))) {
+    return { skipped: true, reason: 'missing_src_layout', removed: [], errors: [] };
+  }
+
+  const removed = [];
+  const errors = [];
+  for (const name of LEGACY_FLAT_ROOT_FILES) {
+    const targetPath = path.join(resolvedRoot, name);
+    try {
+      const stat = fs.lstatSync(targetPath);
+      if (!stat.isFile()) continue;
+      fs.unlinkSync(targetPath);
+      removed.push(name);
+    } catch (err) {
+      if (err && err.code === 'ENOENT') continue;
+      errors.push({
+        file: name,
+        code: (err && err.code) || '',
+        message: (err && err.message) || String(err),
+      });
+    }
+  }
+
+  return {
+    skipped: false,
+    reason: removed.length > 0 ? 'cleaned' : 'already_clean',
+    removed,
+    errors,
+  };
+}
+
 function exitProcessCleanly(code = 0, settleMs = 50) {
   process.exitCode = code;
   try {
@@ -1846,5 +1927,7 @@ module.exports = {
   resolveDesktopHostExecutable,
   buildWindowsRelaunchInnerScript,
   triggerDesktopHostRelaunch,
+  LEGACY_FLAT_ROOT_FILES,
+  cleanupLegacyFlatRootFiles,
   exitProcessCleanly,
 };
