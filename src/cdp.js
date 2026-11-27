@@ -156,7 +156,7 @@ const CONFIG_VALIDATORS = {
   hudTopBar: 'boolean',
   hudBottomBar: 'boolean',
   hudRimProgress: 'boolean',
-  effortSliderStyle: ['claude', 'chatgpt'],
+  effortSliderStyle: ['claude', 'chatgpt', 'off'],
   effortAccent: 'boolean',
   smoothCaret: 'boolean',
   sidebarRestyle: 'boolean',
@@ -933,7 +933,9 @@ const REMOVE_EXPRESSION = `(() => {
   delete globalThis.__agCsLocales;
   const root = document.documentElement;
   if (root) {
+    root.removeAttribute('data-ag-cs-effort-slider');
     root.removeAttribute('data-ag-cs-effort-accent');
+    root.removeAttribute('data-ag-cs-periodic');
     root.removeAttribute('data-ag-cs-glass');
     root.removeAttribute('data-ag-cs-fx-glass');
     root.removeAttribute('data-ag-cs-fx-scrollbar');

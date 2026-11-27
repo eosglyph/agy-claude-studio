@@ -152,6 +152,10 @@ test('normalizeEffortStyle and Codex effort math stay consistent with dsh-codex-
   assert.equal(effortCore.normalizeEffortStyle('claude'), 'claude');
   assert.equal(effortCore.normalizeEffortStyle('chatgpt'), 'chatgpt');
   assert.equal(effortCore.normalizeEffortStyle('codex'), 'chatgpt');
+  assert.equal(effortCore.normalizeEffortStyle('off'), 'off');
+  assert.equal(effortCore.normalizeEffortStyle('OFF'), 'off');
+  assert.equal(effortCore.normalizeEffortStyle('none'), 'off');
+  assert.equal(effortCore.normalizeEffortStyle(false), 'off');
   assert.equal(effortCore.normalizeEffortStyle('liangwufeng'), 'claude');
   assert.equal(effortCore.normalizeEffortStyle('performance'), 'claude');
   assert.equal(effortCore.normalizeEffortStyle('unknown'), 'claude');
