@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSyn
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const cdp = require('../../cdp.js');
@@ -1688,6 +1688,129 @@ function normalizeChildSubagent(conv, trajSummary) {
   };
 }
 
+function isSummaryStatusRunning(status) {
+  if (status === 2) return true;
+  const s = String(status || '').toUpperCase();
+  return s.includes('RUNNING') || s.includes('CANCELLING');
+}
+
+function normalizeSummaryRunState(status) {
+  const s = String(status || '').toUpperCase();
+  if (s.includes('CANCELLING')) return 'RUN_STATE_CANCELLING';
+  if (status === 2 || s.includes('RUNNING')) return 'RUN_STATE_RUNNING';
+  return 'RUN_STATE_IDLE';
+}
+
+function parseTimestampMs(raw) {
+  if (!raw) return 0;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string') {
+    const ms = Date.parse(raw);
+    return Number.isFinite(ms) ? ms : 0;
+  }
+  if (typeof raw === 'object' && raw.seconds != null) {
+    const sec = Number(raw.seconds);
+    return Number.isFinite(sec) ? sec * 1000 : 0;
+  }
+  return 0;
+}
+
+function mergeSideQuestionItems(cdpItems, activeConvoId, summaries) {
+  const byKey = new Map();
+  const list = [];
+  const parentSummary = activeConvoId && summaries && typeof summaries === 'object' ? summaries[activeConvoId] : null;
+  const sqTitles =
+    parentSummary?.annotations?.sideQuestionTitles && typeof parentSummary.annotations.sideQuestionTitles === 'object'
+      ? parentSummary.annotations.sideQuestionTitles
+      : {};
+  const persistedIds = Array.isArray(parentSummary?.annotations?.sideQuestionCascadeIds)
+    ? parentSummary.annotations.sideQuestionCascadeIds
+    : [];
+
+  const upsert = (raw) => {
+    const cascadeId = String(raw?.cascadeId || '').trim();
+    const tabId =
+      String(raw?.tabId || '').trim() ||
+      (cascadeId ? `side_question__${cascadeId}` : 'side_question__draft');
+    const sqSum = cascadeId && summaries ? summaries[cascadeId] : null;
+    const question =
+      String(raw?.question || '').trim() ||
+      (cascadeId ? String(sqTitles[cascadeId] || '').trim() : '') ||
+      String(sqSum?.annotations?.title || sqSum?.summary || '').trim();
+    const key = cascadeId ? `c:${cascadeId}` : `t:${tabId}:${question.slice(0, 48)}`;
+    const isOpenTab = Boolean(raw?.isOpenTab);
+    const isRunning = Boolean(raw?.isRunning) || isSummaryStatusRunning(sqSum?.status);
+    const stepCount = Math.max(Number(raw?.stepCount || 0) || 0, Number(sqSum?.stepCount || 0) || 0);
+    const startTimestamp = Math.max(
+      Number(raw?.startTimestamp || 0) || 0,
+      parseTimestampMs(sqSum?.lastModifiedTime),
+      parseTimestampMs(sqSum?.createdTime)
+    );
+
+    const existing = byKey.get(key);
+    if (existing) {
+      if (!existing.question && question) existing.question = question;
+      if (!existing.tabId && tabId) existing.tabId = tabId;
+      if (isOpenTab) {
+        existing.isOpenTab = true;
+        existing.minimized = false;
+      }
+      if (isRunning) existing.isRunning = true;
+      if (stepCount > existing.stepCount) existing.stepCount = stepCount;
+      if (startTimestamp > existing.startTimestamp) existing.startTimestamp = startTimestamp;
+      if (existing.index === null && Number.isInteger(raw?.index)) existing.index = raw.index;
+      return;
+    }
+
+    const entry = {
+      id: cascadeId || tabId || `sq_${list.length}`,
+      cascadeId,
+      tabId,
+      question,
+      mode: String(raw?.mode || 'btw'),
+      minimized: isOpenTab ? false : raw?.minimized !== false,
+      isOpenTab,
+      isRunning,
+      stepCount,
+      index: Number.isInteger(raw?.index) ? raw.index : null,
+      startTimestamp,
+    };
+    byKey.set(key, entry);
+    list.push(entry);
+  };
+
+  if (Array.isArray(cdpItems)) {
+    for (const item of cdpItems) upsert(item);
+  }
+  for (const sqId of persistedIds) {
+    const cleanId = String(sqId || '').trim();
+    if (!cleanId) continue;
+    upsert({
+      cascadeId: cleanId,
+      tabId: `side_question__${cleanId}`,
+      question: String(sqTitles[cleanId] || '').trim(),
+      minimized: true,
+    });
+  }
+  for (const [sqId, title] of Object.entries(sqTitles)) {
+    const cleanId = String(sqId || '').trim();
+    if (!cleanId) continue;
+    upsert({
+      cascadeId: cleanId,
+      tabId: `side_question__${cleanId}`,
+      question: String(title || '').trim(),
+      minimized: true,
+    });
+  }
+
+  list.sort((a, b) => {
+    if (Boolean(b.isRunning) !== Boolean(a.isRunning)) return b.isRunning ? 1 : -1;
+    if (Boolean(b.isOpenTab) !== Boolean(a.isOpenTab)) return b.isOpenTab ? 1 : -1;
+    return (b.startTimestamp || 0) - (a.startTimestamp || 0);
+  });
+  return list;
+}
+
 async function getLiveTasksApi({
   env = process.env,
   fetchFn = typeof fetch === 'function' ? fetch : null,
@@ -1698,6 +1821,9 @@ async function getLiveTasksApi({
   const sideQPromise = allowCdpFallback
     ? queryHostSideQuestions(reqConvoId).catch(() => ({ ok: false, conversationId: reqConvoId, items: [] }))
     : Promise.resolve({ ok: false, conversationId: reqConvoId, items: [] });
+  const sumPromise = callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 2500 }).catch(() => ({
+    ok: false,
+  }));
 
   const listRes = await callConversationService(
     'ListConversations',
@@ -1706,11 +1832,16 @@ async function getLiveTasksApi({
   );
   if (!listRes.ok) {
     if (allowCdpFallback) {
-      const [fallback, sideQ] = await Promise.all([getLiveTasksCdpFallback(), sideQPromise]);
+      const [fallback, sideQ, sumRes] = await Promise.all([getLiveTasksCdpFallback(), sideQPromise, sumPromise]);
+      const summaries =
+        sumRes?.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
+          ? sumRes.data.trajectorySummaries
+          : {};
+      const activeConvoId = sideQ?.conversationId || reqConvoId || '';
       return {
         ...fallback,
-        sideQuestionConvoId: sideQ?.conversationId || reqConvoId || '',
-        sideQuestions: Array.isArray(sideQ?.items) ? sideQ.items : [],
+        sideQuestionConvoId: activeConvoId,
+        sideQuestions: mergeSideQuestionItems(sideQ?.items, activeConvoId, summaries),
       };
     }
     return {
@@ -1734,6 +1865,9 @@ async function getLiveTasksApi({
     updateTime: c?.state?.updateTime || c?.metadata?.createTime || null,
     createTime: c?.metadata?.createTime || null,
     pinned: Boolean(c?.annotations?.pinned),
+    isSideQuestion: false,
+    parentConversationId: '',
+    parentTitle: '',
     subagentCount: 0,
     activeSubagentCount: 0,
     subagents: [],
@@ -1749,23 +1883,65 @@ async function getLiveTasksApi({
     .filter((c) => c.runState !== 'RUN_STATE_RUNNING' && c.runState !== 'RUN_STATE_CANCELLING')
     .slice(0, 3);
 
-  const targetsToEnrich = running.length > 0 ? running.slice(0, 5) : recent.slice(0, 1);
-  if (targetsToEnrich.length > 0) {
-    let summaries = {};
-    const sumRes = await callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 2500 });
-    if (sumRes.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object') {
-      summaries = sumRes.data.trajectorySummaries;
-    }
+  const [sumRes, sideQ] = await Promise.all([sumPromise, sideQPromise]);
+  const summaries =
+    sumRes?.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
+      ? sumRes.data.trajectorySummaries
+      : {};
 
+  // Discover any active/running side-question (ephemeral /btw) sessions so they are counted in Live Tasks too
+  const runningIds = new Set(running.map((c) => c.id));
+  const seenRunningSq = new Set();
+  for (const [parentId, parentSum] of Object.entries(summaries)) {
+    const sqIds = Array.isArray(parentSum?.annotations?.sideQuestionCascadeIds)
+      ? parentSum.annotations.sideQuestionCascadeIds
+      : [];
+    const sqTitles =
+      parentSum?.annotations?.sideQuestionTitles && typeof parentSum.annotations.sideQuestionTitles === 'object'
+        ? parentSum.annotations.sideQuestionTitles
+        : {};
+    const allSqIds = new Set([...sqIds, ...Object.keys(sqTitles)]);
+    const parentTitle = String(parentSum?.annotations?.title || parentSum?.summary || '').trim();
+    for (const rawSqId of allSqIds) {
+      const sqId = String(rawSqId || '').trim();
+      if (!sqId || runningIds.has(sqId) || seenRunningSq.has(sqId)) continue;
+      const sqSum = summaries[sqId];
+      if (!sqSum || !isSummaryStatusRunning(sqSum.status)) continue;
+      seenRunningSq.add(sqId);
+      runningIds.add(sqId);
+      running.push({
+        id: sqId,
+        title: String(sqTitles[sqId] || sqSum?.annotations?.title || sqSum?.summary || 'Side Question').trim(),
+        runState: normalizeSummaryRunState(sqSum.status),
+        updateTime: sqSum?.lastModifiedTime || sqSum?.createdTime || null,
+        createTime: sqSum?.createdTime || null,
+        pinned: false,
+        isSideQuestion: true,
+        parentConversationId: parentId,
+        parentTitle,
+        tabId: `side_question__${sqId}`,
+        subagentCount: 0,
+        activeSubagentCount: 0,
+        subagents: [],
+        stepCount: Number(sqSum?.stepCount || 0),
+        activity: null,
+      });
+    }
+  }
+
+  const targetsToEnrich = running.length > 0 ? running.slice(0, 6) : recent.slice(0, 1);
+  if (targetsToEnrich.length > 0) {
     await Promise.all(
       targetsToEnrich.map(async (item) => {
         const isRunningItem = item.runState === 'RUN_STATE_RUNNING' || item.runState === 'RUN_STATE_CANCELLING';
-        const subPromise = callConversationService(
-          'ListConversations',
-          { pageSize: 30, parentConversationId: item.id, includeArchived: false },
-          { env, fetchFn, timeoutMs: 2500 }
-        );
-        const stepCount = Number(summaries?.[item.id]?.stepCount || 0);
+        const subPromise = item.isSideQuestion
+          ? Promise.resolve({ ok: false })
+          : callConversationService(
+              'ListConversations',
+              { pageSize: 30, parentConversationId: item.id, includeArchived: false },
+              { env, fetchFn, timeoutMs: 2500 }
+            );
+        const stepCount = Number(summaries?.[item.id]?.stepCount || item.stepCount || 0);
         item.stepCount = stepCount;
         const stepPromise =
           isRunningItem && stepCount > 0
@@ -1795,7 +1971,8 @@ async function getLiveTasksApi({
     );
   }
 
-  const sideQ = await sideQPromise;
+  const activeConvoId = sideQ?.conversationId || reqConvoId || running.find((r) => !r.isSideQuestion)?.id || recent[0]?.id || '';
+  const mergedSideQuestions = mergeSideQuestionItems(sideQ?.items, activeConvoId, summaries);
 
   return {
     ok: true,
@@ -1803,8 +1980,8 @@ async function getLiveTasksApi({
     source: 'conversation_service',
     running,
     recent,
-    sideQuestionConvoId: sideQ?.conversationId || reqConvoId || '',
-    sideQuestions: Array.isArray(sideQ?.items) ? sideQ.items : [],
+    sideQuestionConvoId: activeConvoId,
+    sideQuestions: mergedSideQuestions,
     totalCount: normalized.length,
     checkedAt: new Date().toISOString(),
   };
@@ -1835,24 +2012,138 @@ function decodeFileUriToPath(rawUri) {
 }
 
 function readGitBranchFast(workspaceDir, fallbackBranch = '') {
-  if (!workspaceDir || !existsSync(workspaceDir)) return String(fallbackBranch || '').trim();
-  try {
-    let gitDir = join(workspaceDir, '.git');
-    if (!existsSync(gitDir)) return String(fallbackBranch || '').trim();
-    const st = statSync(gitDir);
-    if (st.isFile()) {
-      const ptr = readFileSync(gitDir, 'utf8').trim();
-      const m = ptr.match(/^gitdir:\s*(.+)$/i);
-      if (m) gitDir = resolve(workspaceDir, m[1].trim());
+  return inspectWorkspaceGitMeta(workspaceDir, { branchName: fallbackBranch }).branch;
+}
+
+function normalizeGitRemoteToWebUrl(rawUrl) {
+  const s = String(rawUrl || '').trim();
+  if (!s || /[\x00-\x1f\x7f\s"'`<>]/.test(s)) {
+    return { url: '', host: '', isGitHub: false };
+  }
+  let candidate = '';
+  const scpMatch = s.match(/^(?:git@|[^@:/\s]+@)([a-zA-Z0-9.-]+):([^/\s].*)$/);
+  if (scpMatch) {
+    const host = scpMatch[1].toLowerCase();
+    const repoPath = scpMatch[2].replace(/\.git$/i, '').replace(/^\/+/, '');
+    if (host && repoPath) candidate = `https://${host}/${repoPath}`;
+  } else if (/^ssh:\/\//i.test(s)) {
+    try {
+      const parsed = new URL(s);
+      const host = parsed.hostname.toLowerCase();
+      const repoPath = parsed.pathname.replace(/\.git$/i, '').replace(/^\/+/, '');
+      if (host && repoPath) candidate = `https://${host}/${repoPath}`;
+    } catch {
+      return { url: '', host: '', isGitHub: false };
     }
-    const headPath = join(gitDir, 'HEAD');
-    if (!existsSync(headPath)) return String(fallbackBranch || '').trim();
-    const head = readFileSync(headPath, 'utf8').trim();
-    const refMatch = head.match(/^ref:\s*refs\/heads\/(.+)$/);
-    if (refMatch) return refMatch[1].trim();
-    if (/^[0-9a-f]{7,40}$/i.test(head)) return head.slice(0, 7);
-  } catch {}
-  return String(fallbackBranch || '').trim();
+  } else if (/^https?:\/\//i.test(s)) {
+    try {
+      const parsed = new URL(s);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return { url: '', host: '', isGitHub: false };
+      }
+      const host = parsed.hostname.toLowerCase();
+      const repoPath = parsed.pathname.replace(/\.git$/i, '').replace(/\/+$/, '');
+      if (!host || !repoPath || repoPath === '/') return { url: '', host: '', isGitHub: false };
+      candidate = `${parsed.protocol}//${parsed.host}${repoPath}`;
+    } catch {
+      return { url: '', host: '', isGitHub: false };
+    }
+  } else {
+    return { url: '', host: '', isGitHub: false };
+  }
+
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return { url: '', host: '', isGitHub: false };
+    const host = u.hostname.toLowerCase();
+    if (!host || !host.includes('.') || host === 'localhost') return { url: '', host: '', isGitHub: false };
+    const cleanUrl = `${u.protocol}//${u.host}${u.pathname}`.replace(/\/+$/, '');
+    return { url: cleanUrl, host, isGitHub: host === 'github.com' };
+  } catch {
+    return { url: '', host: '', isGitHub: false };
+  }
+}
+
+function readGitConfigOriginUrl(gitDir, commonDir) {
+  const candidates = [];
+  if (commonDir) candidates.push(join(commonDir, 'config'));
+  if (gitDir && gitDir !== commonDir) candidates.push(join(gitDir, 'config'));
+  for (const cfgPath of candidates) {
+    try {
+      if (!existsSync(cfgPath)) continue;
+      const content = readFileSync(cfgPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      let inOrigin = false;
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+        if (line.startsWith('[')) {
+          inOrigin = /^\[remote\s+"origin"\]$/i.test(line);
+          continue;
+        }
+        if (inOrigin) {
+          const m = line.match(/^url\s*=\s*(.+)$/i);
+          if (m && m[1]) return m[1].trim();
+        }
+      }
+    } catch {}
+  }
+  return '';
+}
+
+function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
+  const fallbackBranch = String(wsMeta?.branchName || '').trim();
+  const metaOriginUrl = String(wsMeta?.repository?.gitOriginUrl || '').trim();
+  let branch = fallbackBranch;
+  let isWorktree = false;
+  let rawOriginUrl = metaOriginUrl;
+
+  if (workspaceDir && existsSync(workspaceDir)) {
+    try {
+      let gitDir = join(workspaceDir, '.git');
+      let commonDir = '';
+      if (existsSync(gitDir)) {
+        const st = statSync(gitDir);
+        if (st.isFile()) {
+          const ptr = readFileSync(gitDir, 'utf8').trim();
+          const m = ptr.match(/^gitdir:\s*(.+)$/i);
+          if (m) {
+            gitDir = resolve(workspaceDir, m[1].trim());
+            if (/[\\/]worktrees[\\/]/i.test(gitDir) || existsSync(join(gitDir, 'commondir'))) {
+              isWorktree = true;
+            }
+          }
+        }
+        if (isWorktree && existsSync(join(gitDir, 'commondir'))) {
+          try {
+            const relCommon = readFileSync(join(gitDir, 'commondir'), 'utf8').trim();
+            if (relCommon) commonDir = resolve(gitDir, relCommon);
+          } catch {}
+        }
+        if (!commonDir) commonDir = gitDir;
+
+        const headPath = join(gitDir, 'HEAD');
+        if (existsSync(headPath)) {
+          const head = readFileSync(headPath, 'utf8').trim();
+          const refMatch = head.match(/^ref:\s*refs\/heads\/(.+)$/);
+          if (refMatch) branch = refMatch[1].trim();
+          else if (/^[0-9a-f]{7,40}$/i.test(head)) branch = head.slice(0, 7);
+        }
+        if (!rawOriginUrl) {
+          rawOriginUrl = readGitConfigOriginUrl(gitDir, commonDir);
+        }
+      }
+    } catch {}
+  }
+
+  const normalized = normalizeGitRemoteToWebUrl(rawOriginUrl);
+  return {
+    branch,
+    isWorktree,
+    repoWebUrl: normalized.url,
+    repoHost: normalized.host,
+    isGitHub: normalized.isGitHub,
+  };
 }
 
 function resolveAppDataDir(customDir) {
@@ -2160,12 +2451,21 @@ async function getConversationInspectorApi({
   fetchFn = typeof fetch === 'function' ? fetch : null,
   appDataDir = resolveAppDataDir(),
   configDir = resolveUserConfigDir(),
+  allowCdpActiveLookup = fetchFn === fetch,
 } = {}) {
   let targetId = String(conversationId || '').trim();
   let summary = null;
   let lsAvailable = false;
 
-  const sumRes = await callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 3000 });
+  const hostActivePromise =
+    !targetId && allowCdpActiveLookup
+      ? queryHostSideQuestions('').catch(() => null)
+      : Promise.resolve(null);
+
+  const [sumRes, hostActive] = await Promise.all([
+    callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 3000 }),
+    hostActivePromise,
+  ]);
   const summaries =
     sumRes.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
       ? sumRes.data.trajectorySummaries
@@ -2173,7 +2473,10 @@ async function getConversationInspectorApi({
 
   if (summaries) {
     lsAvailable = true;
-    if (targetId && summaries[targetId]) {
+    if (!targetId && hostActive?.conversationId && summaries[hostActive.conversationId]) {
+      targetId = hostActive.conversationId;
+      summary = summaries[targetId];
+    } else if (targetId && summaries[targetId]) {
       summary = summaries[targetId];
     } else if (!targetId) {
       // Pick active running conversation first, else most recently modified root conversation
@@ -2201,14 +2504,19 @@ async function getConversationInspectorApi({
   const fullPath = decodeFileUriToPath(ws?.workspaceFolderAbsoluteUri || '');
   const workspaceName = fullPath ? basename(fullPath) : '';
   const parentPath = fullPath ? dirname(fullPath) : '';
-  const branch = readGitBranchFast(fullPath, ws?.branchName || '');
+  const gitMeta = inspectWorkspaceGitMeta(fullPath, ws);
 
   const environment = {
     host: 'local',
     workspaceName,
     parentPath,
     fullPath,
-    branch,
+    branch: gitMeta.branch,
+    isWorktree: gitMeta.isWorktree,
+    repoWebUrl: gitMeta.repoWebUrl,
+    repoHost: gitMeta.repoHost,
+    isGitHub: gitMeta.isGitHub,
+    platform: process.platform,
   };
 
   // Context (cached by conversationId + stepCount + lastModifiedTime)
@@ -2349,6 +2657,183 @@ async function openInspectorFileApi(data, { appDataDir = resolveAppDataDir(), sp
       done({ ok: false, error: 'launcher_failed' });
     }
   });
+}
+
+function spawnDetachedSafe(cmd, args, options, spawnFn = spawn) {
+  return new Promise((done) => {
+    let child;
+    let timer;
+    try {
+      child = spawnFn(cmd, args, { detached: true, stdio: 'ignore', shell: false, ...options });
+      child.once('error', (err) => {
+        clearTimeout(timer);
+        done({ ok: false, error: err?.code || 'launcher_failed' });
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timer);
+        if (code === 0) done({ ok: true, status: 'launcher_exited' });
+        else if (process.platform === 'win32' && code === 1 && /explorer\.exe$/i.test(cmd)) {
+          done({ ok: true, status: 'request_submitted' });
+        } else {
+          done({ ok: false, error: 'launcher_failed' });
+        }
+      });
+      timer = setTimeout(() => {
+        try {
+          child.unref();
+        } catch {}
+        done({ ok: true, status: 'request_submitted' });
+      }, 650);
+      timer.unref?.();
+    } catch {
+      done({ ok: false, error: 'launcher_failed' });
+    }
+  });
+}
+
+async function collectKnownWorkspaceAllowlist({ env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null } = {}) {
+  const dirs = new Set();
+  const urls = new Set();
+  const addDir = (p, wsMeta = null) => {
+    const clean = decodeFileUriToPath(p);
+    if (!clean) return;
+    try {
+      const real = realpathSync.native(clean);
+      dirs.add(process.platform === 'win32' ? real.toLowerCase() : real);
+      const gitMeta = inspectWorkspaceGitMeta(real, wsMeta);
+      if (gitMeta.repoWebUrl) urls.add(gitMeta.repoWebUrl.toLowerCase());
+    } catch {}
+    if (wsMeta?.repository?.gitOriginUrl) {
+      const norm = normalizeGitRemoteToWebUrl(wsMeta.repository.gitOriginUrl);
+      if (norm.url) urls.add(norm.url.toLowerCase());
+    }
+  };
+  try {
+    const sumRes = await callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 3000 });
+    const summaries =
+      sumRes.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
+        ? sumRes.data.trajectorySummaries
+        : null;
+    if (summaries) {
+      for (const s of Object.values(summaries)) {
+        const wsList = [
+          ...(Array.isArray(s?.workspaces) ? s.workspaces : []),
+          ...(Array.isArray(s?.trajectoryMetadata?.workspaces) ? s.trajectoryMetadata.workspaces : []),
+        ];
+        for (const ws of wsList) {
+          if (ws?.workspaceFolderAbsoluteUri) addDir(ws.workspaceFolderAbsoluteUri, ws);
+        }
+      }
+    }
+  } catch {}
+  return { dirs, urls };
+}
+
+async function performEnvironmentActionApi(
+  data,
+  {
+    env = process.env,
+    fetchFn = typeof fetch === 'function' ? fetch : null,
+    spawnFn = spawn,
+    revealFn = null,
+    allowedDirs = null,
+    allowedUrls = null,
+    platform = process.platform,
+  } = {}
+) {
+  const action = String(data?.action || '').trim().toLowerCase();
+  const win = platform === 'win32';
+  const isLocalPath = (value) =>
+    typeof value === 'string' &&
+    isAbsolute(value) &&
+    !/[\x00-\x1f"\x7f]/.test(value) &&
+    (!win || (/^[a-z]:[\\/]/i.test(value) && !value.slice(2).includes(':')));
+
+  if (action === 'open-repo') {
+    const norm = normalizeGitRemoteToWebUrl(data?.url || '');
+    if (!norm.url) return { ok: false, error: 'invalid_url' };
+    let urlAllow = null;
+    if (Array.isArray(allowedUrls)) {
+      urlAllow = new Set(allowedUrls.map((u) => normalizeGitRemoteToWebUrl(u).url.toLowerCase()).filter(Boolean));
+    } else {
+      const known = await collectKnownWorkspaceAllowlist({ env, fetchFn });
+      urlAllow = known.urls;
+    }
+    if (!urlAllow.has(norm.url.toLowerCase())) {
+      return { ok: false, error: 'url_not_allowed' };
+    }
+    const launcher = win ? 'explorer.exe' : platform === 'darwin' ? '/usr/bin/open' : 'xdg-open';
+    return spawnDetachedSafe(launcher, [norm.url], { windowsHide: false }, spawnFn);
+  }
+
+  if (action !== 'reveal' && action !== 'terminal') {
+    return { ok: false, error: 'invalid_action' };
+  }
+
+  const rawPath = typeof data?.path === 'string' ? data.path.trim() : '';
+  if (!isLocalPath(rawPath)) {
+    return { ok: false, error: 'invalid_path' };
+  }
+
+  let canonical = '';
+  try {
+    canonical = realpathSync.native(resolve(rawPath));
+    if (!isLocalPath(canonical) || !statSync(canonical).isDirectory()) {
+      return { ok: false, error: 'not_a_directory' };
+    }
+  } catch (err) {
+    return { ok: false, error: err?.code === 'ENOENT' ? 'dir_not_found' : 'stat_failed' };
+  }
+
+  let dirAllow = null;
+  if (Array.isArray(allowedDirs)) {
+    dirAllow = new Set();
+    for (const d of allowedDirs) {
+      try {
+        const real = realpathSync.native(resolve(String(d)));
+        dirAllow.add(win ? real.toLowerCase() : real);
+      } catch {}
+    }
+  } else {
+    const known = await collectKnownWorkspaceAllowlist({ env, fetchFn });
+    dirAllow = known.dirs;
+  }
+
+  const canonKey = win ? canonical.toLowerCase() : canonical;
+  if (!dirAllow.has(canonKey)) {
+    return { ok: false, error: 'path_not_allowed' };
+  }
+
+  if (action === 'reveal') {
+    const targetUri = pathToFileURL(canonical).href;
+    if (typeof revealFn === 'function') {
+      return revealFn({ mode: 'reveal', target: targetUri, platform });
+    }
+    if (spawnFn === spawn && typeof cdp.openLocalFileActionAsync === 'function') {
+      const res = await cdp.openLocalFileActionAsync({ mode: 'reveal', target: targetUri, platform });
+      if (res?.ok) return res;
+    }
+    const launcher = win ? 'explorer.exe' : platform === 'darwin' ? '/usr/bin/open' : 'xdg-open';
+    const args = win ? [canonical] : platform === 'darwin' ? ['-R', canonical] : [canonical];
+    return spawnDetachedSafe(launcher, args, { windowsHide: false }, spawnFn);
+  }
+
+  // action === 'terminal'
+  if (win) {
+    const wtRes = await spawnDetachedSafe('wt.exe', ['-d', canonical], { cwd: canonical, windowsHide: false }, spawnFn);
+    if (wtRes.ok) return wtRes;
+    const pwshRes = await spawnDetachedSafe('pwsh.exe', ['-NoExit'], { cwd: canonical, windowsHide: false }, spawnFn);
+    if (pwshRes.ok) return pwshRes;
+    return spawnDetachedSafe('powershell.exe', ['-NoExit'], { cwd: canonical, windowsHide: false }, spawnFn);
+  }
+  if (platform === 'darwin') {
+    return spawnDetachedSafe('/usr/bin/open', ['-a', 'Terminal', canonical], { cwd: canonical }, spawnFn);
+  }
+  for (const termBin of ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']) {
+    const res = await spawnDetachedSafe(termBin, [], { cwd: canonical }, spawnFn);
+    if (res.ok) return res;
+  }
+  return { ok: false, error: 'terminal_not_found' };
 }
 
 const PRIVATE_NOTIFY_FIELDS = {
@@ -2523,6 +3008,7 @@ function registerStudioApis(app, ResponseClass = globalThis.Response) {
     return getConversationInspectorApi({ conversationId: String(data?.conversationId || '').trim() });
   });
   api('/api/open-file', async (data) => openInspectorFileApi(data));
+  api('/api/env/action', async (data) => performEnvironmentActionApi(data));
   api('/api/scripts/list', () => getScriptsApi());
   api('/api/scripts', async (data) => upsertScriptApi(data));
   api('/api/scripts/delete', async (data) => deleteScriptApi(data));
@@ -2650,8 +3136,11 @@ export {
   classifyLiveStepActivity,
   getLiveTasksApi,
   extractContextBreakdownFromGm,
+  normalizeGitRemoteToWebUrl,
+  inspectWorkspaceGitMeta,
   getConversationInspectorApi,
   openInspectorFileApi,
+  performEnvironmentActionApi,
   getStudioStatus,
   applyConfigUpdate,
   resetStudioConfig,

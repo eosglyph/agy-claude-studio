@@ -2445,11 +2445,10 @@
     const cleanPref = normalizeCascadeId(preferredId);
     if (cleanPref) return cleanPref;
     try {
-      const primaryBox = Array.from(document.querySelectorAll('[data-testid="agent-input-box"]')).find(
-        (b) => !b.closest?.('[data-testid="subagent-tab-conversation"]')
-      );
-      const fromDom = resolveCascadeId(primaryBox);
-      if (fromDom) return fromDom;
+      const activeFromStore = store?.getState?.()?.conversation?.convoState?.cascadeId;
+      if (typeof activeFromStore === 'string' && activeFromStore.trim()) {
+        return normalizeCascadeId(activeFromStore) || activeFromStore.trim();
+      }
     } catch {}
     try {
       const m = String(location?.pathname || '').match(/\/c\/([0-9a-f-]{8,})/i);
@@ -2471,7 +2470,34 @@
       const fromLayout = walk(layout?.rootNode);
       if (fromLayout) return normalizeCascadeId(fromLayout) || fromLayout;
     } catch {}
+    try {
+      const primaryBox = Array.from(document.querySelectorAll('[data-testid="agent-input-box"]')).find(
+        (b) => !b.closest?.('[data-testid="subagent-tab-conversation"]') && !b.closest?.('[data-testid="side-panel-v2"]')
+      );
+      const fromDom = resolveCascadeId(primaryBox);
+      if (fromDom) return fromDom;
+    } catch {}
     return '';
+  }
+
+  function parseSummaryTimestampMs(ts) {
+    if (!ts) return 0;
+    if (typeof ts === 'number' && Number.isFinite(ts)) return ts;
+    if (typeof ts === 'string') {
+      const parsed = Date.parse(ts);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (typeof ts === 'object' && ts.seconds != null) {
+      const sec = Number(ts.seconds);
+      if (Number.isFinite(sec) && sec > 0) return sec * 1000;
+    }
+    return 0;
+  }
+
+  function isSummaryRunningStatus(status) {
+    if (status === 2) return true;
+    const s = String(status || '').toUpperCase();
+    return s.includes('RUNNING') || s.includes('CANCELLING');
   }
 
   function getSideQuestionsState(preferredConversationId = '') {
@@ -2484,6 +2510,15 @@
     const pane = state.sidePanelV2?.conversationPanes?.[cid] || {};
     const openTabs = Array.isArray(pane.tabs) ? pane.tabs : [];
     const closedTabs = Array.isArray(pane.closedTabs) ? pane.closedTabs : [];
+    const summaries = state.trajectorySummaries?.summaries || {};
+    const parentSummary = summaries[cid] || {};
+    const sqTitlesMap =
+      parentSummary?.annotations?.sideQuestionTitles && typeof parentSummary.annotations.sideQuestionTitles === 'object'
+        ? parentSummary.annotations.sideQuestionTitles
+        : {};
+    const persistedSqIds = Array.isArray(parentSummary?.annotations?.sideQuestionCascadeIds)
+      ? parentSummary.annotations.sideQuestionCascadeIds
+      : [];
     const openSideTabIds = new Set(
       openTabs
         .filter((t) => t?.content?.type === 'sideQuestionView')
@@ -2491,27 +2526,57 @@
     );
 
     const items = [];
-    const seenKeys = new Set();
-    const pushItem = (raw) => {
+    const byKey = new Map();
+    const mergeItem = (raw) => {
       const cascadeId = String(raw.cascadeId || '').trim();
       const tabId =
         String(raw.tabId || '').trim() ||
         (cascadeId ? `side_question__${cascadeId}` : 'side_question__draft');
-      const question = String(raw.question || '').trim();
-      const dedupeKey = cascadeId ? `c:${cascadeId}` : tabId ? `t:${tabId}:${question.slice(0, 48)}` : `q:${question}`;
-      if (seenKeys.has(dedupeKey)) return;
-      seenKeys.add(dedupeKey);
-      items.push({
+      const sqSum = cascadeId ? summaries[cascadeId] : null;
+      const resolvedTitle =
+        String(raw.question || '').trim() ||
+        (cascadeId ? String(sqTitlesMap[cascadeId] || '').trim() : '') ||
+        String(sqSum?.annotations?.title || sqSum?.summary || '').trim();
+      const dedupeKey = cascadeId ? `c:${cascadeId}` : tabId ? `t:${tabId}:${resolvedTitle.slice(0, 48)}` : `q:${resolvedTitle}`;
+      const isOpen = openSideTabIds.has(tabId) || Boolean(raw.isOpenTab);
+      const isRunning = Boolean(raw.isRunning) || isSummaryRunningStatus(sqSum?.status);
+      const stepCount = Math.max(Number(raw.stepCount || 0) || 0, Number(sqSum?.stepCount || 0) || 0);
+      const ts = Math.max(
+        Number(raw.startTimestamp || 0) || 0,
+        parseSummaryTimestampMs(sqSum?.lastModifiedTime),
+        parseSummaryTimestampMs(sqSum?.createdTime)
+      );
+
+      const existing = byKey.get(dedupeKey);
+      if (existing) {
+        if (!existing.question && resolvedTitle) existing.question = resolvedTitle;
+        if (!existing.tabId && tabId) existing.tabId = tabId;
+        if (isOpen) {
+          existing.isOpenTab = true;
+          existing.minimized = false;
+        }
+        if (isRunning) existing.isRunning = true;
+        if (stepCount > existing.stepCount) existing.stepCount = stepCount;
+        if (ts > existing.startTimestamp) existing.startTimestamp = ts;
+        if (existing.index === null && Number.isInteger(raw.index)) existing.index = raw.index;
+        return;
+      }
+
+      const entry = {
         id: cascadeId || tabId || `sq_${items.length}`,
         cascadeId,
         tabId,
-        question,
+        question: resolvedTitle,
         mode: String(raw.mode || 'btw'),
-        minimized: Boolean(raw.minimized),
-        isOpenTab: openSideTabIds.has(tabId),
+        minimized: isOpen ? Boolean(raw.minimized && !isOpen) : raw.minimized !== false,
+        isOpenTab: isOpen,
+        isRunning,
+        stepCount,
         index: Number.isInteger(raw.index) ? raw.index : null,
-        startTimestamp: Number(raw.startTimestamp || 0) || 0,
-      });
+        startTimestamp: ts,
+      };
+      byKey.set(dedupeKey, entry);
+      items.push(entry);
     };
 
     const sqState = state.sideQuestion?.states?.[cid];
@@ -2523,7 +2588,7 @@
         : [];
       hist.forEach((h, idx) => {
         if (!h || (!h.question && !h.cascadeId)) return;
-        pushItem({
+        mergeItem({
           cascadeId: h.cascadeId || '',
           question: h.question || '',
           mode: h.mode || sqState.mode || 'btw',
@@ -2537,7 +2602,7 @@
     const forks = state.ephemeralFork?.forks || {};
     for (const [forkId, meta] of Object.entries(forks)) {
       if (!meta || meta.parentConversationId !== cid) continue;
-      pushItem({
+      mergeItem({
         cascadeId: forkId,
         question: meta.question || '',
         mode: 'btw',
@@ -2549,11 +2614,12 @@
     for (const tab of openTabs) {
       if (tab?.content?.type !== 'sideQuestionView') continue;
       const fCid = String(tab.content?.sideQuestionView?.cascadeId || '').trim();
-      pushItem({
+      mergeItem({
         cascadeId: fCid,
         tabId: String(tab.id || ''),
         question: String(tab.content?.sideQuestionView?.question || '').trim(),
         mode: 'btw',
+        isOpenTab: true,
         minimized: false,
       });
     }
@@ -2562,7 +2628,7 @@
       const tab = entry?.tab || entry;
       if (tab?.content?.type !== 'sideQuestionView') continue;
       const fCid = String(tab.content?.sideQuestionView?.cascadeId || '').trim();
-      pushItem({
+      mergeItem({
         cascadeId: fCid,
         tabId: String(tab.id || ''),
         question: String(tab.content?.sideQuestionView?.question || '').trim(),
@@ -2571,7 +2637,35 @@
       });
     }
 
-    items.sort((a, b) => (b.startTimestamp || 0) - (a.startTimestamp || 0));
+    for (const sqId of persistedSqIds) {
+      const fCid = String(sqId || '').trim();
+      if (!fCid) continue;
+      mergeItem({
+        cascadeId: fCid,
+        tabId: `side_question__${fCid}`,
+        question: String(sqTitlesMap[fCid] || '').trim(),
+        mode: 'btw',
+        minimized: !openSideTabIds.has(`side_question__${fCid}`),
+      });
+    }
+
+    for (const [sqId, title] of Object.entries(sqTitlesMap)) {
+      const fCid = String(sqId || '').trim();
+      if (!fCid) continue;
+      mergeItem({
+        cascadeId: fCid,
+        tabId: `side_question__${fCid}`,
+        question: String(title || '').trim(),
+        mode: 'btw',
+        minimized: !openSideTabIds.has(`side_question__${fCid}`),
+      });
+    }
+
+    items.sort((a, b) => {
+      if (Boolean(b.isRunning) !== Boolean(a.isRunning)) return b.isRunning ? 1 : -1;
+      if (Boolean(b.isOpenTab) !== Boolean(a.isOpenTab)) return b.isOpenTab ? 1 : -1;
+      return (b.startTimestamp || 0) - (a.startTimestamp || 0);
+    });
     return { ok: true, conversationId: cid, items };
   }
 
@@ -2617,13 +2711,21 @@
 
       const tabId = target.tabId || (target.cascadeId ? `side_question__${target.cascadeId}` : 'side_question__draft');
       const sideQuestionView = target.cascadeId ? { cascadeId: target.cascadeId } : {};
+      const panelScope = { kind: 'cascadeId', cascadeId: cid };
       store.dispatch({
         type: 'sidePanelV2/setContent',
         payload: {
-          panelScope: { kind: 'cascadeId', cascadeId: cid },
+          panelScope,
           content: { type: 'sideQuestionView', sideQuestionView },
           tabId,
           keepOpen: true,
+        },
+      });
+      store.dispatch({
+        type: 'sidePanelV2/setActiveTab',
+        payload: {
+          panelScope,
+          tabId,
         },
       });
 
@@ -2636,6 +2738,34 @@
       if (toolbarBtn && typeof toolbarBtn.click === 'function' && store.getState()?.sideQuestion?.states?.[cid]?.minimized) {
         toolbarBtn.click();
       }
+
+      const focusSideQuestionTab = () => {
+        try {
+          const strip = document.querySelector('[data-side-panel-strip]');
+          if (strip && strip.getAttribute('data-active-tab-id') !== tabId) {
+            const tabBtns = Array.from(strip.querySelectorAll('button, [role="tab"]'));
+            const matchBtn = tabBtns.find((btn) => {
+              const idAttr = btn.getAttribute('data-tab-id') || btn.closest?.('[data-tab-id]')?.getAttribute('data-tab-id') || '';
+              return idAttr === tabId;
+            });
+            if (matchBtn && typeof matchBtn.click === 'function') {
+              matchBtn.click();
+            }
+          }
+          // Focus composer inside the newly activated side-question pane if present
+          const sidePane = document.querySelector('[data-aux-pane-open="true"], [data-testid="side-panel-v2"]');
+          const sqEditor = sidePane?.querySelector?.('[data-testid="agent-input-box"] [contenteditable="true"]');
+          if (sqEditor && typeof sqEditor.focus === 'function') {
+            sqEditor.focus();
+          }
+        } catch {}
+      };
+      focusSideQuestionTab();
+      if (typeof setTimeout === 'function') {
+        setTimeout(focusSideQuestionTab, 40);
+        setTimeout(focusSideQuestionTab, 140);
+      }
+
       return { ok: true, action: 'restored', conversationId: cid, cascadeId: target.cascadeId || '', tabId };
     } catch {
       const filled = fillBtwCommand();
