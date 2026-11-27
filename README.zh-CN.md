@@ -315,6 +315,26 @@ Antigravity 从 `2.33.0` 起默认不再开启 CDP 端口。请彻底退出 Anti
 
 </details>
 
+<details>
+<summary><b>5. Windows 非 TUN / 进程级代理环境使用提示</b></summary>
+
+如果你在 Windows 下未开启系统全局代理或 TUN 模式，而是通过本地代理启动脚本为 Antigravity 注入进程级代理变量，可以按以下方式配置：
+
+1. **首次启动快捷方式**：将桌面或开始菜单中的 `Antigravity (Claude Studio).lnk` 指向你的进程级代理启动脚本（需支持 `%*` 参数透传），并在快捷方式参数中附带 `--remote-debugging-port=0`。
+2. **推荐环境变量**（以本地代理端口 `127.0.0.1:7890` 为例）：
+   ```bat
+   set HTTP_PROXY=http://127.0.0.1:7890
+   set HTTPS_PROXY=http://127.0.0.1:7890
+   set NODE_USE_ENV_PROXY=1
+   set NO_PROXY=localhost,127.0.0.1,::1
+   ```
+   - `NODE_USE_ENV_PROXY=1` 可让 Node.js 22+ 原生 `fetch` 自动走代理，确保右侧面板的**检查更新**、**Gemini 4 元素周期表同步**与**按需语言包下载**正常联网；
+   - `NO_PROXY=localhost,127.0.0.1,::1` 确保本地 CDP 调试端口与 `language_server` 回环通信保持直连，不被代理截断；
+   - 如需 SOCKS5 代理，可按需一并设置 `ALL_PROXY`。
+3. **侧栏重启自动保留代理**：从右侧 **Claude Studio** 面板触发重启时，插件会自动提取当前进程中的 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`、`NODE_USE_ENV_PROXY` 并安全透传给重启后的 `Antigravity.exe` 进程，同时在临时启动脚本退出后自动清理。未使用进程级代理（TUN 模式或直连）的用户不受任何影响。
+
+</details>
+
 ---
 
 ## 开发与测试
