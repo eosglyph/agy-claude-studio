@@ -1469,7 +1469,7 @@
     .cd-env-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 3px;
     }
     .cd-env-row {
       display: flex;
@@ -1477,6 +1477,9 @@
       justify-content: space-between;
       gap: 10px;
       min-width: 0;
+      padding: 5px 8px;
+      margin: 0 -8px;
+      border-radius: 9px;
     }
     .cd-env-main {
       display: flex;
@@ -1505,24 +1508,141 @@
     }
     .cd-env-ws-path {
       color: var(--muted-fg);
-      font-size: 12.5px;
+      font-size: 13px;
     }
-    .cd-env-branch {
-      display: inline-flex;
+    button.cd-env-trigger {
+      display: flex;
       align-items: center;
-      gap: 3px;
-      padding: 2px 7px;
-      border-radius: 999px;
-      background: var(--control-bg);
-      border: 1px solid var(--border-col);
-      color: var(--muted-fg);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 11px;
+      justify-content: flex-start;
+      gap: 10px;
+      width: calc(100% + 16px);
+      min-height: 31px;
+      padding: 5px 8px;
+      margin: 0 -8px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--fg);
+      text-align: left;
+      cursor: pointer;
+      transition: background 130ms ease, color 130ms ease;
+    }
+    button.cd-env-trigger:hover {
+      background: var(--control-hover);
+      border-color: transparent;
+    }
+    button.cd-env-trigger:active {
+      transform: none;
+    }
+    button.cd-env-trigger.is-menu-open {
+      background: rgba(15, 23, 42, 0.11);
+      border-color: transparent;
+    }
+    :root[data-theme="dark"] button.cd-env-trigger.is-menu-open {
+      background: rgba(255, 255, 255, 0.14);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) button.cd-env-trigger.is-menu-open {
+        background: rgba(255, 255, 255, 0.14);
+      }
+    }
+    .cd-env-branch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      margin: 0 -8px;
+      padding: 0 8px 0 0;
+    }
+    .cd-env-branch-row[hidden] {
+      display: none !important;
+    }
+    button.cd-env-trigger.cd-env-branch-btn {
+      width: auto;
+      max-width: 100%;
+      margin: 0;
+      flex: 0 1 auto;
+      min-width: 0;
+      padding: 5px 10px 5px 8px;
+    }
+    .cd-env-branch-text {
+      font-size: 13.5px;
+      font-weight: 450;
+      color: var(--fg);
       white-space: nowrap;
-      max-width: min(118px, 38%);
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .cd-env-worktree-tag {
+      font-size: 12.5px;
+      font-weight: 400;
+      color: var(--muted-fg);
+      white-space: nowrap;
       flex-shrink: 0;
+    }
+    .cd-env-worktree-tag[hidden] {
+      display: none !important;
+    }
+    .cd-env-popover {
+      position: fixed;
+      z-index: 9999;
+      min-width: 210px;
+      max-width: calc(100vw - 16px);
+      padding: 6px;
+      border-radius: 14px;
+      background: #ffffff;
+      border: 1px solid rgba(15, 23, 42, 0.09);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .cd-env-popover[hidden] {
+      display: none !important;
+    }
+    :root[data-theme="dark"] .cd-env-popover {
+      background: #202228;
+      border-color: rgba(255, 255, 255, 0.11);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .cd-env-popover {
+        background: #202228;
+        border-color: rgba(255, 255, 255, 0.11);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+      }
+    }
+    button.cd-env-menu-item {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      width: 100%;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--fg);
+      font-size: 13px;
+      font-weight: 450;
+      text-align: left;
+      cursor: pointer;
+      transition: background 110ms ease;
+    }
+    button.cd-env-menu-item:hover {
+      background: var(--control-hover);
+      border-color: transparent;
+    }
+    button.cd-env-menu-item:active {
+      transform: none;
+    }
+    .cd-env-menu-sep {
+      height: 1px;
+      background: var(--divider-col);
+      margin: 5px 8px;
     }
     .cd-ctx-hero {
       display: flex;
@@ -1868,6 +1988,21 @@
       background: rgba(96, 165, 250, 0.18);
       color: #7cc0ff;
     }
+    .cd-role-pill.is-btw {
+      background: color-mix(in srgb, var(--brand-accent) 14%, transparent);
+      color: var(--brand-accent);
+      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    }
+    .cd-live-item.is-clickable {
+      cursor: pointer;
+      border-radius: 8px;
+      padding: 4px 6px;
+      margin: -4px -6px;
+      transition: background 120ms ease;
+    }
+    .cd-live-item.is-clickable:hover {
+      background: var(--control-bg);
+    }
     .cd-live-action {
       font-weight: 550;
       color: var(--fg);
@@ -2110,6 +2245,11 @@
       color: var(--ok);
       border-color: color-mix(in srgb, var(--ok) 35%, var(--border-col));
     }
+    .cd-btw-state.is-running {
+      color: var(--ok);
+      background: var(--ok-soft);
+      border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+    }
     .cd-btw-arrow {
       color: var(--muted-fg);
       display: inline-flex;
@@ -2166,6 +2306,107 @@
         grid-template-columns: 1fr;
       }
     }
+
+    /* Compact Sidebar mode (shared with sidebarCompact setting) */
+    :root[data-sidebar-compact] .studio-shell {
+      padding: 10px 14px 16px;
+    }
+    :root[data-sidebar-compact] .header-card {
+      padding: 0 0 9px;
+      margin-bottom: 2px;
+    }
+    :root[data-sidebar-compact] .header-top {
+      gap: 6px 8px;
+      margin-bottom: 8px;
+    }
+    :root[data-sidebar-compact] button.tab-btn {
+      min-height: 26px;
+      padding: 3px 8px;
+    }
+    :root[data-sidebar-compact] .cd-section {
+      padding: 10px 0;
+    }
+    :root[data-sidebar-compact] .cd-section:first-child {
+      padding-top: 6px;
+    }
+    :root[data-sidebar-compact] #cd-conn-section {
+      padding: 6px 0;
+    }
+    :root[data-sidebar-compact] .cd-section-head {
+      margin-bottom: 6px;
+    }
+    :root[data-sidebar-compact] .cd-env-list {
+      gap: 1px;
+    }
+    :root[data-sidebar-compact] .cd-env-row {
+      padding: 3px 8px;
+      border-radius: 8px;
+    }
+    :root[data-sidebar-compact] button.cd-env-trigger {
+      min-height: 26px;
+      padding: 3px 8px;
+      border-radius: 8px;
+    }
+    :root[data-sidebar-compact] button.cd-env-trigger.cd-env-branch-btn {
+      padding: 3px 10px 3px 8px;
+    }
+    :root[data-sidebar-compact] .cd-ctx-hero {
+      margin-bottom: 6px;
+    }
+    :root[data-sidebar-compact] .cd-ctx-pct {
+      font-size: 14px;
+    }
+    :root[data-sidebar-compact] .cd-ctx-ratio {
+      font-size: 12px;
+    }
+    :root[data-sidebar-compact] .cd-ctx-bar {
+      margin-bottom: 9px;
+    }
+    :root[data-sidebar-compact] .cd-ctx-rows {
+      gap: 4px;
+    }
+    :root[data-sidebar-compact] .cd-ctx-row {
+      grid-template-columns: minmax(0, 1fr) auto 46px;
+      gap: 8px;
+      font-size: 12.5px;
+      line-height: 1.3;
+    }
+    :root[data-sidebar-compact] .cd-ctx-row.is-free {
+      margin-top: 5px;
+      padding-top: 6px;
+    }
+    :root[data-sidebar-compact] .cd-ctx-subrows {
+      gap: 1px;
+      margin-top: 6px;
+    }
+    :root[data-sidebar-compact] button.cd-expand-btn {
+      min-height: 25px;
+      padding: 3px 6px;
+    }
+    :root[data-sidebar-compact] button.cd-connector-btn {
+      min-height: 26px;
+      padding: 3px 6px;
+      font-size: 13px;
+    }
+    :root[data-sidebar-compact] .cd-live-list {
+      gap: 7px;
+    }
+    :root[data-sidebar-compact] .cd-live-item {
+      gap: 3px;
+    }
+    :root[data-sidebar-compact] .cd-live-item + .cd-live-item {
+      padding-top: 7px;
+    }
+    :root[data-sidebar-compact] .cd-btw-block {
+      margin-top: 7px;
+      padding-top: 7px;
+      gap: 5px;
+    }
+    :root[data-sidebar-compact] button.cd-btw-row {
+      padding: 5px 9px;
+      min-height: 29px;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
@@ -2220,17 +2461,22 @@
               <span class="cd-env-text" id="cd-env-host">本机</span>
             </div>
           </div>
-          <div class="cd-env-row" id="cd-env-ws-row" hidden>
-            <div class="cd-env-main" id="cd-env-ws-tip">
-              <svg class="cd-env-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-              <span class="cd-env-text">
-                <span class="cd-env-ws-name" id="cd-env-ws-name"></span>
-                <span class="cd-env-ws-path" id="cd-env-ws-path"></span>
-              </span>
-            </div>
-            <span class="cd-env-branch" id="cd-env-branch" hidden></span>
+          <button type="button" class="cd-env-trigger" id="cd-env-ws-row" aria-haspopup="menu" aria-expanded="false" hidden>
+            <svg class="cd-env-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <span class="cd-env-text" id="cd-env-ws-tip">
+              <span class="cd-env-ws-name" id="cd-env-ws-name"></span>
+              <span class="cd-env-ws-path" id="cd-env-ws-path"></span>
+            </span>
+          </button>
+          <div class="cd-env-branch-row" id="cd-env-branch-row" hidden>
+            <button type="button" class="cd-env-trigger cd-env-branch-btn" id="cd-env-branch-btn" aria-haspopup="menu" aria-expanded="false">
+              <svg class="cd-env-icon" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><path d="M27.0002,12.0001c0-2.2056-1.7939-4-4-4s-4,1.7944-4,4c0,1.8584,1.2795,3.4109,3,3.858v1.142c0,.5513-.4482,1-1,1h-10c-.3523,0-.6857.0723-1,.1843v-8.3263c1.7205-.4471,3-1.9996,3-3.858,0-2.2056-1.7939-4-4-4s-4,1.7944-4,4c0,1.8584,1.2795,3.4109,3,3.858v12.2839c-1.7205.4471-3,1.9996-3,3.858,0,2.2056,1.7939,4,4,4s4-1.7944,4-4c0-1.8584-1.2795-3.4109-3-3.858v-1.142c0-.5513.4482-1,1-1h10c1.6543,0,3-1.3457,3-3v-1.142c1.7205-.4471,3-1.9996,3-3.858ZM11.0002,26.0001c0,1.103-.8975,2-2,2s-2-.897-2-2,.8975-2,2-2,2,.897,2,2ZM7.0002,6.0001c0-1.103.8975-2,2-2s2,.897,2,2-.8975,2-2,2-2-.897-2-2ZM23.0002,14.0001c-1.1025,0-2-.897-2-2s.8975-2,2-2,2,.897,2,2-.8975,2-2,2Z"/></svg>
+              <span class="cd-env-branch-text" id="cd-env-branch"></span>
+            </button>
+            <span class="cd-env-worktree-tag" id="cd-env-worktree-tag" hidden>Worktree</span>
           </div>
         </div>
+        <div class="cd-env-popover" id="cd-env-popover" role="menu" hidden></div>
       </div>
 
       <div class="cd-section" id="cd-ctx-section">
@@ -2827,7 +3073,7 @@
           glassEffect: ['毛玻璃质感', '为输入框与浮层添加磨砂高光边框、看图悬浮胶囊及聚焦柔光环'],
           logoInk: ['Logo 颜色', '左上角应用图标与首页标志显示为主色调或纯文字色', [['accent', '主题强调色'], ['foreground', '跟随文字色']]],
           sidebarRestyle: ['侧边栏美化', '套用 Claude 风格侧栏行高与悬停高亮'],
-          sidebarCompact: ['侧边栏紧凑模式', '收紧列表间距，同屏展示更多会话'],
+          sidebarCompact: ['侧边栏紧凑模式', '同时收紧左侧列表与 Studio 面板间距，同屏显示更多内容'],
           composerRestyle: ['Claude 风格输入框', '采用 Claude 风格圆角输入框与极简底栏'],
           placeholderStyle: ['输入框引导语', '选择 Claude 风格引导语或保留原生提示', [['studio', 'Claude 风格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素周期表', '在模型名旁添加四角星按钮，点击打开元素周期表选模型'],
@@ -2993,7 +3239,7 @@
           glassEffect: ['毛玻璃質感', '為輸入框與浮層加上磨砂高光邊框、看圖懸浮膠囊及聚焦柔光環'],
           logoInk: ['Logo 顏色', '左上角應用圖示與首頁標誌顯示為主色調或純文字色', [['accent', '主題強調色'], ['foreground', '跟隨文字色']]],
           sidebarRestyle: ['側邊欄美化', '套用 Claude 風格側欄行高與懸停高亮'],
-          sidebarCompact: ['側邊欄緊湊模式', '收緊清單間距，同屏顯示更多對話'],
+          sidebarCompact: ['側邊欄緊湊模式', '同時收緊左側清單與 Studio 面板間距，同屏顯示更多內容'],
           composerRestyle: ['Claude 風格輸入框', '採用 Claude 風格圓角輸入框與極簡底列'],
           placeholderStyle: ['輸入框引導語', '選擇 Claude 風格引導語或保留原生提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '在模型名旁加入四角星按鈕，點擊開啟元素週期表選模型'],
@@ -3159,7 +3405,7 @@
           glassEffect: ['毛玻璃質感', '幫輸入框同浮層加磨砂高光邊框、睇圖懸浮膠囊同聚焦柔光環'],
           logoInk: ['Logo 顏色', '左上角應用圖示同首頁標誌顯示為主色調定純文字色', [['accent', '主題強調色'], ['foreground', '跟隨文字色']]],
           sidebarRestyle: ['側邊欄美化', '套用 Claude 風格側欄行高同懸停高亮'],
-          sidebarCompact: ['側邊欄緊湊模式', '收窄列表間距，一屏睇多幾條對話'],
+          sidebarCompact: ['側邊欄緊湊模式', '一齊收窄左邊列表同 Studio 面板間距，一屏睇多啲內容'],
           composerRestyle: ['Claude 風格輸入框', '採用 Claude 風格圓角輸入框配極簡底欄'],
           placeholderStyle: ['輸入框引導語', '揀 Claude 風格引導語定保留原版提示', [['studio', 'Claude 風格'], ['host', '原生提示']]],
           periodicSelector: ['Gemini 4 元素週期表', '喺模型名隔離加粒四角星，撳開元素週期表揀模型'],
@@ -3325,7 +3571,7 @@
           glassEffect: ['Frosted Glass Effect', 'Frosted surfaces with 1px specular borders, floating media pills & focus halos'],
           logoInk: ['Logo Color', 'Tint the top-left app icon and home mark with accent color or text color', [['accent', 'Accent Color'], ['foreground', 'Text Color']]],
           sidebarRestyle: ['Claude Sidebar Style', 'Apply Claude-style sidebar row height and hover highlight'],
-          sidebarCompact: ['Compact Sidebar', 'Tighter list spacing to fit more chats on screen'],
+          sidebarCompact: ['Compact Sidebar', 'Tighter spacing for both the chat sidebar and Studio panel'],
           composerRestyle: ['Claude Composer Style', 'Use Claude-style rounded input card with a minimal footer'],
           placeholderStyle: ['Input Prompt Text', 'Show Claude-style prompt copy or keep the native prompt', [['studio', 'Claude Style'], ['host', 'Native']]],
           periodicSelector: ['Gemini 4 Periodic Table', 'Add a sparkle button beside model name to pick from the Periodic Table'],
@@ -3491,7 +3737,7 @@
           glassEffect: ['すりガラス質感', '入力欄・浮遊パネルのすりガラス＆高光枠、画像プレビューカプセル、フォーカス光輪'],
           logoInk: ['ロゴの色', '左上のアプリアイコンとホームロゴをアクセント色または文字色で表示', [['accent', 'アクセント色'], ['foreground', '文字色']]],
           sidebarRestyle: ['サイドバー最適化', 'Claude 風の行高とホバーハイライトを適用'],
-          sidebarCompact: ['コンパクトサイドバー', '余白を詰めてより多くの会話を一覧表示'],
+          sidebarCompact: ['コンパクトサイドバー', 'サイドバーと Studio パネルの余白を詰めてより多く表示'],
           composerRestyle: ['Claude 風入力欄', 'Claude 風の角丸入力欄とシンプルなフッターに調整'],
           placeholderStyle: ['入力欄ガイド文', 'Claude 風のガイド文または標準の案内文を選択', [['studio', 'Claude 風'], ['host', '標準']]],
           periodicSelector: ['Gemini 4 元素周期表', 'モデル名横に星ボタンを追加し、周期表からモデルを選択'],
@@ -4726,6 +4972,7 @@
     }
 
     function renderForm(cfg, { force = false } = {}) {
+      document.documentElement.toggleAttribute('data-sidebar-compact', Boolean(cfg?.sidebarCompact));
       const t = getT();
       const statsOn = isUsageStatsOn(cfg);
       const container = document.getElementById('sections');
@@ -5385,9 +5632,12 @@
           btwHeading: (n) => (n > 0 ? `Side Questions (${n})` : 'Side Question'),
           btwTitle: 'Side Question',
           btwEmptySub: 'Ask without interrupting the current chat',
-          btwNewBtn: '+ /btw',
+          btwNewBtn: '/btw',
+          btwRunningState: 'Running',
           btwOpenState: 'Open',
           btwClosedState: 'Closed',
+          liveBtwRole: '/btw',
+          liveBtwParent: (t) => `from ${t}`,
           btwUntitled: 'Side Question Thread',
           btwJumpTip: 'Click to jump back to this side question',
           btwStartTip: 'Insert /btw command chip in composer',
@@ -5442,9 +5692,12 @@
           btwHeading: (n) => (n > 0 ? `サイド質問 (${n})` : 'サイド質問'),
           btwTitle: 'サイド質問',
           btwEmptySub: '現在の会話を止めずに割り込み質問できます',
-          btwNewBtn: '+ /btw',
+          btwNewBtn: '/btw',
+          btwRunningState: '実行中',
           btwOpenState: '表示中',
           btwClosedState: '閉じた状態',
+          liveBtwRole: '/btw',
+          liveBtwParent: (t) => `親: ${t}`,
           btwUntitled: 'サイド質問スレッド',
           btwJumpTip: 'クリックしてこのサイド質問へ移動',
           btwStartTip: '入力欄に /btw コマンドチップを挿入',
@@ -5506,9 +5759,12 @@
             : isTrad
             ? '在不影響目前對話的基礎上隨時提問'
             : '在不影响当前会话的基础上随时提问',
-        btwNewBtn: '+ /btw',
+        btwNewBtn: '/btw',
+        btwRunningState: isTrad ? '運行中' : '运行中',
         btwOpenState: isTrad ? '已開啟' : '已打开',
         btwClosedState: isTrad ? '已關閉' : '已关闭',
+        liveBtwRole: '/btw',
+        liveBtwParent: (t) => (isTrad ? `來自 ${t}` : `来自 ${t}`),
         btwUntitled: isTrad ? '旁支提問' : '旁支提问',
         btwJumpTip: isTrad ? '點擊跳回此旁支提問' : '点击跳转回此旁支提问',
         btwStartTip: isTrad ? '點擊在輸入框插入 /btw 命令並提問' : '点击在输入框插入 /btw 命令并提问',
@@ -5659,7 +5915,18 @@
 
       const renderItem = (item, isRun) => {
         const wrap = document.createElement('div');
-        wrap.className = 'cd-live-item';
+        wrap.className = `cd-live-item${item.isSideQuestion ? ' is-clickable' : ''}`;
+        if (item.isSideQuestion) {
+          wrap.title = c.btwJumpTip;
+          wrap.addEventListener('click', () => {
+            triggerSideQuestionOpen({
+              conversationId: item.parentConversationId || liveTasksState.sideQuestionConvoId || activeConversationId || '',
+              cascadeId: item.id || '',
+              tabId: item.tabId || (item.id ? `side_question__${item.id}` : ''),
+              forceNew: false,
+            });
+          });
+        }
 
         const top = document.createElement('div');
         top.className = 'cd-live-top';
@@ -5729,8 +5996,8 @@
           actRow.className = 'cd-live-activity';
 
           const rolePill = document.createElement('span');
-          rolePill.className = 'cd-role-pill is-main';
-          rolePill.textContent = c.liveMainRole;
+          rolePill.className = `cd-role-pill ${item.isSideQuestion ? 'is-btw' : 'is-main'}`;
+          rolePill.textContent = item.isSideQuestion ? c.liveBtwRole : c.liveMainRole;
           actRow.appendChild(rolePill);
 
           const actSpan = document.createElement('span');
@@ -5754,15 +6021,23 @@
           }
           wrap.appendChild(actRow);
 
-          if (item.stepCount > 0) {
+          if (item.stepCount > 0 || (item.isSideQuestion && item.parentTitle)) {
             const metaRow = document.createElement('div');
             metaRow.className = 'cd-live-meta-row';
-            metaRow.textContent =
-              lang === 'en'
-                ? `Step ${item.stepCount}`
-                : lang === 'ja'
-                ? `${item.stepCount} ステップ`
-                : `第 ${item.stepCount} 步`;
+            const parts = [];
+            if (item.stepCount > 0) {
+              parts.push(
+                lang === 'en'
+                  ? `Step ${item.stepCount}`
+                  : lang === 'ja'
+                  ? `${item.stepCount} ステップ`
+                  : `第 ${item.stepCount} 步`
+              );
+            }
+            if (item.isSideQuestion && item.parentTitle) {
+              parts.push(c.liveBtwParent(item.parentTitle));
+            }
+            metaRow.textContent = parts.join(' · ');
             wrap.appendChild(metaRow);
           }
         } else if (item.stepCount > 0) {
@@ -5943,24 +6218,21 @@
 
         const left = document.createElement('span');
         left.className = 'cd-btw-row-left';
-        const pill = document.createElement('span');
-        pill.className = 'cd-btw-pill';
-        pill.textContent = '/btw';
         const copy = document.createElement('span');
         copy.className = 'cd-btw-copy';
         const title = document.createElement('span');
         title.className = 'cd-btw-title';
         title.textContent = sq.question || c.btwUntitled;
         copy.appendChild(title);
-        left.appendChild(pill);
         left.appendChild(copy);
 
         const right = document.createElement('span');
         right.className = 'cd-btw-row-right';
         const st = document.createElement('span');
+        const isRunning = Boolean(sq.isRunning);
         const isOpen = Boolean(sq.isOpenTab && !sq.minimized);
-        st.className = `cd-btw-state${isOpen ? ' is-open' : ''}`;
-        st.textContent = isOpen ? c.btwOpenState : c.btwClosedState;
+        st.className = `cd-btw-state${isRunning ? ' is-running' : isOpen ? ' is-open' : ''}`;
+        st.textContent = isRunning ? c.btwRunningState : isOpen ? c.btwOpenState : c.btwClosedState;
         const arrow = document.createElement('span');
         arrow.className = 'cd-btw-arrow';
         arrow.setAttribute('aria-hidden', 'true');
@@ -6326,6 +6598,17 @@
         return {
           envHeading: 'Environment',
           hostLocal: 'This computer',
+          worktreeTag: 'Worktree',
+          menuShowExplorer: 'Show in Explorer',
+          menuShowFinder: 'Reveal in Finder',
+          menuShowFiles: 'Show in Files',
+          menuOpenGithub: 'Open repository on GitHub',
+          menuOpenRepo: 'Open remote repository',
+          menuCopyPath: 'Copy path',
+          menuCopyBranch: 'Copy branch name',
+          menuOpenTerminal: 'Open in terminal',
+          copiedBranch: 'Branch name copied',
+          actionFail: 'Could not run action',
           ctxHeading: 'Context',
           usedPct: (p) => `${p}% used`,
           freeSpace: 'Free space',
@@ -6362,6 +6645,17 @@
         return {
           envHeading: '環境',
           hostLocal: 'このコンピューター',
+          worktreeTag: 'Worktree',
+          menuShowExplorer: 'エクスプローラーで表示',
+          menuShowFinder: 'Finder で表示',
+          menuShowFiles: 'ファイルマネージャーで表示',
+          menuOpenGithub: 'GitHub でリポジトリを開く',
+          menuOpenRepo: 'リモートリポジトリを開く',
+          menuCopyPath: 'パスをコピー',
+          menuCopyBranch: 'ブランチ名をコピー',
+          menuOpenTerminal: 'ターミナルで開く',
+          copiedBranch: 'ブランチ名をコピーしました',
+          actionFail: '操作を実行できませんでした',
           ctxHeading: 'コンテキスト',
           usedPct: (p) => `${p}% 使用`,
           freeSpace: '空き容量',
@@ -6398,6 +6692,17 @@
       return {
         envHeading: isTrad ? '環境' : '环境',
         hostLocal: isTrad ? '本機電腦' : '本机',
+        worktreeTag: 'Worktree',
+        menuShowExplorer: isTrad ? '在檔案總管中顯示' : '在资源管理器中显示',
+        menuShowFinder: isTrad ? '在 Finder 中顯示' : '在 Finder 中显示',
+        menuShowFiles: isTrad ? '在檔案管理器中顯示' : '在文件管理器中显示',
+        menuOpenGithub: isTrad ? '在 GitHub 中開啟儲存庫' : '在 GitHub 中打开仓库',
+        menuOpenRepo: isTrad ? '開啟遠端儲存庫' : '打开远程仓库',
+        menuCopyPath: isTrad ? '複製路徑' : '复制路径',
+        menuCopyBranch: isTrad ? '複製分支名稱' : '复制分支名',
+        menuOpenTerminal: isTrad ? '在終端機中開啟' : '在终端中打开',
+        copiedBranch: isTrad ? '分支名稱已複製' : '分支名已复制',
+        actionFail: isTrad ? '無法執行此操作' : '无法执行此操作',
         ctxHeading: isTrad ? '上下文' : '上下文',
         usedPct: (p) => (isTrad ? `已用 ${p}%` : `已用 ${p}%`),
         freeSpace: isTrad ? '剩餘空間' : '剩余空间',
@@ -6451,13 +6756,163 @@
       return `${v.toFixed(1)}%`;
     }
 
+    function middleTruncateText(raw, maxLen = 24, headLen = 11, tailLen = 10) {
+      const s = String(raw || '').trim();
+      if (!s || s.length <= maxLen) return s;
+      const safeHead = Math.max(4, Math.min(headLen, s.length - 4));
+      const safeTail = Math.max(4, Math.min(tailLen, s.length - safeHead));
+      return `${s.slice(0, safeHead)}...${s.slice(s.length - safeTail)}`;
+    }
+
     function shortenParentPath(p) {
       const s = String(p || '').trim();
-      if (!s || s.length <= 28) return s;
-      const sep = s.includes('\\') ? '\\' : '/';
+      if (!s || s.length <= 20) return s;
       const parts = s.split(/[\\/]/).filter(Boolean);
-      if (parts.length <= 2) return s;
-      return `${parts[0]}${sep}…${sep}${parts[parts.length - 1]}`;
+      const tail = parts.length > 0 ? parts[parts.length - 1] : '';
+      if (tail && tail.length <= 14 && s.length > 20) {
+        const prefix = s.slice(0, Math.min(6, Math.max(4, s.length - tail.length - 3)));
+        return `${prefix}...${tail}`;
+      }
+      return middleTruncateText(s, 20, 6, 11);
+    }
+
+    function shortenBranchName(b) {
+      return middleTruncateText(b, 24, 12, 10);
+    }
+
+    let envPopoverKind = '';
+    let envPopoverAnchor = null;
+
+    function closeEnvPopover() {
+      const pop = document.getElementById('cd-env-popover');
+      if (pop) {
+        pop.hidden = true;
+        pop.innerHTML = '';
+      }
+      document.getElementById('cd-env-ws-row')?.classList.remove('is-menu-open');
+      document.getElementById('cd-env-ws-row')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('cd-env-branch-btn')?.classList.remove('is-menu-open');
+      document.getElementById('cd-env-branch-btn')?.setAttribute('aria-expanded', 'false');
+      envPopoverKind = '';
+      envPopoverAnchor = null;
+    }
+
+    async function copyEnvText(text, okMsg) {
+      const value = String(text || '');
+      if (!value) return;
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(value);
+          showToast(okMsg);
+          return;
+        }
+      } catch {}
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showToast(okMsg);
+      } catch {}
+    }
+
+    async function runEnvAction(payload, failMsg) {
+      try {
+        const res = await apiFetch('/api/env/action', {
+          body: JSON.stringify(payload || {}),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          showToast(failMsg || 'Action failed');
+        }
+      } catch {
+        showToast(failMsg || 'Action failed');
+      }
+    }
+
+    function openEnvPopover(kind, anchorEl, { keepOpen = false } = {}) {
+      const pop = document.getElementById('cd-env-popover');
+      const env = inspectorState?.environment || {};
+      if (!pop || !anchorEl) return;
+      if (!keepOpen && envPopoverKind === kind && !pop.hidden) {
+        closeEnvPopover();
+        return;
+      }
+      closeEnvPopover();
+
+      const lang = currentConfig?.language || 'zh-CN';
+      const ic = getInspectorCopy(lang);
+      const addItem = (label, onClick) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cd-env-menu-item';
+        btn.setAttribute('role', 'menuitem');
+        btn.textContent = label;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeEnvPopover();
+          void onClick();
+        });
+        pop.appendChild(btn);
+      };
+      const addSep = () => {
+        const sep = document.createElement('div');
+        sep.className = 'cd-env-menu-sep';
+        sep.setAttribute('role', 'separator');
+        pop.appendChild(sep);
+      };
+
+      if (kind === 'workspace') {
+        if (!env.fullPath) return;
+        const showLabel =
+          env.platform === 'darwin'
+            ? ic.menuShowFinder
+            : env.platform === 'linux'
+            ? ic.menuShowFiles
+            : ic.menuShowExplorer;
+        addItem(showLabel, () => runEnvAction({ action: 'reveal', path: env.fullPath }, ic.actionFail));
+        if (env.repoWebUrl) {
+          addItem(
+            env.isGitHub ? ic.menuOpenGithub : ic.menuOpenRepo,
+            () => runEnvAction({ action: 'open-repo', url: env.repoWebUrl }, ic.actionFail)
+          );
+        }
+        addSep();
+        addItem(ic.menuCopyPath, () => copyEnvText(env.fullPath, ic.copiedPath));
+        addSep();
+        addItem(ic.menuOpenTerminal, () => runEnvAction({ action: 'terminal', path: env.fullPath }, ic.actionFail));
+      } else if (kind === 'branch') {
+        if (!env.branch) return;
+        addItem(ic.menuCopyBranch, () => copyEnvText(env.branch, ic.copiedBranch));
+        if (env.fullPath) {
+          addSep();
+          addItem(ic.menuOpenTerminal, () => runEnvAction({ action: 'terminal', path: env.fullPath }, ic.actionFail));
+        }
+      } else {
+        return;
+      }
+
+      pop.hidden = false;
+      anchorEl.classList.add('is-menu-open');
+      anchorEl.setAttribute('aria-expanded', 'true');
+      envPopoverKind = kind;
+      envPopoverAnchor = anchorEl;
+
+      const rect = anchorEl.getBoundingClientRect();
+      const popRect = pop.getBoundingClientRect();
+      const pad = 8;
+      let left = Math.max(pad, Math.min(rect.left, window.innerWidth - popRect.width - pad));
+      let top = rect.bottom + 5;
+      if (top + popRect.height > window.innerHeight - pad) {
+        top = Math.max(pad, rect.top - popRect.height - 5);
+      }
+      pop.style.left = `${Math.round(left)}px`;
+      pop.style.top = `${Math.round(top)}px`;
     }
 
     function renderConversationInspector() {
@@ -6479,30 +6934,38 @@
       const refBtn = document.getElementById('btn-inspector-refresh');
       if (refBtn) refBtn.title = ic.refreshTip;
 
-      // Environment workspace
+      // Environment workspace & Git branch (Claude Desktop-style interactive rows)
       const wsRow = document.getElementById('cd-env-ws-row');
-      const wsTip = document.getElementById('cd-env-ws-tip');
       const wsNameEl = document.getElementById('cd-env-ws-name');
       const wsPathEl = document.getElementById('cd-env-ws-path');
+      const branchRow = document.getElementById('cd-env-branch-row');
+      const branchBtn = document.getElementById('cd-env-branch-btn');
       const branchEl = document.getElementById('cd-env-branch');
+      const wtTagEl = document.getElementById('cd-env-worktree-tag');
       const env = data?.environment || {};
       if (wsRow) {
         if (env.workspaceName) {
           wsRow.hidden = false;
+          wsRow.title = env.fullPath || env.workspaceName;
           if (wsNameEl) wsNameEl.textContent = env.workspaceName;
           if (wsPathEl) wsPathEl.textContent = env.parentPath ? ` · ${shortenParentPath(env.parentPath)}` : '';
-          if (wsTip) wsTip.title = env.fullPath || env.workspaceName;
-          if (branchEl) {
-            if (env.branch) {
-              branchEl.hidden = false;
-              branchEl.textContent = env.branch;
-              branchEl.title = `Git: ${env.branch}`;
-            } else {
-              branchEl.hidden = true;
-            }
-          }
         } else {
           wsRow.hidden = true;
+          if (envPopoverKind === 'workspace') closeEnvPopover();
+        }
+      }
+      if (branchRow && branchEl) {
+        if (env.branch) {
+          branchRow.hidden = false;
+          branchEl.textContent = shortenBranchName(env.branch);
+          if (branchBtn) branchBtn.title = env.branch;
+          if (wtTagEl) {
+            wtTagEl.hidden = !env.isWorktree;
+            wtTagEl.textContent = ic.worktreeTag;
+          }
+        } else {
+          branchRow.hidden = true;
+          if (envPopoverKind === 'branch') closeEnvPopover();
         }
       }
 
@@ -6753,6 +7216,50 @@
       void loadConversationInspector();
       void loadLiveTasks();
     });
+    document.getElementById('cd-env-ws-row')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEnvPopover('workspace', e.currentTarget);
+    });
+    document.getElementById('cd-env-ws-row')?.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openEnvPopover('workspace', e.currentTarget, { keepOpen: true });
+    });
+    document.getElementById('cd-env-branch-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEnvPopover('branch', e.currentTarget);
+    });
+    document.getElementById('cd-env-branch-btn')?.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openEnvPopover('branch', e.currentTarget, { keepOpen: true });
+    });
+    document.addEventListener('contextmenu', (e) => {
+      if (!envPopoverKind) return;
+      const pop = document.getElementById('cd-env-popover');
+      if (pop && pop.contains(e.target)) {
+        e.preventDefault();
+        return;
+      }
+      if (envPopoverAnchor && envPopoverAnchor.contains(e.target)) return;
+      closeEnvPopover();
+    });
+    document.addEventListener('click', (e) => {
+      if (!envPopoverKind) return;
+      const pop = document.getElementById('cd-env-popover');
+      if (pop && pop.contains(e.target)) return;
+      if (envPopoverAnchor && envPopoverAnchor.contains(e.target)) return;
+      closeEnvPopover();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && envPopoverKind) closeEnvPopover();
+    });
+    window.addEventListener('resize', () => {
+      if (envPopoverKind) closeEnvPopover();
+    });
+    window.addEventListener('scroll', () => {
+      if (envPopoverKind) closeEnvPopover();
+    }, true);
     document.getElementById('cd-mcp-toggle')?.addEventListener('click', () => {
       inspectorExpanded.mcp = !inspectorExpanded.mcp;
       renderConversationInspector();

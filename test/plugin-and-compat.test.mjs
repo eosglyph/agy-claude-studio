@@ -2976,6 +2976,7 @@ test('compactPreset continue mode and persistent /btw side-question restore & co
     assert.equal(openRes.action, 'restored');
     assert.ok(dispatched.some((a) => a.type === 'sideQuestion/restoreSideQuestion' && a.payload === convoId));
     assert.ok(dispatched.some((a) => a.type === 'sidePanelV2/setContent' && a.payload?.content?.type === 'sideQuestionView'));
+    assert.ok(dispatched.some((a) => a.type === 'sidePanelV2/setActiveTab' && a.payload?.tabId === 'side_question__fork-111'));
     assert.equal(auxToggleClicks, 1, 'Opens closed aux pane when restoring sideQuestionView tab');
 
     // C. Clicking forceNew inserts /btw, converts to chip, and shows gray ghost guide hint
@@ -2992,5 +2993,354 @@ test('compactPreset continue mode and persistent /btw side-question restore & co
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
   } finally {
     for (const id of timers) clearTimeout(id);
+  }
+});
+
+
+test('getSideQuestionsState reads persisted annotations.sideQuestionCascadeIds/Titles and enriches untitled closed tabs', async () => {
+  const timers = new Set();
+  const convoId = '3e950d9e-f798-4da2-8b1c-9c2585d7abd4';
+  const sqId = 'ff7d0c37-1eaa-4173-ba7b-d9414c30a210';
+  const sqId2 = 'aa7d0c37-1eaa-4173-ba7b-d9414c30a299';
+
+  const makeEl = (tag, { id = '', className = '', attrs = {} } = {}) => {
+    const classes = new Set((className || '').split(/\s+/).filter(Boolean));
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      id,
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); for (const c of String(v || '').split(/\s+/).filter(Boolean)) classes.add(c); },
+      attrs: new Map(Object.entries(attrs)),
+      children: [],
+      parentElement: null,
+      textContent: '',
+      innerHTML: '',
+      style: { setProperty() {}, getPropertyValue() { return ''; }, removeProperty() {} },
+      classList: {
+        add(...cs) { for (const c of cs) if (c) classes.add(c); },
+        remove(...cs) { for (const c of cs) classes.delete(c); },
+        toggle(c, force) { const on = force === undefined ? !classes.has(c) : Boolean(force); if (on) classes.add(c); else classes.delete(c); },
+        contains: (c) => classes.has(c),
+      },
+      appendChild(child) { child.parentElement = this; this.children.push(child); return child; },
+      remove() { if (!this.parentElement) return; const i = this.parentElement.children.indexOf(this); if (i >= 0) this.parentElement.children.splice(i, 1); this.parentElement = null; },
+      getAttribute(k) { return this.attrs.has(k) ? this.attrs.get(k) : null; },
+      setAttribute(k, v) { this.attrs.set(k, String(v)); },
+      removeAttribute(k) { this.attrs.delete(k); },
+      hasAttribute(k) { return this.attrs.has(k); },
+      addEventListener() {},
+      removeEventListener() {},
+      closest() { return null; },
+      querySelector() { return null; },
+      querySelectorAll() { return []; },
+    };
+    return el;
+  };
+
+  const docEl = makeEl('html');
+  const head = docEl.appendChild(makeEl('head'));
+  const body = docEl.appendChild(makeEl('body', { className: 'theme-standalone' }));
+  const root = body.appendChild(makeEl('div', { id: 'root' }));
+  root.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+
+  const reduxState = {
+    conversation: { convoState: { type: 'active', cascadeId: convoId } },
+    sideQuestion: { states: {} },
+    ephemeralFork: { forks: {} },
+    sidePanelV2: {
+      conversationPanes: {
+        [convoId]: {
+          tabs: [],
+          closedTabs: [
+            { tab: { id: `side_question__${sqId}`, content: { type: 'sideQuestionView', sideQuestionView: { cascadeId: sqId } } } },
+          ],
+        },
+      },
+    },
+    trajectorySummaries: {
+      summaries: {
+        [convoId]: {
+          summary: 'test',
+          annotations: {
+            sideQuestionCascadeIds: [sqId, sqId2],
+            sideQuestionTitles: {
+              [sqId]: 'Agy官方新模型特性讨论',
+              [sqId2]: '正在跑的旁支研究',
+            },
+          },
+        },
+        [sqId]: { status: 1, stepCount: 120, lastModifiedTime: { seconds: '1795700000' } },
+        [sqId2]: { status: 2, stepCount: 42, lastModifiedTime: { seconds: '1795705000' } },
+      },
+    },
+  };
+  root.__reactContainer$test = {
+    current: {
+      memoizedProps: {
+        value: { store: { getState: () => reduxState, dispatch: () => {} } },
+      },
+    },
+  };
+
+  const doc = {
+    documentElement: docEl,
+    head,
+    body,
+    readyState: 'complete',
+    visibilityState: 'visible',
+    title: 'Test - Antigravity',
+    getElementById: (id) => (id === 'root' ? root : null),
+    querySelector: (sel) => (sel.includes('agent-input-box') ? root.children[0] : null),
+    querySelectorAll: (sel) => (sel.includes('agent-input-box') ? [root.children[0]] : []),
+    createElement: (tag) => makeEl(tag),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const sandbox = {
+    document: doc,
+    location: { href: 'https://127.0.0.1:2015/', protocol: 'https:', hostname: '127.0.0.1', pathname: '/' },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl, RegExp,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, language: 'zh-CN' }), sandbox);
+    const snap = sandbox.window.__agClaudeStudio.getSideQuestionsState('');
+    assert.equal(snap.conversationId, convoId, 'Resolves active conversation from Redux conversation.convoState.cascadeId');
+    assert.equal(snap.items.length, 2, 'Includes both closed-tab and persisted-only side questions');
+    assert.equal(snap.items[0].cascadeId, sqId2, 'Sorts running side question first');
+    assert.equal(snap.items[0].isRunning, true);
+    assert.equal(snap.items[0].question, '正在跑的旁支研究');
+    assert.equal(snap.items[1].cascadeId, sqId);
+    assert.equal(snap.items[1].question, 'Agy官方新模型特性讨论', 'Fills missing title from annotations.sideQuestionTitles');
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('getLiveTasksApi counts running side-question sessions and merges persisted sideQuestions from trajectorySummaries', async () => {
+  const { getLiveTasksApi } = await import('../sidecars/studio/main.mjs');
+  const parentId = 'parent-convo-1';
+  const runningSqId = 'sq-running-1';
+  const closedSqId = 'sq-closed-2';
+
+  const mockFetch = async (url, init) => {
+    const u = String(url);
+    const body = init?.body ? JSON.parse(init.body) : {};
+    if (u.includes('ListConversations')) {
+      if (body.parentConversationId) {
+        return { ok: true, status: 200, json: async () => ({ conversations: [] }) };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          conversations: [
+            {
+              id: parentId,
+              annotations: { title: 'Main Feature Work' },
+              state: { runState: 'RUN_STATE_IDLE', updateTime: '2026-11-26T15:00:00Z' },
+              metadata: { createTime: '2026-11-26T14:00:00Z' },
+            },
+          ],
+        }),
+      };
+    }
+    if (u.includes('GetAllCascadeTrajectories')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          trajectorySummaries: {
+            [parentId]: {
+              summary: 'Main Feature Work',
+              status: 'CASCADE_RUN_STATUS_IDLE',
+              stepCount: 50,
+              annotations: {
+                title: 'Main Feature Work',
+                sideQuestionCascadeIds: [runningSqId, closedSqId],
+                sideQuestionTitles: {
+                  [runningSqId]: '旁支模型对比',
+                  [closedSqId]: '历史旁支笔记',
+                },
+              },
+            },
+            [runningSqId]: {
+              summary: '',
+              status: 'CASCADE_RUN_STATUS_RUNNING',
+              stepCount: 12,
+              lastModifiedTime: '2026-11-26T15:10:00Z',
+            },
+            [closedSqId]: {
+              summary: '',
+              status: 'CASCADE_RUN_STATUS_IDLE',
+              stepCount: 8,
+              lastModifiedTime: '2026-11-26T14:10:00Z',
+            },
+          },
+        }),
+      };
+    }
+    if (u.includes('GetCascadeTrajectorySteps')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          steps: [{ type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE', status: 'CORTEX_STEP_STATUS_RUNNING', plannerResponse: { thinking: 'analyzing...' } }],
+        }),
+      };
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+
+  const res = await getLiveTasksApi({
+    env: {
+      ANTIGRAVITY_LS_ADDRESS: '127.0.0.1:49998',
+      ANTIGRAVITY_CSRF_TOKEN: 'lstok',
+    },
+    fetchFn: mockFetch,
+    allowCdpFallback: false,
+    conversationId: parentId,
+  });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.running.length, 1, 'Running side-question session is counted in running list');
+  assert.equal(res.running[0].id, runningSqId);
+  assert.equal(res.running[0].isSideQuestion, true);
+  assert.equal(res.running[0].title, '旁支模型对比');
+  assert.equal(res.running[0].parentConversationId, parentId);
+  assert.equal(res.running[0].parentTitle, 'Main Feature Work');
+  assert.equal(res.sideQuestions.length, 2, 'Both running and closed persisted side questions are returned');
+  assert.equal(res.sideQuestions[0].cascadeId, runningSqId);
+  assert.equal(res.sideQuestions[0].isRunning, true);
+  assert.equal(res.sideQuestions[1].cascadeId, closedSqId);
+  assert.equal(res.sideQuestions[1].question, '历史旁支笔记');
+});
+
+test('Environment git metadata detects worktree & normalizes remotes, and performEnvironmentActionApi enforces workspace boundary', async () => {
+  const { normalizeGitRemoteToWebUrl, inspectWorkspaceGitMeta, performEnvironmentActionApi } = await import('../sidecars/studio/main.mjs');
+
+  assert.deepEqual(normalizeGitRemoteToWebUrl('git@github.com:eosglyph/agy-claude-studio.git'), {
+    url: 'https://github.com/eosglyph/agy-claude-studio',
+    host: 'github.com',
+    isGitHub: true,
+  });
+  assert.deepEqual(normalizeGitRemoteToWebUrl('https://gitlab.com/org/proj.git'), {
+    url: 'https://gitlab.com/org/proj',
+    host: 'gitlab.com',
+    isGitHub: false,
+  });
+  assert.equal(normalizeGitRemoteToWebUrl('javascript:alert(1)').url, '');
+  assert.equal(normalizeGitRemoteToWebUrl('file:///C:/Windows/win.ini').url, '');
+  assert.equal(normalizeGitRemoteToWebUrl('https://github.com/a/b; calc.exe').url, '');
+
+  const tmpRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-env-test-')));
+  try {
+    const commonGit = path.join(tmpRoot, 'main-repo', '.git');
+    const wtGitDir = path.join(commonGit, 'worktrees', 'feat-demo');
+    const wtDir = path.join(tmpRoot, 'wt-demo');
+    const outsideDir = path.join(tmpRoot, 'outside');
+    fs.mkdirSync(wtGitDir, { recursive: true });
+    fs.mkdirSync(wtDir, { recursive: true });
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.writeFileSync(path.join(commonGit, 'config'), '[remote "origin"]\n\turl = git@github.com:eosglyph/agy-claude-studio.git\n');
+    fs.writeFileSync(path.join(wtGitDir, 'commondir'), '../..\n');
+    fs.writeFileSync(path.join(wtGitDir, 'HEAD'), 'ref: refs/heads/claude/adoring-han-edf0d3\n');
+    fs.writeFileSync(path.join(wtDir, '.git'), `gitdir: ${wtGitDir}\n`);
+
+    const meta = inspectWorkspaceGitMeta(wtDir);
+    assert.equal(meta.isWorktree, true);
+    assert.equal(meta.branch, 'claude/adoring-han-edf0d3');
+    assert.equal(meta.repoWebUrl, 'https://github.com/eosglyph/agy-claude-studio');
+    assert.equal(meta.isGitHub, true);
+
+    const spawned = [];
+    const fakeSpawn = (cmd, args, opts) => {
+      spawned.push({ cmd, args, opts });
+      const handlers = new Map();
+      const child = {
+        once(ev, fn) { handlers.set(ev, fn); },
+        unref() {},
+      };
+      setImmediate(() => {
+        if (cmd === 'wt.exe') handlers.get('error')?.({ code: 'ENOENT' });
+        else handlers.get('exit')?.(0);
+      });
+      return child;
+    };
+
+    const revealCalls = [];
+    const revealViaHelper = await performEnvironmentActionApi(
+      { action: 'reveal', path: wtDir },
+      {
+        allowedDirs: [wtDir],
+        revealFn: async (opts) => {
+          revealCalls.push(opts);
+          return { ok: true, mode: 'reveal' };
+        },
+        platform: 'win32',
+      }
+    );
+    assert.equal(revealViaHelper.ok, true);
+    assert.equal(revealCalls.length, 1);
+    assert.equal(revealCalls[0].mode, 'reveal');
+    assert.ok(revealCalls[0].target.startsWith('file:///'), 'Passes file:/// URI to shared WindowsFileAction reveal helper');
+
+    const revealOk = await performEnvironmentActionApi(
+      { action: 'reveal', path: wtDir },
+      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: 'win32' }
+    );
+    assert.equal(revealOk.ok, true);
+    assert.equal(spawned[0].cmd, 'explorer.exe');
+    assert.deepEqual(spawned[0].args, [wtDir]);
+    assert.equal(spawned[0].opts.shell, false);
+    assert.equal(spawned[0].opts.windowsHide, false);
+
+    const termOk = await performEnvironmentActionApi(
+      { action: 'terminal', path: wtDir },
+      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: 'win32' }
+    );
+    assert.equal(termOk.ok, true);
+    assert.equal(spawned[1].cmd, 'wt.exe');
+    assert.equal(spawned[2].cmd, 'pwsh.exe');
+    assert.equal(spawned[2].opts.cwd, wtDir);
+    assert.equal(spawned[2].opts.shell, false);
+
+    const repoOk = await performEnvironmentActionApi(
+      { action: 'open-repo', url: 'https://github.com/eosglyph/agy-claude-studio' },
+      { allowedUrls: ['https://github.com/eosglyph/agy-claude-studio'], spawnFn: fakeSpawn, platform: 'win32' }
+    );
+    assert.equal(repoOk.ok, true);
+
+    const blockedDir = await performEnvironmentActionApi(
+      { action: 'reveal', path: outsideDir },
+      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: 'win32' }
+    );
+    assert.equal(blockedDir.ok, false);
+    assert.equal(blockedDir.error, 'path_not_allowed');
+
+    const blockedUrl = await performEnvironmentActionApi(
+      { action: 'open-repo', url: 'https://evil.example/repo' },
+      { allowedUrls: ['https://github.com/eosglyph/agy-claude-studio'], spawnFn: fakeSpawn, platform: 'win32' }
+    );
+    assert.equal(blockedUrl.ok, false);
+    assert.equal(blockedUrl.error, 'url_not_allowed');
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
 });
