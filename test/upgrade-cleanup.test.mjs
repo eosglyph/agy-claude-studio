@@ -14,6 +14,21 @@ function makeTempDir(prefix) {
   return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 }
 
+// Released inject.sh, also used to exercise CRLF checkouts and edited copies.
+const releasedInject = `#!/usr/bin/env bash
+# Inject Claude Studio (agy-claude-studio) into Antigravity windows once.
+cd "$(dirname "$0")"
+echo "Injecting Claude Studio (agy-claude-studio)..."
+node inject.js
+`;
+
+function writeLayout(root) {
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  for (const file of ['cdp.js', 'inject.js', 'ui-runtime.js', 'style.css', 'lifecycle.js']) {
+    fs.writeFileSync(path.join(root, 'src', file), '/* new layout */\n');
+  }
+}
+
 test('LEGACY_FLAT_ROOT_FILES contains exact 31 pre-v2.2.4 migrated and retired root files', () => {
   assert.equal(lifecycle.LEGACY_FLAT_ROOT_FILES.length, 31);
   assert.equal(new Set(lifecycle.LEGACY_FLAT_ROOT_FILES).size, 31);
@@ -25,13 +40,11 @@ test('LEGACY_FLAT_ROOT_FILES contains exact 31 pre-v2.2.4 migrated and retired r
   assert.ok(lifecycle.LEGACY_FLAT_ROOT_FILES.includes('launch.sh'));
 });
 
-test('cleanupLegacyFlatRootFiles removes all 31 legacy files while preserving valid root, src, ops, and custom files', () => {
+test('cleanupLegacyFlatRootFiles removes published originals while preserving valid root, src, ops, and custom files', () => {
   const rootDir = makeTempDir('agy-cs-cleanup-');
   try {
-    fs.mkdirSync(path.join(rootDir, 'src'), { recursive: true });
+    writeLayout(rootDir);
     fs.mkdirSync(path.join(rootDir, 'scripts', 'ops'), { recursive: true });
-    fs.writeFileSync(path.join(rootDir, 'src', 'cdp.js'), '// new layout\n', 'utf8');
-    fs.writeFileSync(path.join(rootDir, 'src', 'inject.js'), '// new inject\n', 'utf8');
     fs.writeFileSync(path.join(rootDir, 'package.json'), '{"name":"agy-claude-studio"}\n', 'utf8');
     fs.writeFileSync(path.join(rootDir, 'plugin.json'), '{"name":"agy-claude-studio"}\n', 'utf8');
     fs.writeFileSync(path.join(rootDir, 'i18n-compat.json'), '{}\n', 'utf8');
@@ -42,15 +55,17 @@ test('cleanupLegacyFlatRootFiles removes all 31 legacy files while preserving va
       fs.writeFileSync(path.join(rootDir, file), `legacy:${file}\n`, 'utf8');
     }
 
+    fs.writeFileSync(path.join(rootDir, 'inject.sh'), releasedInject.replace(/\n/g, '\r\n'));
+    const modifiedScript = releasedInject + '# customized\n';
+    fs.writeFileSync(path.join(rootDir, 'launch.sh'), modifiedScript);
     const res = lifecycle.cleanupLegacyFlatRootFiles(rootDir);
     assert.equal(res.skipped, false);
     assert.equal(res.reason, 'cleaned');
     assert.deepEqual(res.errors, []);
-    assert.equal(res.removed.length, 31);
-
-    for (const file of lifecycle.LEGACY_FLAT_ROOT_FILES) {
-      assert.equal(fs.existsSync(path.join(rootDir, file)), false, `Expected ${file} to be removed`);
-    }
+    assert.deepEqual(res.removed, ['inject.sh']);
+    assert.equal(fs.existsSync(path.join(rootDir, 'inject.sh')), false);
+    assert.deepEqual(res.preserved, lifecycle.LEGACY_FLAT_ROOT_FILES.filter((file) => file !== 'inject.sh'));
+    assert.equal(fs.readFileSync(path.join(rootDir, 'launch.sh'), 'utf8'), modifiedScript);
 
     assert.equal(fs.existsSync(path.join(rootDir, 'package.json')), true);
     assert.equal(fs.existsSync(path.join(rootDir, 'plugin.json')), true);
@@ -76,7 +91,8 @@ test('cleanupLegacyFlatRootFiles skips when .git directory or .git worktree file
   const wtDir = makeTempDir('agy-cs-gitfile-');
   try {
     for (const dir of [repoDir, wtDir]) {
-      fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
+      writeLayout(dir);
+      fs.writeFileSync(path.join(dir, 'inject.sh'), releasedInject);
       fs.writeFileSync(path.join(dir, 'src', 'cdp.js'), '// src\n', 'utf8');
       fs.writeFileSync(path.join(dir, 'cdp.js'), '// legacy\n', 'utf8');
       fs.writeFileSync(path.join(dir, 'launch.bat'), '@echo off\n', 'utf8');
@@ -95,6 +111,7 @@ test('cleanupLegacyFlatRootFiles skips when .git directory or .git worktree file
     assert.equal(resWt.skipped, true);
     assert.equal(resWt.reason, 'git_repo');
     assert.deepEqual(resWt.removed, []);
+    for (const dir of [repoDir, wtDir]) assert.ok(fs.existsSync(path.join(dir, 'inject.sh')));
     assert.equal(fs.existsSync(path.join(wtDir, 'cdp.js')), true);
     assert.equal(fs.existsSync(path.join(wtDir, 'launch.bat')), true);
   } finally {
@@ -103,9 +120,12 @@ test('cleanupLegacyFlatRootFiles skips when .git directory or .git worktree file
   }
 });
 
-test('cleanupLegacyFlatRootFiles skips when src/cdp.js is missing', () => {
+test('cleanupLegacyFlatRootFiles skips a partial layout even when src/cdp.js exists', () => {
   const rootDir = makeTempDir('agy-cs-nosrc-');
   try {
+    writeLayout(rootDir);
+    fs.unlinkSync(path.join(rootDir, 'src', 'style.css'));
+    fs.writeFileSync(path.join(rootDir, 'inject.sh'), releasedInject);
     fs.writeFileSync(path.join(rootDir, 'cdp.js'), '// legacy\n', 'utf8');
     fs.writeFileSync(path.join(rootDir, 'watch.bat'), '@echo off\n', 'utf8');
 
@@ -117,6 +137,29 @@ test('cleanupLegacyFlatRootFiles skips when src/cdp.js is missing', () => {
     assert.equal(fs.existsSync(path.join(rootDir, 'watch.bat')), true);
   } finally {
     fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+});
+
+test('cleanup preserves links even when their target contains a released original', (t) => {
+  const root = makeTempDir('agy-cs-link-');
+  try {
+    writeLayout(root);
+    const original = path.join(root, 'keep');
+    fs.writeFileSync(original, releasedInject);
+    const link = path.join(root, 'inject.sh');
+    try {
+      fs.symlinkSync(original, link, 'file');
+    } catch (err) {
+      if (err.code !== 'EPERM') throw err;
+      // Windows without symlink privileges still permits directory junctions.
+      fs.symlinkSync(path.join(root, 'src'), link, 'junction');
+      t.diagnostic('Tested a junction on this Windows host');
+    }
+    assert.deepEqual(lifecycle.cleanupLegacyFlatRootFiles(root).preserved, ['inject.sh']);
+    assert.ok(fs.lstatSync(link).isSymbolicLink());
+    assert.equal(fs.readFileSync(original, 'utf8'), releasedInject);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -178,7 +221,7 @@ test('runSubprocessReinject captures stderr when subprocess exits non-zero', asy
   }
 });
 
-test('performArchiveSelfUpdate cleans legacy flat files and runs subprocess reinject on non-git install', async () => {
+test('v2.2.3 overlay, restart cleanup and next archive update use the installed subprocess injector', async () => {
   const tmpDir = makeTempDir('agy-cs-arch-cleanup-');
   try {
     const pluginDir = path.join(tmpDir, 'installed-plugin');
@@ -190,9 +233,9 @@ test('performArchiveSelfUpdate cleans legacy flat files and runs subprocess rein
 
     fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.2.3' }), 'utf8');
     fs.writeFileSync(path.join(pluginDir, 'package.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.2.3' }), 'utf8');
-    for (const file of lifecycle.LEGACY_FLAT_ROOT_FILES) {
-      fs.writeFileSync(path.join(pluginDir, file), `old:${file}\n`, 'utf8');
-    }
+    fs.writeFileSync(path.join(pluginDir, 'inject.sh'), releasedInject);
+    fs.writeFileSync(path.join(pluginDir, 'launch.bat'), 'user-edited');
+    writeLayout(releaseSrc);
 
     const markerPath = path.join(pluginDir, 'archive-reinject-marker.txt');
     fs.writeFileSync(path.join(releaseSrc, 'plugin.json'), JSON.stringify({ name: 'agy-claude-studio', version: '2.2.4' }), 'utf8');
@@ -204,31 +247,52 @@ test('performArchiveSelfUpdate cleans legacy flat files and runs subprocess rein
       'utf8'
     );
 
-    const tarFile = path.join(tmpDir, 'v2.2.4.tar.gz');
+    // v2.2.3 copied the new layout over the flat install and called its cached injector.
+    // Start a fresh process against the installed lifecycle as the restarted host does.
+    fs.copyFileSync(new URL('../src/lifecycle.js', import.meta.url), path.join(releaseSrc, 'src', 'lifecycle.js'));
+    fs.cpSync(releaseSrc, pluginDir, { recursive: true });
+    assert.ok(fs.existsSync(path.join(pluginDir, 'inject.sh')));
+    const restart = execFileSync(process.execPath, ['-e',
+      "console.log(JSON.stringify(require('./src/lifecycle').cleanupLegacyFlatRootFiles(process.cwd())))",
+    ], { cwd: pluginDir, encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(restart).removed, ['inject.sh']);
+    assert.equal(fs.existsSync(markerPath), false);
+    fs.writeFileSync(path.join(releaseSrc, 'package.json'), JSON.stringify({ version: '2.2.5' }));
+    const tarFile = path.join(tmpDir, 'v2.2.5.tar.gz');
     execFileSync('tar', ['-czf', tarFile, '-C', tmpDir, 'agy-claude-studio-2.2.4']);
     const tarBuf = fs.readFileSync(tarFile);
 
-    const updRes = await studioMain.performArchiveSelfUpdate({
+    const updateOptions = {
       pluginDir,
       pluginDataDir,
-      targetTag: 'v2.2.4',
+      targetTag: 'v2.2.5',
       fetchFn: async () => ({
         ok: true,
         status: 200,
         arrayBuffer: async () => tarBuf.buffer.slice(tarBuf.byteOffset, tarBuf.byteOffset + tarBuf.byteLength),
       }),
-    });
+    };
+    const updRes = await studioMain.performStudioSelfUpdate(updateOptions);
 
     assert.equal(updRes.ok, true);
     assert.equal(updRes.mode, 'archive');
-    assert.equal(updRes.version, '2.2.4');
+    assert.equal(updRes.version, '2.2.5');
 
-    for (const file of lifecycle.LEGACY_FLAT_ROOT_FILES) {
-      assert.equal(fs.existsSync(path.join(pluginDir, file)), false, `Expected ${file} to be cleaned`);
-    }
+    assert.equal(updRes.filesUpdated, true);
+    assert.equal(updRes.reinjectOk, true);
+    assert.equal(updRes.needsRestart, true);
+    assert.match(updRes.reinjectError, /updated plugin backend/);
+    assert.equal(fs.existsSync(path.join(pluginDir, 'inject.sh')), false);
+    assert.equal(fs.readFileSync(path.join(pluginDir, 'launch.bat'), 'utf8'), 'user-edited');
     assert.equal(fs.existsSync(path.join(pluginDir, 'src', 'cdp.js')), true);
     assert.equal(fs.existsSync(markerPath), true);
     assert.match(fs.readFileSync(markerPath, 'utf8'), /^subprocess-ran:\d+$/);
+    const failed = await studioMain.performStudioSelfUpdate({ ...updateOptions, reinjectFn() { throw Error('activation failed'); } });
+    assert.equal(failed.ok, true);
+    assert.equal(failed.filesUpdated, true);
+    assert.equal(failed.reinjectOk, false);
+    assert.match(failed.reinjectError, /activation failed/);
+    assert.equal(failed.needsRestart, true);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

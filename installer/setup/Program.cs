@@ -862,6 +862,193 @@ namespace AgyClaudeStudio.Installer
             }
         }
 
+        // Same normalized release hashes as src/lifecycle.js (v2.2.3 through v2.0.0).
+        private static readonly Dictionary<string, string[]> LegacyFlatRootSha256 = new Dictionary<string, string[]>
+        {
+            { "cdp.js", new string[] {
+                "55d44228254c444b2f79bbdc92056ab0bdf44ea575365b53dcb90ff1e51e5361",
+                "c43c3d586918da728e236d45578f95d85b6798f14777a2e83a7d956b9583118d",
+                "c95311695fe341831d359cb0420c66b0a767134e479d19ad7a0be9fcf835d039",
+                "2125024bbfd80d9e055ebbc8b278f71dc8f071ab2826de30587f704f5b8a1048",
+                "56a794856db790bf131d41c5e755084bbc9c4f9aca1d98b7e3884e2057947a2a",
+            } },
+            { "crab-assets.js", new string[] {
+                "af9616788f6345712db88569b152bbd839854e0fc30bea89ee33366bb2a9a440",
+            } },
+            { "effort-core.js", new string[] {
+                "f273b23473601c0579492bafccc4285784d2107578eeb610520f85128186e6a0",
+                "d3a23e1f458e52dc2e48fed79e72d348b91427a659f7da6a554dd33266eda337",
+            } },
+            { "i18n-core.js", new string[] {
+                "5b0403f2c02bf6db6b3f079ca1fc86a9fdf0dc4234323ad69b1b715e8e11c5e4",
+                "81cf48105b9a15a8bb979d7257cf37d79a848f7caa7986c270b143074b9ce8d7",
+                "5851f0f8287e69b4abd3218a16a58bf12e304fb94e142cddd14926ce7bf7214b",
+                "c70408a80951494be44b04d6cc17872de58768b9214176092de339efc461da0b",
+            } },
+            { "i18n-locales.js", new string[] {
+                "8b9df3e10b3591ad1fee8b4c0b2dcd1d580325c6e8be570a7dc1f11316146e07",
+                "ae49fdbe3ab5e3820fe33f0d6a67bc97d7bfe413b9eea4ee13743c7a9f50c17e",
+                "dde1f400a0c92660d20f53eef1765f65ac4dd82460951fb030791583f60b4b9d",
+                "b5fc841430170e4829e7c3153d1ae5a99a6f17456862f45b6c801ace8458b03c",
+                "6f9524dbedb341dcfea6455c518d9e6599ffac8de23084b23374efc5c5f4e1ca",
+            } },
+            { "i18n-sync.js", new string[] {
+                "99d46e76c2a4ea7aaf5b34e49bf5a71359f03115d9265050027f9e422159e6a9",
+            } },
+            { "inject.js", new string[] {
+                "d06fbd729e8fed55f0083b4bd743731c35228ade94a914bacd306d03ffa45a1a",
+                "9d299f43d52033f501615622365b0e27bddf2490aa9a9fd8d9a659ecd6e6fbe2",
+                "97383e33448fa6b37d23251c7221ec4e1c0eefaa1c383552e8f81ef851f26c31",
+            } },
+            { "lifecycle.js", new string[] {
+                "3e9370e5b42003948fa659fb78cc337a3625b24b9aa9042311cd01a1e175e43a",
+            } },
+            { "mascot-core.js", new string[] {
+                "c1a335ce9ba0380be2e8ec2296ae98d9c6820f49eccbf865e2642f52d61e12d2",
+            } },
+            { "notify-core.js", new string[] {
+                "6f9924c70ec9cf5c8561635b91013ad4c081fe016866c32ad24e4a5ac88eb70b",
+                "99880ee5117868baeb09d713e71784227a41884a7f00971f2685e4dca6193c55",
+            } },
+            { "periodic-core.js", new string[] {
+                "45dcc806364cf40920c68d4b23b0ea6c873fd071cdceef818959541a64f48daf",
+            } },
+            { "periodic-sync.js", new string[] {
+                "cac2e35fe6835be367cef9b78af01f0b8382ad471abc612aa5784aef4df62c60",
+            } },
+            { "remove.js", new string[] {
+                "d1362b32848be402c9da2e9c292b1caff4c3323c07367ec839b326f692811424",
+                "13663565b14aa427c2e67e9c7ecfc4b17a56517c3f22920fdbf84a14a2926c00",
+            } },
+            { "ripple-core.js", new string[] {
+                "eb7e73e3862dfe620e6934d78ba12a8a60467013dd1a95b5cf69be442d3486d5",
+            } },
+            { "scripts-core.js", new string[] {
+                "0b5bff4d88fb054f91aae8ee1269ebcbcb8357144b5e87ba956bd68383646916",
+                "9a3850ed06554b27ef4eddbe6b587cb4aeb41e816d19bf77b4c2dc57ada5459e",
+            } },
+            { "sidecar-core.js", new string[] {
+                "03101ba96310c83d35658b2e67071d47068d1ba785ac23ddc03c6a20b598e95d",
+                "c1a8993489e67c756d80c8194e8b04d7589d0b14e348aeda3786065b1c9c9211",
+            } },
+            { "style.css", new string[] {
+                "74a392b143e22d4da58cdb1f330b39feae992444f65b399349648401df813401",
+                "0bd46743be52c6cf189e073a09ce520186bfd942763ec96d86bc2ab1b1391f02",
+                "c9946af5b102ef55b9e1af9571958f19261ba508ef3a348b8da345fe75400b37",
+                "6b06fbd56589a7707ca471c4bed38ad8518546f24222197c25333c85652239ad",
+            } },
+            { "ui-runtime.js", new string[] {
+                "58265dcb0d555ccdd605d7ff10575664264ac865765a950829c3de0eac7e03c6",
+                "2ba4bc37c271f606e5e7275878626de2f614d06c85edc4c65e05104408e14805",
+                "dd115d9572e2553aa3c07b260b186bc8bd4a630ab2572e8df72c48b33cc8c769",
+                "5b20474d0d03d2e3732f2d16a8d6e565fb4cb3329a775de16ca64587ff8d4020",
+                "1cc657ae0c77adb1fb1edc21742847e50e7aa054fef80b3b42241f310a34b595",
+            } },
+            { "usage-core.js", new string[] {
+                "6b4925c7ca64762ba4d0fa417f11505e877350947e5a45631816f6a54da99cca",
+                "bbbac7c7c46b29b819f49e067fdfbd9ce55a67afb8014b07f44f531bc14eebf9",
+                "264a9cd9d472b1a3f86dd574d3f794b36e9ffebb317e861c42bcc6e7c0168c73",
+            } },
+            { "watcher-core.js", new string[] {
+                "9ebba5c200cb8a0406717323e980e93cff2a52de82d7851451542d2c72f0375f",
+                "a3428a7665e00cfea9cf2ed694482718c6b401b0ab6681b39c3e7016e3b49a44",
+            } },
+            { "autostart-off.bat", new string[] {
+                "b450fe8f100d61bcfdea82406c27210a5da058f95f32080f579833a14ff94eed",
+                "ffdb804b74ccaff5f3e2b2ba495b653ebdbd32eddec29f9e6dd9f9f4ba075404",
+            } },
+            { "autostart-on.bat", new string[] {
+                "d50d1a59a481dc2b6514975921e514096c8ac2f5f7d40ccecea1451354b1a8ff",
+                "fa53b4b1c824a86e70307fdae1b01221e6e4146a76ddfc24e5fae38554aff29d",
+            } },
+            { "inject.bat", new string[] {
+                "4e66d1a6c94266fb1fbd1b327bc4255d51c3c4ddafc67c13c21546aac00690d0",
+                "b1a067ff1a4f210124bc994779c5137bc462970992ebaef9ea17cde29724de3f",
+            } },
+            { "inject.sh", new string[] {
+                "efaacd076ef489f40bffac10a807376c1f0fde4a88c49e38e66e6d8d712661eb",
+                "e732958f56a05c91aa3621e3cc7b308e43f3c59d961d2dd6f225d6345861cb00",
+            } },
+            { "launch.bat", new string[] {
+                "63e579f0223b11ee40a81a44b04b001756d4b51eaec0b6c6835fc19f8f1400c1",
+                "7a5ad4498940a99c6c03ae08d3e843376fdc441b32bb45035dc507cdd59881a6",
+            } },
+            { "launch.sh", new string[] {
+                "0938761c83f1c721be7a18693f71d325d84d15f9d790cae46a2c71bb1340a757",
+                "2d27b4390a92bf098df5bda0946ab5d0ca494938424b456f049f7cd282dfae56",
+            } },
+            { "remove.bat", new string[] {
+                "be3995502f039c658f0b6e29941180796423e218af1c17da5e30b6df24c98f82",
+                "f3cb26e3f2e336e484536d5ec3f04f0ca3ebe5dee38c663b61a45296da4fbdf0",
+            } },
+            { "remove.sh", new string[] {
+                "097d7568536ced43af3abbd723339800d9a2316bc5f3f14e58f8654d0d4e1e88",
+                "b38a7d10320acaaf30de17d44f0d2a69d27ded431f15d2bc23746e2fcac9be7e",
+            } },
+            { "watch-hidden.vbs", new string[] {
+                "01cb6b19cc2605c8e75e9c80c0ce6708d87ab61592d80f9557084ba5389538a1",
+            } },
+            { "watch.bat", new string[] {
+                "f710616e081f18cb930c2ef5e2cf692cdba39734f885633d437fd44561050f4a",
+                "7ae8a862b54ef75db73f64d90586870f8a5db106a0972f60c2766da1554d261d",
+            } },
+            { "watch.sh", new string[] {
+                "b9892acf8ecf4bb4e37e7589bdfe99b944b98335237f91007bea41bdc3264bf0",
+                "214f69c33c368e650b38b48845179250832356cf63064d78e104f56d83a40b9b",
+            } },
+        };
+
+        private static void CleanupLegacyFlatRootFiles(string installDir)
+        {
+            string src = Path.Combine(installDir, "src");
+            string git = Path.Combine(installDir, ".git");
+            try
+            {
+                try
+                {
+                    File.GetAttributes(git);
+                    return;
+                }
+                catch (FileNotFoundException) { }
+                catch (DirectoryNotFoundException) { }
+
+                if (!Directory.Exists(src) ||
+                    (File.GetAttributes(installDir) & FileAttributes.ReparsePoint) != 0 ||
+                    (File.GetAttributes(src) & FileAttributes.ReparsePoint) != 0) return;
+                foreach (string name in new string[] { "cdp.js", "ui-runtime.js", "style.css", "inject.js", "lifecycle.js" })
+                {
+                    string core = Path.Combine(src, name);
+                    if (!File.Exists(core) || (File.GetAttributes(core) & FileAttributes.ReparsePoint) != 0) return;
+                }
+            }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            using (System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create())
+            {
+                foreach (KeyValuePair<string, string[]> entry in LegacyFlatRootSha256)
+                {
+                    string file = Path.Combine(installDir, entry.Key);
+                    try
+                    {
+                        FileInfo info = new FileInfo(file);
+                        if (!info.Exists || (info.Attributes & FileAttributes.ReparsePoint) != 0 || info.Length > 4 * 1024 * 1024) continue;
+                        byte[] bytes = File.ReadAllBytes(file);
+                        int length = 0;
+                        for (int i = 0; i < bytes.Length; i++)
+                        {
+                            if (bytes[i] == 13 && i + 1 < bytes.Length && bytes[i + 1] == 10) continue;
+                            bytes[length++] = bytes[i];
+                        }
+                        string hash = BitConverter.ToString(sha.ComputeHash(bytes, 0, length)).Replace("-", "").ToLowerInvariant();
+                        if (Array.IndexOf(entry.Value, hash) >= 0) File.Delete(file);
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+            }
+        }
+
         private static bool IsProtectedUserScriptPath(string normalizedRelPath)
         {
             return normalizedRelPath.StartsWith("scripts\\ops\\", StringComparison.OrdinalIgnoreCase);
@@ -943,26 +1130,7 @@ namespace AgyClaudeStudio.Installer
                     }
                 }
             }
-            // Clean up legacy flat root files relocated into src/ or retired from pre-src installs
-            string[] legacyFlatRootFiles = new string[]
-            {
-                "cdp.js", "crab-assets.js", "effort-core.js", "i18n-core.js", "i18n-locales.js",
-                "i18n-sync.js", "inject.js", "lifecycle.js", "mascot-core.js", "notify-core.js",
-                "periodic-core.js", "periodic-sync.js", "remove.js", "ripple-core.js",
-                "scripts-core.js", "sidecar-core.js", "style.css", "ui-runtime.js",
-                "usage-core.js", "watcher-core.js",
-                "autostart-off.bat", "autostart-on.bat", "inject.bat", "inject.sh",
-                "launch.bat", "launch.sh", "remove.bat", "remove.sh",
-                "watch.bat", "watch.sh", "watch-hidden.vbs",
-            };
-            for (int i = 0; i < legacyFlatRootFiles.Length; i++)
-            {
-                string stalePath = Path.Combine(installDir, legacyFlatRootFiles[i]);
-                if (File.Exists(stalePath))
-                {
-                    try { File.Delete(stalePath); } catch { }
-                }
-            }
+            CleanupLegacyFlatRootFiles(installDir);
             report(64, "原生插件核心、三栏控制面板、手机推送提醒与内置技能已部署完成");
 
             // Ensure plugin_data/config.json exists with defaults if user had no prior config

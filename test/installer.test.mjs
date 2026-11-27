@@ -477,6 +477,12 @@ test(
     const existingBundledOps = path.join(pluginDir, 'scripts', 'ops', 'check-agy-update.mjs');
     fs.writeFileSync(existingBundledOps, '// user-customized-ops-file\n', 'utf8');
 
+    const oldScript = path.join(pluginDir, 'inject.sh');
+    const original = '#!/usr/bin/env bash\n# Inject Claude Studio (agy-claude-studio) into Antigravity windows once.\ncd "$(dirname "$0")"\necho "Injecting Claude Studio (agy-claude-studio)..."\nnode inject.js\n';
+    fs.writeFileSync(oldScript, original.replace(/\n/g, '\r\n'));
+    const userScript = path.join(pluginDir, 'launch.bat');
+    fs.writeFileSync(userScript, '@echo keep my launcher');
+
     // Existing host config with another plugin + legacy agy-claude-style
     fs.writeFileSync(
       hostConfigPath,
@@ -554,6 +560,9 @@ test(
       assert.equal(fs.readFileSync(customOpsScript, 'utf8'), 'export const keep = true;\n');
       assert.equal(fs.readFileSync(existingBundledOps, 'utf8'), '// user-customized-ops-file\n');
 
+      assert.equal(fs.existsSync(oldScript), false);
+      assert.equal(fs.readFileSync(userScript, 'utf8'), '@echo keep my launcher');
+
       // Safeguard 2: Complete native plugin deployed & enabled in host config (without touching unrelated keys)
       assert.ok(fs.existsSync(path.join(pluginDir, 'plugin.json')));
       assert.ok(fs.existsSync(path.join(pluginDir, 'hooks.json')));
@@ -584,6 +593,8 @@ test(
         assert.equal(meta.iconLocation.toLowerCase(), expectedIcon.toLowerCase());
       }
 
+      fs.writeFileSync(oldScript, original);
+      fs.writeFileSync(path.join(pluginDir, '.git'), 'gitdir: elsewhere');
       // 3) Re-install / upgrade preserves existing plugin_data/config.json
       fs.writeFileSync(path.join(pluginDataDir, 'config.json'), JSON.stringify({ palette: 'claude', language: 'ja' }), 'utf8');
       await runExe(
@@ -594,6 +605,7 @@ test(
       );
       const res2 = JSON.parse(fs.readFileSync(outUpgrade, 'utf8'));
       assert.equal(res2.ok, true);
+      assert.equal(fs.readFileSync(oldScript, 'utf8'), original);
       assert.equal(res2.preservedExistingConfig, true);
       assert.equal(JSON.parse(fs.readFileSync(path.join(pluginDataDir, 'config.json'), 'utf8')).language, 'ja');
 

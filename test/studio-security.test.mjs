@@ -4,16 +4,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
-import { getNotifyConfigApi, saveNotifyConfigApi, startStudioSidecar, registerStudioApis, performStudioSelfUpdate } from '../sidecars/studio/main.mjs';
+import { getNotifyConfigApi, saveNotifyConfigApi, startStudioSidecar, registerStudioApis, performStudioSelfUpdate, runSubprocessReinject, spawnDetachedSafe, createRemoteLocaleManifestCache } from '../sidecars/studio/main.mjs';
 
 const require = createRequire(import.meta.url);
 const notify = require('../src/notify-core.js');
 const scripts = require('../src/scripts-core.js');
 
 async function withDataDir(fn) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-security-'));
+  const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-security-')));
   try {
     return await fn(dir);
   } finally {
@@ -120,6 +121,100 @@ test('git update refuses to replace an ancestor of a protected data directory', 
   assert.equal(result.reason, 'protected_data_path');
   assert.equal(mergeAttempted, false);
 }));
+
+test('reinject and detached tools receive no Sidecar credentials', async () => withDataDir(async (root) => {
+  const names = ['ANTIGRAVITY_SIDECAR_UI_TOKEN', 'Antigravity_Sidecar_Future_Key'];
+  const previous = names.map((key) => process.env[key]);
+  try {
+    for (const key of names) process.env[key] = 'secret-sentinel';
+    fs.mkdirSync(path.join(root, 'src'));
+    const script = path.join(root, 'src', 'inject.js');
+    fs.writeFileSync(script, `require('fs').writeFileSync('child-env.json', JSON.stringify(
+      Object.keys(process.env).filter(key => /^ANTIGRAVITY_SIDECAR_/i.test(key))));`);
+    const marker = path.join(root, 'child-env.json');
+    assert.equal((await runSubprocessReinject(root)).ok, true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(marker)), []);
+    fs.unlinkSync(marker);
+    assert.equal((await spawnDetachedSafe(process.execPath, [script], { cwd: root })).ok, true);
+    for (let i = 0; i < 100 && !fs.existsSync(marker); i++) await delay(20);
+    assert.deepEqual(JSON.parse(fs.readFileSync(marker)), []);
+  } finally {
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) delete process.env[name];
+      else process.env[name] = previous[index];
+    });
+  }
+}));
+
+test('git update fast-forwards to the requested annotated tag, even when upstream is newer', async () => withDataDir(async (root) => {
+  const remote = path.join(root, 'origin');
+  const pluginDir = path.join(root, 'install');
+  fs.mkdirSync(remote);
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git(remote, 'init', '-b', 'main');
+  git(remote, 'config', 'user.name', 'Fixture');
+  git(remote, 'config', 'user.email', 'fixture@example.invalid');
+  function commit(version) {
+    fs.writeFileSync(path.join(remote, 'package.json'), JSON.stringify({ version }));
+    git(remote, 'add', 'package.json');
+    git(remote, '-c', 'commit.gpgSign=false', 'commit', '-m', version);
+  }
+  commit('1.0.0');
+  git(remote, 'tag', 'v1.0.0');
+  git(root, 'clone', remote, pluginDir);
+  commit('2.0.0');
+  git(remote, '-c', 'tag.gpgSign=false', 'tag', '-a', 'v2.0.0', '-m', 'release');
+  commit('3.0.0');
+  git(pluginDir, 'fetch', 'origin');
+  const result = await performStudioSelfUpdate({ pluginDir, targetTag: 'v2.0.0', reinjectFn: () => ({ code: 2, stderr: 'reinject exit 2' }) });
+  assert.equal(result.version, '2.0.0');
+  assert.equal(result.filesUpdated, true);
+  assert.equal(result.reinjectOk, false);
+  assert.equal(result.needsRestart, true);
+  assert.match(result.reinjectError, /exit 2/);
+  assert.equal(git(pluginDir, 'rev-parse', 'HEAD'), git(remote, 'rev-parse', 'v2.0.0^{commit}'));
+  assert.notEqual(git(pluginDir, 'rev-parse', 'HEAD'), git(pluginDir, 'rev-parse', '@{upstream}'));
+  const older = await performStudioSelfUpdate({ pluginDir, targetTag: 'v1.0.0' });
+  assert.equal(older.reason, 'not_fast_forward');
+  assert.equal(older.filesUpdated, false);
+}));
+
+test('remote manifest retries failures and empty lists after 30 seconds and retains stale data', async () => {
+  let time = 0;
+  let attempts = 0;
+  const first = { locales: { ja: { version: '1' } } };
+  const latest = { locales: { ja: { version: '2' } } };
+  const replies = [new Error('offline'), first, { locales: {} }, latest];
+  const cache = createRemoteLocaleManifestCache(() => {
+    const reply = replies[attempts++];
+    if (reply instanceof Error) throw reply;
+    return reply;
+  }, () => time);
+  const settle = () => new Promise((done) => setImmediate(done));
+  assert.deepEqual(cache.read(), { value: null, stale: true });
+  cache.read();
+  await settle();
+  time = 29_999;
+  cache.read();
+  await settle();
+  assert.equal(attempts, 1);
+  time++;
+  cache.read();
+  await settle();
+  time += 599_999;
+  assert.deepEqual(cache.read(), { value: first, stale: false });
+  time++;
+  assert.deepEqual(cache.read(), { value: first, stale: true });
+  await settle();
+  time += 29_999;
+  assert.deepEqual(cache.read(), { value: first, stale: true });
+  await settle();
+  assert.equal(attempts, 3);
+  time++;
+  cache.read();
+  await settle();
+  assert.deepEqual(cache.read(), { value: latest, stale: false });
+});
 
 test('notification deadline remains active while reading the provider response', async () => {
   const config = notify.sanitizeNotifyConfig({ channel: 'serverchan', channels: { serverchan: { sendKey: 'test-token' } } });
