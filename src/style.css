@@ -4984,6 +4984,10 @@ html[data-ag-cs-style][data-ag-cs-gemini-loader="on"] .ripple-container > .rippl
   padding-right: var(--ag-cs-dock-solo-pr, 76px);
 }
 
+html[data-ag-cs-style] .agy-sheet [data-testid="aux-pane-split"][data-split-root="true"][data-ag-cs-dock-open="1"][data-ag-cs-dock-solo="1"] [data-testid="pane-titlebar-toolbar"] {
+  padding-right: max(8px, calc(var(--ag-cs-dock-solo-pr, 44px) - 4px - var(--ag-cs-dock-w, 310px))) !important;
+}
+
 [data-testid="aux-pane-split"][data-ag-cs-dock-solo="1"] .ag-cs-pinned-dock.is-collapsed {
   padding-top: 48px;
   border-left: 0;
