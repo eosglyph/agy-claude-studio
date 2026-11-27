@@ -270,7 +270,7 @@ npm run remove                        # 停止守护并无损还原原生界面
 | 界面微调 | `geminiLoader` | `boolean` | `true` | 加载动效：用可爱的 Gemini 娘和 12 刻度环替换原生转圈 |
 | 进阶交互 | `fileLinkContextMenu` | `boolean` | `true` | 对话文件右键菜单：右击本地文件链接唤起打开/定位/复制路径菜单 |
 | 进阶交互 | `periodicSelector` / `orchestratorSwitch` | `boolean` | `true` | Gemini 4 元素周期表选择器与协作模式快捷开关 |
-| 进阶交互 | `effortSliderStyle` / `effortAccent` | `'chatgpt'` \| `'claude'` / `boolean` | `'chatgpt'` / `true` | 思考强度滑块风格与色阶 |
+| 进阶交互 | `effortSliderStyle` / `effortAccent` | `'chatgpt'` \| `'claude'` \| `'off'` / `boolean` | `'chatgpt'` / `true` | 思考强度滑块风格（`'off'` 保留原生）与色阶 |
 | 进阶交互 | `compactPreset` / `compactCustomText` | `'empty'` \| `'clean'` \| `'dev'` \| `'custom'` / `string` | `'clean'` / `''` | `/compact` 压缩预设与自定义指令文案 |
 | 进阶交互 | `smoothCaret` / `mascot` / `homeRipple` | `boolean` / `'crab'` \| `'off'` / `boolean` | `true` / `'crab'` / `true` | 丝滑光标、Clawd 挂件、首页字符水波纹 |
 | 翻译保护 | `pluginPageTranslate` / `i18nIgnoreSelectors` | `boolean` / `string[]` | `true` / `[]` | 插件市场按需翻译小胶囊与自定义免翻译 CSS 选择器 |

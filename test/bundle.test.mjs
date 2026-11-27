@@ -5662,3 +5662,296 @@ test('inline model trigger tags data-ag-cs-inline-model-wrap without *:has(), op
     for (const id of timers) clearTimeout(id);
   }
 });
+
+test('composerRestyle=false and effortSliderStyle=off preserve native footer, glass exclusion, and native model/effort interaction', () => {
+  const fs = require('node:fs');
+  const css = fs.readFileSync(require.resolve('../src/style.css'), 'utf8');
+
+  assert.equal(cdp.sanitizeConfig({ effortSliderStyle: 'off' }).effortSliderStyle, 'off');
+
+  // Native footer flex rules are strictly gated on mounted inline stats / context ring and allow shrinking
+  assert.ok(
+    css.includes('html[data-ag-cs-composer="off"] .agy-composer-footer:has(> .ag-cs-inline-stats, > .ag-cs-context-ring) > div:nth-child(1)'),
+    'composer="off" footer div:nth-child(1) rule must only apply when stats or ring are mounted'
+  );
+  assert.ok(
+    css.includes('html[data-ag-cs-composer="off"] .agy-composer-footer:has(> .ag-cs-inline-stats, > .ag-cs-context-ring) > div:nth-child(2)'),
+    'composer="off" footer div:nth-child(2) rule must only apply when stats or ring are mounted'
+  );
+  assert.equal(
+    css.includes('html[data-ag-cs-composer="off"] .agy-composer-footer > div:nth-child(1)'),
+    false,
+    'Unconditional composer="off" footer flex override must be removed'
+  );
+  assert.equal(
+    css.includes('flex: 1 0 auto;'),
+    false,
+    'Footer flex must not lock flex-shrink: 0'
+  );
+
+  // Glass rules must not repaint native composer card or send button when composerRestyle is off
+  assert.equal(
+    css.includes('html[data-ag-cs-style][data-ag-cs-glass="on"] .surface-composer-card'),
+    false,
+    'Glass composer surface rules must be scoped to [data-ag-cs-composer="on"]'
+  );
+  assert.equal(
+    css.includes('[data-ag-cs-composer="off"] [data-testid="send-button"]'),
+    false,
+    'Glass rules must not style native send button when composerRestyle is off'
+  );
+  assert.ok(
+    css.includes('html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"]'),
+    'Model selector trigger override must be scoped to active composer/effort/periodic features'
+  );
+  assert.ok(
+    css.includes('html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort]'),
+    'Effort badge styles must be scoped to [data-ag-cs-effort-slider="on"]'
+  );
+
+  // Runtime behavior: switching effortSliderStyle -> off strips tags, closes popover, and passes clicks through
+  const timers = new Set();
+  const docCaptureListeners = new Map();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const props = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      children,
+      childNodes: children,
+      get childElementCount() { return children.length; },
+      textContent: opts.text || '',
+      style: {
+        setProperty(k, v) { props.set(k, String(v)); },
+        getPropertyValue(k) { return props.get(k) || ''; },
+        removeProperty(k) { props.delete(k); },
+      },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+      },
+      get className() { return [...classes].join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get isConnected() {
+        let p = el;
+        while (p) { if (p === html) return true; p = p.parentElement; }
+        return false;
+      },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      getBoundingClientRect: opts.rect || (() => ({ left: 40, top: 200, right: 200, bottom: 226, width: 160, height: 26 })),
+      appendChild(c) { c.parentElement = el; children.push(c); return c; },
+      removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; return c; },
+      remove() { if (el.parentElement) el.parentElement.removeChild(el); },
+      animate() { return { cancel() {}, onfinish: null }; },
+      addEventListener() {},
+      removeEventListener() {},
+      contains(target) {
+        if (target === el) return true;
+        return children.some((c) => c.contains && c.contains(target));
+      },
+      matches(sel) {
+        return sel.split(',').map((s) => s.trim()).filter(Boolean).some((part) => {
+          const tokens = part.replace(/\s*>\s*/g, ' > ').split(/\s+/).filter(Boolean);
+          const matchSingle = (node, simple) => {
+            if (!node || node.nodeType !== 1) return false;
+            if (simple === '*') return true;
+            let rest = simple;
+            for (const m of rest.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)) {
+              const [, k, v] = m;
+              if (v === undefined ? !node.hasAttribute(k) : node.getAttribute(k) !== v) return false;
+            }
+            rest = rest.replace(/\[[^\]]+\]/g, '');
+            const idM = rest.match(/#([A-Za-z0-9_-]+)/);
+            if (idM && node.getAttribute('id') !== idM[1]) return false;
+            rest = rest.replace(/#[A-Za-z0-9_-]+/g, '');
+            const tagM = rest.match(/^[a-zA-Z]+/);
+            if (tagM && node.tagName !== tagM[0].toUpperCase()) return false;
+            for (const m of rest.matchAll(/\.([A-Za-z0-9_-]+)/g)) {
+              if (!node.classList.contains(m[1])) return false;
+            }
+            return true;
+          };
+          let idx = tokens.length - 1;
+          if (!matchSingle(el, tokens[idx])) return false;
+          let cur = el.parentElement;
+          for (idx -= 1; idx >= 0; idx--) {
+            if (tokens[idx] === '>') {
+              idx -= 1;
+              if (!cur || !matchSingle(cur, tokens[idx])) return false;
+              cur = cur.parentElement;
+            } else {
+              while (cur && !matchSingle(cur, tokens[idx])) cur = cur.parentElement;
+              if (!cur) return false;
+              cur = cur.parentElement;
+            }
+          }
+          return true;
+        });
+      },
+      closest(sel) {
+        for (let cur = el; cur; cur = cur.parentElement) {
+          if (cur.matches && cur.matches(sel)) return cur;
+        }
+        return null;
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children || []) {
+            if (c.matches && c.matches(sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(el);
+        return out;
+      },
+      querySelector(sel) { return el.querySelectorAll(sel)[0] || null; },
+    };
+    return el;
+  };
+
+  const html = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body', { className: 'theme-light' });
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const inputBox = makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } });
+  const card = makeEl('div', { className: 'surface-composer-card' });
+  const footer = makeEl('div', { className: 'agy-composer-footer' });
+  const modelBtn = makeEl('button', { attrs: { 'data-testid': 'model-selector-trigger' } });
+  const labelWrap = makeEl('span');
+  const modelNameSpan = makeEl('span', { text: 'Gemini 4 Neon' });
+  const effortSpan = makeEl('span', {
+    text: ' High',
+    rect: () => ({ left: 150, top: 200, right: 196, bottom: 226, width: 46, height: 26 }),
+  });
+  labelWrap.appendChild(modelNameSpan);
+  labelWrap.appendChild(effortSpan);
+  modelBtn.appendChild(labelWrap);
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      selectedModel: { model: 'gemini-4-neon-high', label: 'Gemini 4 Neon (High)' },
+      modelOptions: [
+        { model: 'gemini-4-neon-low', label: 'Gemini 4 Neon (Low)' },
+        { model: 'gemini-4-neon-medium', label: 'Gemini 4 Neon (Medium)' },
+        { model: 'gemini-4-neon-high', label: 'Gemini 4 Neon (High)' },
+      ],
+      setSelectedModel() {},
+    },
+    return: null,
+  };
+  footer.appendChild(modelBtn);
+  card.appendChild(footer);
+  inputBox.appendChild(card);
+  body.appendChild(inputBox);
+
+  const document = {
+    documentElement: html,
+    head,
+    body,
+    createElement: (t) => makeEl(t),
+    getElementById: () => null,
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener(type, fn, cap) {
+      if (cap) {
+        if (!docCaptureListeners.has(type)) docCaptureListeners.set(type, new Set());
+        docCaptureListeners.get(type).add(fn);
+      }
+    },
+    removeEventListener(type, fn, cap) {
+      if (cap) docCaptureListeners.get(type)?.delete(fn);
+    },
+  };
+
+  const sandbox = {
+    document,
+    innerWidth: 1200,
+    innerHeight: 800,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    addEventListener() {},
+    removeEventListener() {},
+    location: { href: 'https://127.0.0.1:2015/', protocol: 'https:', hostname: '127.0.0.1', pathname: '/' },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl, RegExp,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(
+      cdp.buildInjectExpression({
+        ...cdp.DEFAULT_CONFIG,
+        composerRestyle: false,
+        periodicSelector: false,
+        effortSliderStyle: 'chatgpt',
+      }),
+      sandbox
+    );
+    assert.equal(html.getAttribute('data-ag-cs-effort-slider'), 'on');
+    assert.equal(html.getAttribute('data-ag-cs-periodic'), 'off');
+    assert.equal(effortSpan.getAttribute('data-ag-cs-effort'), 'high');
+    assert.equal(modelBtn.getAttribute('data-ag-cs-has-effort'), '1');
+
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
+    assert.ok(body.querySelector('.ag-cs-effort-popover'), 'Effort popover opens when effortSliderStyle is chatgpt');
+
+    // Switch effortSliderStyle to 'off': must close popover, strip all effort attrs/classes/vars, and never intercept clicks
+    sandbox.window.__agClaudeStudio.refreshConfig({
+      ...cdp.DEFAULT_CONFIG,
+      composerRestyle: false,
+      periodicSelector: false,
+      effortSliderStyle: 'off',
+    });
+    assert.equal(html.getAttribute('data-ag-cs-effort-slider'), 'off');
+    assert.equal(body.querySelector('.ag-cs-effort-popover'), null, 'Switching effortSliderStyle to off closes open popover');
+    assert.equal(effortSpan.hasAttribute('data-ag-cs-effort'), false, 'Strips data-ag-cs-effort when off');
+    assert.equal(effortSpan.classList.contains('ag-cs-effort-badge'), false, 'Strips ag-cs-effort-badge when off');
+    assert.equal(modelBtn.hasAttribute('data-ag-cs-has-effort'), false, 'Strips data-ag-cs-has-effort when off');
+    assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '', 'Removes --ag-cs-effort-cut when off');
+
+    let prevented = false;
+    let stopped = false;
+    const clickEv = {
+      target: effortSpan,
+      button: 0,
+      preventDefault() { prevented = true; },
+      stopPropagation() { stopped = true; },
+      stopImmediatePropagation() { stopped = true; },
+    };
+    for (const fn of [...(docCaptureListeners.get('pointerdown') || [])]) fn(clickEv);
+    for (const fn of [...(docCaptureListeners.get('click') || [])]) fn(clickEv);
+    assert.equal(prevented, false, 'Native effort click must pass through when effortSliderStyle is off');
+    assert.equal(stopped, false, 'Native effort click must not stop propagation when off');
+    assert.equal(body.querySelector('.ag-cs-effort-popover'), null, 'Effort popover stays closed on click when off');
+
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
+    assert.equal(body.querySelector('.ag-cs-effort-popover'), null, 'Direct openEffortPopover is no-op when off');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(html.hasAttribute('data-ag-cs-effort-slider'), false);
+    assert.equal(html.hasAttribute('data-ag-cs-periodic'), false);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});

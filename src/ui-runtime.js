@@ -466,6 +466,15 @@
     }
   };
 
+  function isEffortSliderEnabled() {
+    if (cfg.effortSlider === false) return false;
+    const styleMode =
+      effortCore && typeof effortCore.normalizeEffortStyle === 'function'
+        ? effortCore.normalizeEffortStyle(cfg.effortSliderStyle)
+        : String(cfg.effortSliderStyle || '').trim().toLowerCase();
+    return styleMode !== 'off';
+  }
+
   function applyRootAttrs() {
     const html = document.documentElement;
     if (!html) return;
@@ -490,7 +499,9 @@
     setHtmlAttr('data-ag-cs-sidebar', cfg.sidebarRestyle === false ? 'off' : 'on');
     setHtmlAttr('data-ag-cs-sidebar-compact', cfg.sidebarCompact === true ? 'on' : 'off');
     removeHtmlAttr('data-ag-cs-hud-compact');
+    setHtmlAttr('data-ag-cs-effort-slider', isEffortSliderEnabled() ? 'on' : 'off');
     setHtmlAttr('data-ag-cs-effort-accent', cfg.effortAccent === false ? 'off' : 'on');
+    setHtmlAttr('data-ag-cs-periodic', cfg.periodicSelector === false ? 'off' : 'on');
     setHtmlAttr('data-ag-cs-lang', lang);
     const isCjk = i18nCore && typeof i18nCore.isCjkLanguage === 'function' ? i18nCore.isCjkLanguage(lang) : isZh();
     if (isCjk) setHtmlAttr('data-ag-cs-cjk', '1');
@@ -4576,6 +4587,10 @@
 
   function refreshOpenEffortPopover() {
     if (!openEffortPop || !openEffortPop.isConnected) return;
+    if (!isEffortSliderEnabled()) {
+      closeEffortPopover();
+      return;
+    }
     renderEffortPopoverContent(openEffortPop, openEffortModelBtn, openEffortBadgeEl);
     positionEffortPopover(openEffortPop, openEffortAnchor || openEffortModelBtn);
     if (typeof openEffortPop._syncEffortKnob === 'function') {
@@ -5460,6 +5475,10 @@
   }
 
   function openEffortPopover(badgeEl, modelBtn) {
+    if (!isEffortSliderEnabled()) {
+      closeEffortPopover();
+      return;
+    }
     const anchor = badgeEl || modelBtn;
     if (!anchor) return;
     const resolvedModelBtn = modelBtn || anchor?.closest?.('[data-testid="model-selector-trigger"]') || null;
@@ -7952,6 +7971,21 @@
       // 2. Effort level accent badge inside [data-testid="model-selector-trigger"]
       const modelBtn = card.querySelector('[data-testid="model-selector-trigger"]');
       if (modelBtn) {
+        if (!isEffortSliderEnabled()) {
+          if (openEffortPop && openEffortModelBtn === modelBtn) {
+            closeEffortPopover();
+          }
+          for (const el of modelBtn.querySelectorAll('.ag-cs-effort-badge, [data-ag-cs-effort]')) {
+            if (el.hasAttribute('data-ag-cs-effort')) el.removeAttribute('data-ag-cs-effort');
+            if (el.classList.contains('ag-cs-effort-badge')) el.classList.remove('ag-cs-effort-badge');
+          }
+          if (modelBtn.hasAttribute('data-ag-cs-has-effort')) {
+            modelBtn.removeAttribute('data-ag-cs-has-effort');
+          }
+          if (modelBtn.style?.getPropertyValue?.('--ag-cs-effort-cut')) {
+            modelBtn.style.removeProperty('--ag-cs-effort-cut');
+          }
+        } else {
         if (isModelButtonLocked(modelBtn) && openEffortPop && openEffortModelBtn === modelBtn) {
           closeEffortPopover();
         }
@@ -8018,6 +8052,7 @@
           if (modelBtn.style?.getPropertyValue?.('--ag-cs-effort-cut')) {
             modelBtn.style.removeProperty('--ag-cs-effort-cut');
           }
+        }
         }
       }
 
@@ -9337,7 +9372,7 @@
   }
 
   function findClickedEffortBadge(ev) {
-    if (cfg.effortSlider === false) return null;
+    if (!isEffortSliderEnabled()) return null;
     const t = ev?.target;
     if (!t || !t.closest) return null;
     const badge = t.closest('[data-testid="model-selector-trigger"] .ag-cs-effort-badge, [data-testid="model-selector-trigger"] [data-ag-cs-effort]');
@@ -9353,7 +9388,7 @@
     const t = ev?.target;
     if (!t || !t.closest) return null;
     if (
-      cfg.effortSlider !== false &&
+      isEffortSliderEnabled() &&
       t.closest('[data-testid="model-selector-trigger"] .ag-cs-effort-badge, [data-testid="model-selector-trigger"] [data-ag-cs-effort]')
     ) {
       return null;
@@ -10334,7 +10369,9 @@
           'data-ag-cs-sidebar',
           'data-ag-cs-sidebar-compact',
           'data-ag-cs-hud-compact',
+          'data-ag-cs-effort-slider',
           'data-ag-cs-effort-accent',
+          'data-ag-cs-periodic',
           'data-ag-cs-lang',
           'data-ag-cs-cjk',
         ]) {

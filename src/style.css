@@ -1494,7 +1494,7 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer:has(> .ag-
   margin-left: 0 !important;
 }
 
-html[data-ag-cs-style] [data-testid="model-selector-trigger"] {
+html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"] {
   position: relative !important;
   isolation: isolate !important;
   height: 26px !important;
@@ -1510,7 +1510,7 @@ html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-test
   min-width: 0 !important;
   overflow: hidden !important;
 }
-html[data-ag-cs-style] [data-testid="model-selector-trigger"][data-ag-cs-has-effort="1"] {
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-testid="model-selector-trigger"][data-ag-cs-has-effort="1"] {
   padding: 0 2px 0 6px !important;
 }
 html[data-ag-cs-style] .agy-composer-footer:has(> .ag-cs-periodic-trigger) [data-testid="model-selector-trigger"],
@@ -1518,14 +1518,14 @@ html[data-ag-cs-style] .ag-cs-periodic-trigger.is-inline + .no-focus-agent-input
   padding: 0 6px 0 3px !important;
   border-radius: 0 6px 6px 0 !important;
 }
-html[data-ag-cs-style] .agy-composer-footer:has(> .ag-cs-periodic-trigger) [data-testid="model-selector-trigger"][data-ag-cs-has-effort="1"],
-html[data-ag-cs-style] .ag-cs-periodic-trigger.is-inline + .no-focus-agent-input [data-testid="model-selector-trigger"][data-ag-cs-has-effort="1"] {
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] .agy-composer-footer:has(> .ag-cs-periodic-trigger) [data-testid="model-selector-trigger"][data-ag-cs-has-effort="1"],
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] .ag-cs-periodic-trigger.is-inline + .no-focus-agent-input [data-testid="model-selector-trigger"][data-ag-cs-has-effort="1"] {
   padding: 0 2px 0 3px !important;
 }
-html[data-ag-cs-style] [data-testid="model-selector-trigger"]:hover {
+html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"]:hover {
   background: transparent !important;
 }
-html[data-ag-cs-style] [data-testid="model-selector-trigger"]::before {
+html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"]::before {
   content: "";
   position: absolute;
   top: 0;
@@ -1542,14 +1542,14 @@ html[data-ag-cs-style] .agy-composer-footer:has(> .ag-cs-periodic-trigger) [data
 html[data-ag-cs-style] .ag-cs-periodic-trigger.is-inline + .no-focus-agent-input [data-testid="model-selector-trigger"]::before {
   border-radius: 0 6px 6px 0 !important;
 }
-html[data-ag-cs-style] [data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover:not(:has([data-ag-cs-effort]:hover)),
+html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover:not(:has([data-ag-cs-effort]:hover)),
 html[data-ag-cs-style] .agy-composer-footer:has(> .ag-cs-periodic-trigger:not(.is-disabled):not([aria-disabled="true"]):hover) [data-testid="model-selector-trigger"],
 html[data-ag-cs-style] .ag-cs-periodic-trigger.is-inline:not(.is-disabled):not([aria-disabled="true"]):hover + .no-focus-agent-input [data-testid="model-selector-trigger"],
 html[data-ag-cs-style] .agy-composer-footer:has(> .ag-cs-periodic-trigger[aria-expanded="true"]) [data-testid="model-selector-trigger"],
 html[data-ag-cs-style] .ag-cs-periodic-trigger.is-inline[aria-expanded="true"] + .no-focus-agent-input [data-testid="model-selector-trigger"] {
   color: var(--foreground) !important;
 }
-html[data-ag-cs-style] [data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover:not(:has([data-ag-cs-effort]:hover))::before,
+html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover:not(:has([data-ag-cs-effort]:hover))::before,
 html[data-ag-cs-style] .agy-composer-footer:has(> .ag-cs-periodic-trigger:not(.is-disabled):not([aria-disabled="true"]):hover) [data-testid="model-selector-trigger"]::before,
 html[data-ag-cs-style] .ag-cs-periodic-trigger.is-inline:not(.is-disabled):not([aria-disabled="true"]):hover + .no-focus-agent-input [data-testid="model-selector-trigger"]::before,
 html[data-ag-cs-style] .agy-composer-footer:has(> .ag-cs-periodic-trigger[aria-expanded="true"]) [data-testid="model-selector-trigger"]::before,
@@ -1559,7 +1559,7 @@ html[data-ag-cs-style] .ag-cs-periodic-trigger.is-inline[aria-expanded="true"] +
 html[data-ag-cs-style][data-ag-cs-composer="on"] .agy-composer-footer [data-testid="model-selector-trigger"] > svg {
   display: none !important;
 }
-html[data-ag-cs-style] [data-testid="model-selector-trigger"] > span {
+html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"] > span {
   height: 26px !important;
   line-height: 26px !important;
 }
@@ -1567,7 +1567,7 @@ html[data-ag-cs-style] [data-testid="model-selector-trigger"] > span {
 /* Effort level colors & interactive effort badge pill.
    Keep display: inline (NOT inline-flex) so Chromium's text-overflow: ellipsis on the parent
    span truncates smoothly character-by-character instead of hiding the entire span atomically. */
-html[data-ag-cs-style] [data-ag-cs-effort] {
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort] {
   opacity: 1 !important;
   font-weight: 600;
   display: inline;
@@ -1577,29 +1577,29 @@ html[data-ag-cs-style] [data-ag-cs-effort] {
   cursor: pointer;
   transition: background-color 120ms ease, box-shadow 120ms ease;
 }
-html[data-ag-cs-style] [data-ag-cs-effort]:hover {
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort]:hover {
   background: color-mix(in srgb, currentColor 16%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
 }
-html[data-ag-cs-style] [data-testid="model-selector-trigger"]:disabled [data-ag-cs-effort],
-html[data-ag-cs-style] [data-testid="model-selector-trigger"][aria-disabled="true"] [data-ag-cs-effort] {
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-testid="model-selector-trigger"]:disabled [data-ag-cs-effort],
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-testid="model-selector-trigger"][aria-disabled="true"] [data-ag-cs-effort] {
   cursor: not-allowed !important;
   opacity: 0.65 !important;
   filter: saturate(0.35);
   background: transparent !important;
   box-shadow: none !important;
 }
-html[data-ag-cs-style] [data-testid="model-selector-trigger"]:disabled [data-ag-cs-effort]:hover,
-html[data-ag-cs-style] [data-testid="model-selector-trigger"][aria-disabled="true"] [data-ag-cs-effort]:hover {
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-testid="model-selector-trigger"]:disabled [data-ag-cs-effort]:hover,
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-testid="model-selector-trigger"][aria-disabled="true"] [data-ag-cs-effort]:hover {
   background: transparent !important;
   box-shadow: none !important;
 }
-html[data-ag-cs-style] [data-ag-cs-effort="low"] { color: var(--ag-cs-effort-low) !important; }
-html[data-ag-cs-style] [data-ag-cs-effort="medium"] { color: var(--ag-cs-effort-med) !important; }
-html[data-ag-cs-style] [data-ag-cs-effort="high"] { color: var(--ag-cs-effort-high) !important; }
-html[data-ag-cs-style] [data-ag-cs-effort="xhigh"],
-html[data-ag-cs-style] [data-ag-cs-effort="max"],
-html[data-ag-cs-style] [data-ag-cs-effort="extra"] { color: var(--ag-cs-effort-xhigh) !important; }
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort="low"] { color: var(--ag-cs-effort-low) !important; }
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort="medium"] { color: var(--ag-cs-effort-med) !important; }
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort="high"] { color: var(--ag-cs-effort-high) !important; }
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort="xhigh"],
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort="max"],
+html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort="extra"] { color: var(--ag-cs-effort-xhigh) !important; }
 
 /* Context meter mini ring on far right (conversation mode) */
 .ag-cs-context-ring {
@@ -1640,11 +1640,12 @@ html[data-ag-cs-style] [data-ag-cs-effort="extra"] { color: var(--ag-cs-effort-x
   box-shadow: 0 0 0 1px rgba(220, 60, 61, 0.35);
 }
 
-/* Native composer mode (composerRestyle = off): keep stats & ring inline on one clean row,
-   with native right cluster ([Perm][Mic][Send]) staying pinned to the far right. */
-html[data-ag-cs-composer="off"] .agy-composer-footer > div:nth-child(1) {
+/* Native composer mode (composerRestyle = off): keep native flex untouched unless
+   inline stats or context ring are actually mounted inside the footer. */
+html[data-ag-cs-composer="off"] .agy-composer-footer:has(> .ag-cs-inline-stats, > .ag-cs-context-ring) > div:nth-child(1) {
   order: 0;
-  flex: 1 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 html[data-ag-cs-composer="off"] .agy-composer-footer > .ag-cs-inline-stats {
   order: 1;
@@ -1656,7 +1657,7 @@ html[data-ag-cs-composer="off"] .agy-composer-footer > .ag-cs-context-ring {
   order: 1;
   margin-left: 2px;
 }
-html[data-ag-cs-composer="off"] .agy-composer-footer > div:nth-child(2) {
+html[data-ag-cs-composer="off"] .agy-composer-footer:has(> .ag-cs-inline-stats, > .ag-cs-context-ring) > div:nth-child(2) {
   order: 2;
 }
 
@@ -4083,7 +4084,7 @@ html[data-ag-cs-style][data-ag-cs-glass="off"] .ag-cs-ps-drawer {
 }
 
 /* 13.1 Frosted glass surfaces & 1px specular highlight borders */
-html[data-ag-cs-style][data-ag-cs-glass="on"] .surface-composer-card > div.relative.w-full {
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"] .surface-composer-card > div.relative.w-full {
   background: color-mix(in srgb, var(--ag-cs-composer-bg, var(--card, #ffffff)) 74%, transparent) !important;
   backdrop-filter: blur(18px) saturate(1.22) !important;
   -webkit-backdrop-filter: blur(18px) saturate(1.22) !important;
@@ -4093,8 +4094,8 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] .surface-composer-card > div.relat
     0 8px 24px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 11%, rgba(15, 23, 42, 0.08)),
     inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
 }
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .surface-composer-card > div.relative.w-full {
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"]:has(> body.dark) .surface-composer-card > div.relative.w-full {
   background: color-mix(in srgb, var(--ag-cs-composer-bg, var(--card, #1c1f28)) 72%, transparent) !important;
   border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 36%, rgba(255, 255, 255, 0.14)) !important;
   box-shadow:
@@ -4172,7 +4173,7 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="media-modal-zoom-con
 }
 
 /* 13.3 Micro-interaction focus halos & soft elevation shadows */
-html[data-ag-cs-style][data-ag-cs-glass="on"] .surface-composer-card > div.relative.w-full:focus-within,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"] .surface-composer-card > div.relative.w-full:focus-within,
 html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="new-tab-search-input"]:focus,
 html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="new-tab-search-input"]:focus-within {
   border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 58%, transparent) !important;
@@ -4181,8 +4182,8 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] [data-testid="new-tab-search-input
     0 8px 24px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 16%, rgba(0, 0, 0, 0.08)),
     inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
 }
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full:focus-within,
-html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .surface-composer-card > div.relative.w-full:focus-within {
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"]:has(> body.theme-dark) .surface-composer-card > div.relative.w-full:focus-within,
+html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="on"]:has(> body.dark) .surface-composer-card > div.relative.w-full:focus-within {
   border-color: color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 62%, transparent) !important;
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 22%, transparent),
@@ -4202,14 +4203,6 @@ html[data-ag-cs-style][data-ag-cs-glass="on"]:has(> body.dark) .agy-user-bubble 
   box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-}
-html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="off"] [data-testid="send-button"]:not(:disabled) {
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 36%, transparent) !important;
-  transition: transform 120ms ease, box-shadow 140ms ease !important;
-}
-html[data-ag-cs-style][data-ag-cs-glass="on"][data-ag-cs-composer="off"] [data-testid="send-button"]:not(:disabled):hover {
-  transform: translateY(-0.5px);
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--ag-cs-accent, #4d6bfe) 44%, transparent) !important;
 }
 
 /* ── 14. Plugin Detail Page On-Demand Translate Pill ──────────────────────── */

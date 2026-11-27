@@ -423,10 +423,12 @@
 
   /**
    * Normalize configured effort slider style identifier.
-   * Supports 'claude' (Claude Code) and 'chatgpt' (Codex).
+   * Supports 'claude' (Claude Code), 'chatgpt' (Codex), and 'off' (native).
    */
   function normalizeEffortStyle(style) {
+    if (style === false) return 'off';
     const raw = typeof style === 'string' ? style.trim().toLowerCase() : '';
+    if (raw === 'off' || raw === 'none' || raw === 'disabled') return 'off';
     if (raw === 'chatgpt' || raw === 'codex') return 'chatgpt';
     return 'claude';
   }
