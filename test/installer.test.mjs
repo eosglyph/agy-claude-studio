@@ -365,7 +365,7 @@ test('unified artifact naming, native plugin payload, and version parity stay co
   assert.equal(names.has('launch.bat'), false, 'Retired flat launch scripts must not be bundled');
   assert.ok(names.has('locales/manifest.json'));
   assert.ok(names.has('locales/zh-CN.json'));
-  assert.ok(names.has('locales/zh-TW.json'));
+  assert.equal(names.has('locales/zh-TW.json'), false, 'On-demand zh-TW pack must not be bundled into plugin release');
   assert.equal(names.has('locales/yue.json'), false, 'On-demand yue pack must not be bundled into plugin release');
   assert.equal(names.has('locales/ja.json'), false, 'On-demand ja pack must not be bundled into plugin release');
   assert.ok(names.has('assets/agy-gemini-clawd.ico'));

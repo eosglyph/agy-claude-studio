@@ -101,7 +101,7 @@ If you kick off a long refactor or batch run and step away from your desk, Claud
 
 ### Localization & Marketplace Translation
 - **Full Antigravity v2.35.2 Coverage**: Translates the main window, dialogs, and the `/swarm` multi-agent sidecar with a fast DOM observer engine.
-- **On-Demand Language Packs**: English (`en`), Simplified Chinese (`zh-CN`), and Traditional Chinese (`zh-TW`) come bundled; Cantonese (`yue`) and Japanese (`ja`) download on demand with SHA-256 verification so the base install stays small.
+- **On-Demand Language Packs**: English (`en`) and Simplified Chinese (`zh-CN`) come bundled; Traditional Chinese (`zh-TW`), Cantonese (`yue`), and Japanese (`ja`) download on demand with SHA-256 verification so the base install stays small.
 - **Marketplace Translate Pill**: Adds an on-demand translate button on the Plugin Marketplace page. It makes no network requests until you click it, falls back automatically to a secondary provider if Google Translate rate-limits, and toggles cleanly back to the original text. Respects `translate="no"`, `.notranslate`, a cloud protection list, and your own custom CSS ignore selectors.
 
 ### Visual Polish, Loading Animation & Clawd

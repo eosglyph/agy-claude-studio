@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Generate pure-JSON per-language locale packs under locales/ from i18n-locales.js.
-// Built-in offline baseline: zh-CN, zh-TW (plus native en).
-// On-demand cloud downloadable: yue, ja (hosted in GitHub locales/, not bundled into plugin releases).
+// Built-in offline baseline: zh-CN (plus native en).
+// On-demand cloud downloadable: zh-TW, yue, ja (hosted in GitHub locales/, not bundled into plugin releases).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,7 +17,7 @@ const i18nLocales = require(path.join(ROOT_DIR, 'src', 'i18n-locales.js'));
 
 const LOCALE_SPECS = [
   { lang: 'zh-CN', label: '简体中文', bundled: true },
-  { lang: 'zh-TW', label: '繁體中文', bundled: true },
+  { lang: 'zh-TW', label: '繁體中文', bundled: false },
   { lang: 'yue', label: '粵語', bundled: false },
   { lang: 'ja', label: '日本語', bundled: false },
 ];

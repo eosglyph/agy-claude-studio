@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "lang": "zh-TW",
   "label": "繁體中文",
-  "bundled": true,
+  "bundled": false,
   "agyVersion": "2.35.2",
-  "updatedAt": "2026-11-26",
+  "updatedAt": "2026-11-27",
   "cjkLatinSpacing": true,
   "units": {
     "singleMin": "分鐘",

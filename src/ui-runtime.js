@@ -2045,20 +2045,50 @@
     return out;
   }
 
+  function parseSlashMentionPayload(node) {
+    const rawData = node?.data && typeof node.data.data === 'string' ? node.data.data : '';
+    const mentionText = cleanCompactCmd(node?.data?.mentionText || '');
+    if (!rawData) return { isSlash: false, cmd: '', rawData: '' };
+    try {
+      const parsed = JSON.parse(rawData);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.slashCommand && typeof parsed.slashCommand === 'object') {
+          const name = cleanCompactCmd(
+            parsed.slashCommand.info?.name || parsed.slashCommand.name || mentionText || ''
+          );
+          return { isSlash: true, cmd: name || 'slash', rawData };
+        }
+        if (parsed.recipe && typeof parsed.recipe === 'object') {
+          const name = cleanCompactCmd(
+            parsed.recipe.recipeId || parsed.recipe.name || parsed.recipe.title || mentionText || ''
+          );
+          if (name) return { isSlash: true, cmd: name, rawData };
+        }
+        return { isSlash: false, cmd: '', rawData };
+      }
+    } catch {}
+    if (/"(uri|fileUri|filePath|relativePath)"/i.test(rawData)) {
+      return { isSlash: false, cmd: '', rawData };
+    }
+    if (/slashCommand/i.test(rawData) || /"recipe"\s*:\s*\{/i.test(rawData)) {
+      const cmd = /\bcompact\b/i.test(rawData) ? 'compact' : /\bbtw\b/i.test(rawData) ? 'btw' : (mentionText || 'slash');
+      return { isSlash: true, cmd, rawData };
+    }
+    return { isSlash: false, cmd: '', rawData };
+  }
+
   function isSlashMentionNode(node, cmdName) {
     if (!node || typeof node !== 'object') return false;
     if (node.type !== 'beautifulMention' && node.type !== 'contextScopeItemMention') return false;
-    if (node.trigger && node.trigger !== '/') return false;
     const target = String(cmdName || '').toLowerCase();
     if (!target) return false;
-    if (cleanCompactCmd(node.value) === target) {
+    if (node.type === 'beautifulMention' && node.trigger && node.trigger !== '/') return false;
+    const val = cleanCompactCmd(node.value);
+    if (val && val !== 'contextscopeitemmention' && val === target) {
       return true;
     }
-    const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
-    if (!rawData) return false;
-    if (/"(uri|fileUri|filePath|relativePath)"/i.test(rawData)) return false;
-    const cmdRe = new RegExp(`\\b${target}\\b`, 'i');
-    return Boolean((/slashCommand/i.test(rawData) || /"recipe"\s*:|"type"\s*:\s*"recipe"|"kind"\s*:\s*"recipe"/i.test(rawData) || target === 'btw') && cmdRe.test(rawData));
+    const parsed = parseSlashMentionPayload(node);
+    return parsed.isSlash && parsed.cmd === target;
   }
 
   function isCompactMentionNode(node) {
@@ -2068,25 +2098,21 @@
   function isAnySlashCommandMentionNode(node) {
     if (!node || typeof node !== 'object') return false;
     if (node.type !== 'beautifulMention' && node.type !== 'contextScopeItemMention') return false;
-    if (node.trigger && node.trigger !== '/') return false;
+    if (node.type === 'beautifulMention' && node.trigger && node.trigger !== '/') return false;
     if (node.trigger === '/') return true;
     const val = cleanCompactCmd(node.value);
     if (val === 'compact' || val === 'btw') return true;
-    const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
-    if (!rawData) return false;
-    if (/"(uri|fileUri|filePath|relativePath)"/i.test(rawData)) return false;
-    if (/slashCommand/i.test(rawData)) return true;
-    return /"recipe"\s*:|"type"\s*:\s*"recipe"|"kind"\s*:\s*"recipe"/i.test(rawData);
+    return parseSlashMentionPayload(node).isSlash;
   }
 
   function extractSlashCommandNameFromNode(node) {
     if (!isAnySlashCommandMentionNode(node)) return '';
     const val = cleanCompactCmd(node.value);
-    if (val) return val;
-    const rawData = node.data && typeof node.data.data === 'string' ? node.data.data : '';
-    if (/\bcompact\b/i.test(rawData)) return 'compact';
-    if (/\bbtw\b/i.test(rawData)) return 'btw';
-    return 'slash';
+    if (val && val !== 'contextscopeitemmention') return val;
+    const parsed = parseSlashMentionPayload(node);
+    if (parsed.cmd) return parsed.cmd;
+    const mentionText = cleanCompactCmd(node?.data?.mentionText || '');
+    return mentionText || 'slash';
   }
 
   function normalizeComposerWhitespace(str) {
@@ -2104,9 +2130,9 @@
     add(cfg?.compactCustomText);
     for (const ui of [curUi, uiText('en')]) {
       if (!ui) continue;
-      add(ui.compactPresetClean || 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.');
-      add(ui.compactPresetDev || 'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.');
-      add(ui.compactPresetContinue || 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of the interrupted work, and remaining TODOs. Right after compaction completes, resume and continue executing the unfinished task.');
+      add(ui.compactPresetClean || 'Drop verbose tool I/O, full logs, finished-task trial-and-error, and processed image/video details (keep conclusions only; for active unfinished tasks, extract key visual/content points first). Keep core business logic and architecture, finalized decisions, user preferences and rejected options, key constraints, full context of work in progress, and open TODOs.');
+      add(ui.compactPresetDev || 'Drop verbose tool I/O, raw file dumps, full diffs/logs, finished-task trial-and-error, and processed screenshot/video details (keep conclusions only; for active unfinished tasks, extract visual defects and locations first). Preserve core architecture, key file paths and symbol/API contracts, current branch, uncommitted changes and verification status, error root causes, known pitfalls, hard constraints and rejected options, active task details, and open TODOs.');
+      add(ui.compactPresetContinue || 'Drop verbose tool I/O/logs, finished-task trial-and-error, and processed image/video details (keep conclusions only; for active unfinished tasks, extract key points first). Preserve core architecture, hard constraints, user preferences/rejected options, the interrupted task checkpoint (progress, key paths, uncommitted changes, open errors, next action), and remaining TODOs. After compaction, resume immediately without recapping unless a user decision is required.');
     }
     return out;
   }
@@ -2254,7 +2280,7 @@
         document.execCommand('selectAll', false, null);
         inserted = Boolean(document.execCommand('insertText', false, cmdText));
       } catch {}
-      if (!inserted) return false;
+      return inserted;
     } else {
       let beforeInputCancelled = false;
       if (typeof InputEvent === 'function' && typeof ed.dispatchEvent === 'function') {
@@ -2542,19 +2568,19 @@
     if (mode === 'clean') {
       return String(
         ui?.compactPresetClean ||
-          'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.'
+          'Drop verbose tool I/O, full logs, finished-task trial-and-error, and processed image/video details (keep conclusions only; for active unfinished tasks, extract key visual/content points first). Keep core business logic and architecture, finalized decisions, user preferences and rejected options, key constraints, full context of work in progress, and open TODOs.'
       ).trim();
     }
     if (mode === 'dev') {
       return String(
         ui?.compactPresetDev ||
-          'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.'
+          'Drop verbose tool I/O, raw file dumps, full diffs/logs, finished-task trial-and-error, and processed screenshot/video details (keep conclusions only; for active unfinished tasks, extract visual defects and locations first). Preserve core architecture, key file paths and symbol/API contracts, current branch, uncommitted changes and verification status, error root causes, known pitfalls, hard constraints and rejected options, active task details, and open TODOs.'
       ).trim();
     }
     if (mode === 'continue') {
       return String(
         ui?.compactPresetContinue ||
-          'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of the interrupted work, and remaining TODOs. Right after compaction completes, resume and continue executing the unfinished task.'
+          'Drop verbose tool I/O/logs, finished-task trial-and-error, and processed image/video details (keep conclusions only; for active unfinished tasks, extract key points first). Preserve core architecture, hard constraints, user preferences/rejected options, the interrupted task checkpoint (progress, key paths, uncommitted changes, open errors, next action), and remaining TODOs. After compaction, resume immediately without recapping unless a user decision is required.'
       ).trim();
     }
     if (mode === 'custom') {
@@ -9025,6 +9051,7 @@
   const pageTranslateState = {
     btn: null,
     status: 'idle', // 'idle' | 'loading' | 'translated' | 'error'
+    kind: 'page', // 'page' | 'skills'
     pageKey: '',
     lang: '',
     errorMsg: '',
@@ -9032,6 +9059,30 @@
     abortCtrl: null,
     reqSeq: 0,
   };
+  const SKILLS_HEADING_RE = /^(?:skills|技能|スキル)$/i;
+  let nextSkillsSectionSeq = 1;
+  const skillsSectionIdMap = new WeakMap();
+
+  function getSkillsSectionId(root) {
+    let id = skillsSectionIdMap.get(root);
+    if (!id) {
+      id = nextSkillsSectionSeq++;
+      skillsSectionIdMap.set(root, id);
+    }
+    return id;
+  }
+
+  function hasActiveTranslatedNodesIn(scopeRoot) {
+    if (!scopeRoot) return false;
+    for (const node of Array.from(pageTranslateActiveNodes)) {
+      if (!node || !node.isConnected) {
+        pageTranslateActiveNodes.delete(node);
+        continue;
+      }
+      if (nodeContains(scopeRoot, node)) return true;
+    }
+    return false;
+  }
 
   function getPageTranslateTarget(lang) {
     if (lang === 'zh-CN') return 'zh-CN';
@@ -9045,43 +9096,51 @@
     if (lang === 'zh-TW') {
       return {
         translate: '翻譯此頁',
+        translateSkills: '翻譯說明',
         showOriginal: '顯示原文',
         loading: '翻譯中…',
         error: '翻譯失敗，請檢查網絡',
         empty: '暫無可翻譯英文',
         tipTranslate: '使用 Google 翻譯此頁英文內容（不消耗模型額度）',
+        tipTranslateSkills: '使用 Google 翻譯技能英文說明（不消耗模型額度）',
         tipOriginal: '切回英文原文',
       };
     }
     if (lang === 'yue') {
       return {
         translate: '翻譯呢頁',
+        translateSkills: '翻譯說明',
         showOriginal: '顯示原文',
         loading: '翻譯緊…',
         error: '翻譯失敗，請檢查網絡',
         empty: '暫無可翻譯英文',
         tipTranslate: '用 Google 翻譯呢頁英文內容（唔扣模型額度）',
+        tipTranslateSkills: '用 Google 翻譯技能英文說明（唔扣模型額度）',
         tipOriginal: '切返英文原文',
       };
     }
     if (lang === 'ja') {
       return {
         translate: 'このページを翻訳',
+        translateSkills: '説明を翻訳',
         showOriginal: '原文を表示',
         loading: '翻訳中…',
         error: '翻訳に失敗しました',
         empty: '翻訳対象の英語なし',
         tipTranslate: 'Google 翻訳でこのページの英語を翻訳（トークン消費なし）',
+        tipTranslateSkills: 'Google 翻訳でスキルの英語説明を翻訳（トークン消費なし）',
         tipOriginal: '英語の原文に戻す',
       };
     }
     return {
       translate: '翻译此页',
+      translateSkills: '翻译说明',
       showOriginal: '显示原文',
       loading: '翻译中…',
       error: '翻译失败，请检查网络',
       empty: '暂无可翻译英文',
       tipTranslate: '使用谷歌翻译此页英文内容（不消耗模型额度）',
+      tipTranslateSkills: '使用谷歌翻译技能英文说明（不消耗模型额度）',
       tipOriginal: '切回英文原文',
     };
   }
@@ -9153,9 +9212,144 @@
     return { mountParent: tablist, beforeNode: null, inHeader: false, inActionGroup: false };
   }
 
+  function isElementHiddenForTranslate(el) {
+    if (!el) return true;
+    if (el.hidden || el.getAttribute?.('aria-hidden') === 'true') return true;
+    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return true;
+      } catch {}
+    }
+    return false;
+  }
+
+  function isElementTreeHiddenForTranslate(el) {
+    let cur = el;
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      if (isElementHiddenForTranslate(cur)) return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+
+  function findSkillsSectionContext({ dialogOnly = false } = {}) {
+    const roots = dialogOnly
+      ? Array.from(document.querySelectorAll('[role="dialog"]')).filter(
+          (d) => d && d.isConnected && !isElementTreeHiddenForTranslate(d)
+        )
+      : [document];
+
+    for (const scope of roots) {
+      const expandBtns = scope.querySelectorAll?.('button[aria-expanded]') || [];
+      for (const btn of expandBtns) {
+        if (!btn || !btn.isConnected) continue;
+        if (btn.getAttribute('aria-expanded') !== 'true') continue;
+        if (btn.closest?.('.md-divider-spacing')) continue;
+        if (isElementTreeHiddenForTranslate(btn)) continue;
+
+        const heading = btn.querySelector?.('h2, h3, h4') || null;
+        const headingText = (heading?.textContent || '').trim();
+        if (!SKILLS_HEADING_RE.test(headingText)) continue;
+
+        const headerRow = btn.parentElement;
+        if (!headerRow || !headerRow.isConnected) continue;
+
+        let sectionRoot = null;
+        let listBox = null;
+        let cur = headerRow;
+        for (let depth = 0; depth < 3 && cur && cur.parentElement; depth += 1) {
+          const nextSib = cur.nextElementSibling;
+          if (nextSib && !isElementHiddenForTranslate(nextSib)) {
+            sectionRoot = cur.parentElement;
+            listBox = nextSib;
+            break;
+          }
+          cur = cur.parentElement;
+        }
+        if (!sectionRoot || !listBox) continue;
+
+        const hasSkillItems = Boolean(
+          listBox.querySelector?.('[data-tooltip-id$="-name"], .text-muted-foreground, .border-b')
+        );
+        if (!hasSkillItems) continue;
+
+        const countBadge = (btn.querySelector?.('span')?.textContent || '').trim();
+        const sectionId = getSkillsSectionId(sectionRoot);
+        return {
+          kind: 'skills',
+          tablist: btn,
+          bodySection: listBox,
+          detailRoot: listBox,
+          tabpanel: listBox,
+          activeTabId: countBadge,
+          pageKey: `skills|${sectionId}|${countBadge}`,
+          mountParent: headerRow,
+          beforeNode: null,
+          inHeader: false,
+          inActionGroup: false,
+          inSection: true,
+        };
+      }
+
+      if (!dialogOnly && /\/customizations(?:[/?#]|$)/i.test(String(location?.pathname || ''))) {
+        const headings = scope.querySelectorAll?.('h2, h3') || [];
+        for (const heading of headings) {
+          if (!heading || !heading.isConnected) continue;
+          if (heading.closest?.('button[aria-expanded], .md-divider-spacing')) continue;
+          if (isElementTreeHiddenForTranslate(heading)) continue;
+          const headingText = (heading.textContent || '').trim();
+          if (!SKILLS_HEADING_RE.test(headingText)) continue;
+
+          const headerRow = heading.parentElement;
+          if (!headerRow || !headerRow.isConnected) continue;
+
+          let sectionRoot = null;
+          let listBox = null;
+          let cur = headerRow;
+          for (let depth = 0; depth < 3 && cur && cur.parentElement; depth += 1) {
+            const nextSib = cur.nextElementSibling;
+            if (
+              nextSib &&
+              !isElementHiddenForTranslate(nextSib) &&
+              nextSib.querySelector?.('[data-tooltip-id$="-name"]')
+            ) {
+              sectionRoot = cur.parentElement;
+              listBox = nextSib;
+              break;
+            }
+            cur = cur.parentElement;
+          }
+          if (!sectionRoot || !listBox) continue;
+
+          const sectionId = getSkillsSectionId(sectionRoot);
+          return {
+            kind: 'skills',
+            tablist: heading,
+            bodySection: listBox,
+            detailRoot: listBox,
+            tabpanel: listBox,
+            activeTabId: 'customizations',
+            pageKey: `skills|${sectionId}|customizations`,
+            mountParent: headerRow,
+            beforeNode: null,
+            inHeader: false,
+            inActionGroup: false,
+            inSection: true,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
   function findPluginDetailContext() {
+    const dialogSkills = findSkillsSectionContext({ dialogOnly: true });
+    if (dialogSkills) return dialogSkills;
+
     const firstTab = document.querySelector('[role="tablist"] button[id^="plugin-detail-tab-"]');
-    if (firstTab && firstTab.isConnected) {
+    if (firstTab && firstTab.isConnected && !isElementTreeHiddenForTranslate(firstTab)) {
       const tablist = firstTab.closest?.('[role="tablist"]') || firstTab.parentElement || null;
       if (tablist && tablist.isConnected) {
         const bodySection = tablist.parentElement || null;
@@ -9169,12 +9363,12 @@
         const titleEl = detailRoot.querySelector?.('h1') || null;
         const pageKey = `${(titleEl?.textContent || '').trim()}|${activeTabId}`;
         const mount = resolvePluginDetailMount(detailRoot, titleEl, tablist);
-        return { tablist, bodySection, detailRoot, tabpanel, activeTabId, pageKey, ...mount };
+        return { kind: 'page', tablist, bodySection, detailRoot, tabpanel, activeTabId, pageKey, inSection: false, ...mount };
       }
     }
 
     const pluginsNav = document.querySelector('nav[data-testid="plugins-tabs"]');
-    if (pluginsNav && pluginsNav.isConnected && pluginsNav.parentElement) {
+    if (pluginsNav && pluginsNav.isConnected && pluginsNav.parentElement && !isElementTreeHiddenForTranslate(pluginsNav)) {
       const headerRow = pluginsNav.parentElement;
       let detailRoot = headerRow.parentElement || headerRow;
       let up = 0;
@@ -9198,6 +9392,7 @@
       const activeTabId = (activeNavBtn?.textContent || '').trim();
       const pageKey = `marketplace|${activeTabId}`;
       return {
+        kind: 'page',
         tablist: pluginsNav,
         bodySection: detailRoot,
         detailRoot,
@@ -9208,26 +9403,19 @@
         beforeNode: pluginsNav,
         inHeader: true,
         inActionGroup: false,
+        inSection: false,
       };
     }
+
+    const pageSkills = findSkillsSectionContext({ dialogOnly: false });
+    if (pageSkills) return pageSkills;
 
     return null;
   }
 
-  function isElementHiddenForTranslate(el) {
-    if (!el) return true;
-    if (el.hidden || el.getAttribute?.('aria-hidden') === 'true') return true;
-    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
-      try {
-        const cs = window.getComputedStyle(el);
-        if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return true;
-      } catch {}
-    }
-    return false;
-  }
-
   function collectTranslatableTextNodes(ctx) {
     if (!ctx?.detailRoot) return [];
+    const isSkills = ctx.kind === 'skills';
     const out = [];
     const walk = (node) => {
       if (!node) return;
@@ -9235,6 +9423,10 @@
         const meta = pageTranslateNodeMeta.get(node);
         const orig = meta ? meta.original : node.nodeValue;
         if (isTranslatableEnglishText(orig)) {
+          if (isSkills) {
+            const norm = normalizeTranslateSource(orig);
+            if (!/\s/.test(norm) && /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/i.test(norm)) return;
+          }
           out.push(node);
         }
         return;
@@ -9252,6 +9444,12 @@
         node.getAttribute?.('role') === 'tab'
       ) {
         return;
+      }
+      if (isSkills) {
+        const tipId = node.getAttribute?.('data-tooltip-id') || '';
+        if (/-name$/i.test(tipId)) return;
+        if (tag === 'SPAN' && node.classList?.contains('font-medium') && node.classList?.contains('truncate')) return;
+        if (tag === 'BUTTON') return;
       }
       if (isElementHiddenForTranslate(node)) return;
       const inPanel = ctx.tabpanel ? nodeContains(ctx.tabpanel, node) : false;
@@ -9491,6 +9689,7 @@
     const lang = getLang();
     const s = getPageTranslateStrings(lang);
     const status = pageTranslateState.status;
+    const isSkills = pageTranslateState.kind === 'skills';
     const label =
       status === 'loading'
         ? s.loading
@@ -9498,9 +9697,11 @@
         ? s.showOriginal
         : status === 'error'
         ? pageTranslateState.errorMsg || s.error
+        : isSkills
+        ? s.translateSkills
         : s.translate;
-    const title = status === 'translated' ? s.tipOriginal : s.tipTranslate;
-    const renderKey = `${status}|${lang}|${label}|${title}`;
+    const title = status === 'translated' ? s.tipOriginal : isSkills ? s.tipTranslateSkills : s.tipTranslate;
+    const renderKey = `${status}|${lang}|${pageTranslateState.kind}|${label}|${title}`;
     if (btn.getAttribute('data-ag-cs-pt-key') === renderKey) return;
     btn.setAttribute('data-ag-cs-pt-key', renderKey);
 
@@ -9630,6 +9831,7 @@
       pageTranslateState.btn = null;
     }
     pageTranslateState.status = 'idle';
+    pageTranslateState.kind = 'page';
     pageTranslateState.pageKey = '';
     pageTranslateState.errorMsg = '';
   }
@@ -9660,10 +9862,11 @@
       pageTranslateState.reqSeq += 1;
       abortPageTranslateRequest();
       clearPageTranslateErrorTimer();
-      pageTranslateState.status = 'idle';
+      pageTranslateState.status = hasActiveTranslatedNodesIn(ctx.detailRoot) ? 'translated' : 'idle';
       pageTranslateState.errorMsg = '';
     }
     pageTranslateState.pageKey = ctx.pageKey;
+    pageTranslateState.kind = ctx.kind || 'page';
 
     let btn = pageTranslateState.btn;
     const needRemount = !btn || !btn.isConnected || btn.parentElement !== ctx.mountParent;
@@ -9688,6 +9891,7 @@
     }
     btn.classList.toggle('is-header', Boolean(ctx.inHeader));
     btn.classList.toggle('is-in-action-group', Boolean(ctx.inActionGroup));
+    btn.classList.toggle('is-section', Boolean(ctx.inSection));
 
     renderPageTranslateButton();
   }

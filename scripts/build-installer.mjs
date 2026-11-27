@@ -51,12 +51,11 @@ const PLUGIN_RUNTIME_SUBDIRS = [
   'skills',
 ];
 
-// Built-in offline baseline packs only (zh-CN + zh-TW + manifest).
-// Additional languages (yue, ja, etc.) are downloaded on demand from GitHub in Studio Settings.
+// Built-in offline baseline packs only (zh-CN + manifest).
+// Additional languages (zh-TW, yue, ja, etc.) are downloaded on demand from GitHub in Studio Settings.
 const PLUGIN_BUNDLED_LOCALE_FILES = [
   'locales/manifest.json',
   'locales/zh-CN.json',
-  'locales/zh-TW.json',
 ];
 
 const PLUGIN_RUNTIME_SCRIPTS = [

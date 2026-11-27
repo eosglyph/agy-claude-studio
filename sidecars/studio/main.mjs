@@ -2081,15 +2081,50 @@ async function getLiveTasksApi({
   const running = normalized.filter(
     (c) => c.runState === 'RUN_STATE_RUNNING' || c.runState === 'RUN_STATE_CANCELLING'
   );
-  const recent = normalized
-    .filter((c) => c.runState !== 'RUN_STATE_RUNNING' && c.runState !== 'RUN_STATE_CANCELLING')
-    .slice(0, 3);
+  const idleNormalized = normalized.filter(
+    (c) => c.runState !== 'RUN_STATE_RUNNING' && c.runState !== 'RUN_STATE_CANCELLING'
+  );
 
   const [sumRes, sideQ] = await Promise.all([sumPromise, sideQPromise]);
   const summaries =
     sumRes?.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
       ? sumRes.data.trajectorySummaries
       : {};
+
+  // Ensure the active conversation is prioritized in recent (and recovered from summaries if outside ListConversations pageSize)
+  let recent = idleNormalized.slice(0, 3);
+  if (!isUnbound && reqConvoId && !running.some((c) => c.id === reqConvoId)) {
+    let activeIdle = idleNormalized.find((c) => c.id === reqConvoId) || null;
+    if (!activeIdle) {
+      const reqSum = summaries[reqConvoId];
+      if (reqSum && typeof reqSum === 'object') {
+        const sumItem = {
+          id: reqConvoId,
+          title: String(reqSum?.annotations?.title || reqSum?.summary || 'Untitled Conversation').trim(),
+          runState: normalizeSummaryRunState(reqSum.status),
+          updateTime: reqSum?.lastModifiedTime || reqSum?.createdTime || null,
+          createTime: reqSum?.createdTime || null,
+          pinned: false,
+          isSideQuestion: false,
+          parentConversationId: '',
+          parentTitle: '',
+          subagentCount: 0,
+          activeSubagentCount: 0,
+          subagents: [],
+          stepCount: Number(reqSum?.stepCount || 0),
+          activity: null,
+        };
+        if (isSummaryStatusRunning(reqSum.status)) {
+          running.unshift(sumItem);
+        } else {
+          activeIdle = sumItem;
+        }
+      }
+    }
+    if (activeIdle) {
+      recent = [activeIdle, ...idleNormalized.filter((c) => c.id !== reqConvoId)].slice(0, 3);
+    }
+  }
 
   // Discover any active/running side-question (ephemeral /btw) sessions so they are counted in Live Tasks too
   const runningIds = new Set(running.map((c) => c.id));
@@ -2129,6 +2164,11 @@ async function getLiveTasksApi({
         activity: null,
       });
     }
+  }
+
+  if (!isUnbound && reqConvoId && running.length > 1) {
+    const priorityOf = (c) => (c.id === reqConvoId ? 0 : c.parentConversationId === reqConvoId ? 1 : 2);
+    running.sort((a, b) => priorityOf(a) - priorityOf(b));
   }
 
   const targetsToEnrich = running.length > 0 ? running.slice(0, 6) : recent.slice(0, 1);

@@ -127,13 +127,13 @@
       min-height: 100vh;
     }
 
-    /* Claude Minimalist Flat Header + Full-Width 3-Column Tab Bar */
+    /* Claude Minimalist Flat Header + Flush 3-Column Underline Tab Bar */
     .header-card {
       background: transparent;
       border: none;
       border-bottom: 1px solid var(--divider-col);
       border-radius: 0;
-      padding: 0 0 12px;
+      padding: 0;
       margin-bottom: 6px;
       box-shadow: none;
     }
@@ -143,7 +143,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px 10px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     .header-right {
       display: inline-flex;
@@ -273,44 +273,73 @@
     }
     .dot.ok { background: var(--ok); }
 
-    /* Segmented Full-Width 3-Column Tab Switcher (Chat | Tools | Settings) */
+    /* Minimalist Flush Underline 3-Column Tab Switcher (Chat | Tools | Settings) */
     .tab-bar {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 4px;
-      padding: 3px;
-      border-radius: 9px;
-      background: var(--control-bg);
-      border: 1px solid var(--border-col);
+      gap: 0;
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      border: none;
     }
     button.tab-btn {
+      position: relative;
       width: 100%;
-      min-height: 29px;
-      padding: 4px 8px;
-      border-radius: 7px;
-      border: 1px solid transparent;
+      min-height: 28px;
+      padding: 4px 6px 7px;
+      border-radius: 6px 6px 0 0;
+      border: none;
       background: transparent;
       color: var(--muted-fg);
       font-size: 12.5px;
       font-weight: 500;
-      gap: 6px;
+      letter-spacing: 0.01em;
+      gap: 5px;
       box-shadow: none;
-      transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+      overflow: visible;
+      transition: color 140ms ease;
+    }
+    button.tab-btn::after {
+      content: '';
+      position: absolute;
+      left: 20%;
+      right: 20%;
+      bottom: -1px;
+      height: 2px;
+      border-radius: 999px;
+      background: var(--fg);
+      opacity: 0;
+      transform: scaleX(0.6);
+      transition: opacity 160ms ease, transform 160ms ease;
+      pointer-events: none;
     }
     button.tab-btn:hover {
-      background: var(--control-hover);
+      background: transparent;
       border-color: transparent;
       color: var(--fg);
+    }
+    button.tab-btn:hover::after {
+      opacity: 0.2;
+      transform: scaleX(0.85);
     }
     button.tab-btn:active {
       transform: none;
     }
     button.tab-btn.is-active {
-      background: var(--tab-active-bg);
-      border-color: var(--border-col);
+      background: transparent;
+      border-color: transparent;
       color: var(--fg);
       font-weight: 600;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      box-shadow: none;
+    }
+    button.tab-btn.is-active::after {
+      opacity: 0.9;
+      transform: scaleX(1);
+    }
+    button.tab-btn:focus-visible {
+      outline: 2px solid var(--border-col);
+      outline-offset: -2px;
     }
     .tab-panel[hidden] {
       display: none !important;
@@ -983,19 +1012,19 @@
       opacity: 0.8;
     }
     .i18n-packs-box {
-      margin: 6px 0 10px;
-      padding: 8px 10px;
-      border-radius: 9px;
-      border: 1px solid var(--divider-col);
-      background: var(--control-bg);
+      margin: 4px 0 8px;
+      padding: 8px 0 0;
+      border-top: 1px dashed var(--divider-col);
+      background: transparent;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 0;
     }
     .i18n-packs-head {
       font-size: 11px;
       color: var(--muted-fg);
-      line-height: 1.35;
+      line-height: 1.4;
+      margin-bottom: 4px;
     }
     .i18n-pack-row {
       display: flex;
@@ -1003,10 +1032,14 @@
       align-items: center;
       justify-content: space-between;
       gap: 6px 8px;
-      padding: 6px 8px;
-      border-radius: 7px;
-      background: var(--bg);
-      border: 1px solid var(--divider-col);
+      padding: 7px 2px;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--divider-col);
+    }
+    .i18n-pack-row:last-child {
+      border-bottom: none;
+      padding-bottom: 2px;
     }
     .i18n-pack-info {
       min-width: 0;
@@ -1064,18 +1097,20 @@
     }
     button.i18n-pack-btn {
       width: auto;
-      min-height: 24px;
-      padding: 0 8px;
-      border-radius: 6px;
-      border: 1px solid var(--border-col);
-      background: transparent;
+      min-height: 23px;
+      padding: 0 9px;
+      border-radius: 999px;
+      border: 1px solid var(--divider-col);
+      background: var(--control-bg);
       color: var(--fg);
       font-size: 11px;
       font-weight: 500;
       cursor: pointer;
+      transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
     }
     button.i18n-pack-btn:hover:not(:disabled) {
-      background: var(--control-bg);
+      background: var(--control-hover);
+      border-color: var(--border-col);
     }
     button.i18n-pack-btn.primary {
       background: var(--brand-accent);
@@ -1670,11 +1705,16 @@
       color: var(--muted-fg);
       user-select: none;
     }
-    button.cd-env-menu-item.is-worktree-item {
+    .cd-env-wt-row {
+      display: flex;
+      align-items: center;
       justify-content: space-between;
       gap: 10px;
-      min-height: 31px;
-      padding: 5px 10px;
+      width: 100%;
+      min-height: 29px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      cursor: default;
     }
     .cd-env-wt-left {
       display: flex;
@@ -1690,7 +1730,7 @@
       background: transparent;
       flex-shrink: 0;
     }
-    button.cd-env-menu-item.is-worktree-item.is-active .cd-env-wt-dot {
+    .cd-env-wt-row.is-active .cd-env-wt-dot {
       background: var(--accent);
     }
     .cd-env-wt-branch {
@@ -1701,7 +1741,7 @@
       font-size: 12.5px;
       color: var(--fg);
     }
-    button.cd-env-menu-item.is-worktree-item.is-active .cd-env-wt-branch {
+    .cd-env-wt-row.is-active .cd-env-wt-branch {
       font-weight: 600;
     }
     .cd-env-wt-sub {
@@ -1968,7 +2008,7 @@
       padding: 2px 0;
     }
     /* Unified Live Activity Section (Claude Desktop style, always expanded) */
-    .cd-live-section {
+    .cd-btw-section {
       border-bottom: none;
       padding-bottom: 4px;
     }
@@ -2042,31 +2082,29 @@
       align-items: center;
       gap: 3px;
       width: auto;
-      min-height: 20px;
-      padding: 1px 7px;
-      border-radius: 999px;
-      border: 1px solid var(--border-col);
-      background: var(--control-bg);
+      min-height: 22px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
       color: var(--muted-fg);
-      font-size: 10.5px;
-      font-weight: 550;
+      font-size: 11px;
+      font-weight: 500;
       white-space: nowrap;
       cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
     }
     button.cd-sub-toggle:hover {
       background: var(--control-hover);
-      border-color: var(--border-col);
+      border-color: transparent;
       color: var(--fg);
     }
-    button.cd-sub-toggle[aria-expanded="true"] {
-      background: rgba(59, 130, 246, 0.12);
-      border-color: rgba(59, 130, 246, 0.28);
-      color: #2563eb;
+    button.cd-sub-toggle:active {
+      transform: none;
     }
-    :root[data-theme="dark"] button.cd-sub-toggle[aria-expanded="true"] {
-      background: rgba(96, 165, 250, 0.16);
-      border-color: rgba(96, 165, 250, 0.34);
-      color: #7cc0ff;
+    button.cd-sub-toggle[aria-expanded="true"] {
+      background: var(--control-hover);
+      color: var(--fg);
     }
     button.cd-sub-toggle .cd-chev {
       width: 10px;
@@ -2225,78 +2263,48 @@
       color: var(--ok);
       font-weight: 550;
     }
-    .cd-btw-block {
-      margin-top: 10px;
-      padding-top: 9px;
-      border-top: 1px dashed var(--divider-col);
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
     .cd-btw-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 6px;
-    }
-    .cd-btw-heading {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted-fg);
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
-    button.cd-btw-new-btn {
-      width: auto;
-      min-height: 20px;
-      padding: 1px 8px;
-      border-radius: 999px;
-      border: 1px solid var(--border-col);
-      background: var(--control-bg);
-      color: var(--muted-fg);
-      font-size: 10.5px;
-      font-weight: 550;
-      cursor: pointer;
-      white-space: nowrap;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
-    }
-    button.cd-btw-new-btn:hover {
-      background: var(--control-hover);
-      color: var(--fg);
-      border-color: color-mix(in srgb, var(--brand-accent) 42%, var(--border-col));
+      gap: 10px;
+      margin-bottom: 11px;
     }
     .cd-btw-list {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 2px;
     }
     button.cd-btw-row {
-      width: 100%;
-      min-height: 34px;
+      width: calc(100% + 16px);
+      min-height: 31px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      padding: 7px 9px;
+      margin: 0 -8px;
+      padding: 5px 8px;
       border-radius: 9px;
-      border: 1px solid var(--border-col);
-      background: var(--control-bg);
+      border: none;
+      background: transparent;
       color: var(--fg);
       text-align: left;
       cursor: pointer;
-      transition: background 120ms ease, border-color 120ms ease;
+      transition: background 120ms ease, color 120ms ease;
     }
     button.cd-btw-row:hover {
       background: var(--control-hover);
-      border-color: color-mix(in srgb, var(--brand-accent) 45%, var(--border-col));
+      border-color: transparent;
+    }
+    button.cd-btw-row:active {
+      transform: none;
     }
     button.cd-btw-row.is-empty-entry .cd-btw-sub {
-      font-size: 11.5px;
+      font-size: 13px;
       color: var(--muted-fg);
+    }
+    button.cd-btw-row.is-empty-entry:hover .cd-btw-sub {
+      color: var(--fg);
     }
     .cd-btw-row-left {
       display: flex;
@@ -2304,21 +2312,6 @@
       gap: 7px;
       min-width: 0;
       flex: 1;
-    }
-    .cd-btw-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 6px;
-      height: 18px;
-      border-radius: 5px;
-      background: color-mix(in srgb, var(--brand-accent) 13%, transparent);
-      color: var(--brand-accent);
-      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-      font-size: 10.5px;
-      font-weight: 650;
-      white-space: nowrap;
-      flex-shrink: 0;
     }
     .cd-btw-copy {
       display: flex;
@@ -2328,15 +2321,15 @@
       flex: 1;
     }
     .cd-btw-title {
-      font-size: 12px;
-      font-weight: 550;
+      font-size: 13px;
+      font-weight: 450;
       color: var(--fg);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .cd-btw-sub {
-      font-size: 10.5px;
+      font-size: 12.5px;
       color: var(--muted-fg);
       white-space: nowrap;
       overflow: hidden;
@@ -2345,27 +2338,21 @@
     .cd-btw-row-right {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       flex-shrink: 0;
     }
     .cd-btw-state {
-      font-size: 10px;
-      font-weight: 550;
-      padding: 1px 6px;
-      border-radius: 999px;
-      background: var(--panel-bg);
-      border: 1px solid var(--border-col);
+      font-size: 11.5px;
+      font-weight: 450;
       color: var(--muted-fg);
       white-space: nowrap;
     }
     .cd-btw-state.is-open {
       color: var(--ok);
-      border-color: color-mix(in srgb, var(--ok) 35%, var(--border-col));
     }
     .cd-btw-state.is-running {
       color: var(--ok);
-      background: var(--ok-soft);
-      border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+      font-weight: 550;
     }
     .cd-btw-arrow {
       color: var(--muted-fg);
@@ -2374,7 +2361,7 @@
       transition: transform 120ms ease, color 120ms ease;
     }
     button.cd-btw-row:hover .cd-btw-arrow {
-      color: var(--brand-accent);
+      color: var(--fg);
       transform: translateX(2px);
     }
     .cd-sub-state.is-error {
@@ -2429,16 +2416,17 @@
       padding: 10px 14px 16px;
     }
     :root[data-sidebar-compact] .header-card {
-      padding: 0 0 9px;
+      padding: 0;
       margin-bottom: 2px;
     }
     :root[data-sidebar-compact] .header-top {
       gap: 6px 8px;
-      margin-bottom: 8px;
+      margin-bottom: 5px;
     }
     :root[data-sidebar-compact] button.tab-btn {
-      min-height: 26px;
-      padding: 3px 8px;
+      min-height: 25px;
+      padding: 3px 6px 6px;
+      font-size: 12px;
     }
     :root[data-sidebar-compact] .cd-section {
       padding: 10px 0;
@@ -2514,14 +2502,9 @@
     :root[data-sidebar-compact] .cd-live-item + .cd-live-item {
       padding-top: 7px;
     }
-    :root[data-sidebar-compact] .cd-btw-block {
-      margin-top: 7px;
-      padding-top: 7px;
-      gap: 5px;
-    }
     :root[data-sidebar-compact] button.cd-btw-row {
-      padding: 5px 9px;
-      min-height: 29px;
+      padding: 4px 8px;
+      min-height: 27px;
       border-radius: 8px;
     }
   </style>
@@ -2657,8 +2640,9 @@
         <div class="cd-live-list" id="live-tasks-list">
           <div class="cd-empty">…</div>
         </div>
-        <div class="cd-btw-block" id="live-btw-block"></div>
       </div>
+
+      <div class="cd-section cd-btw-section" id="live-btw-block"></div>
     </div>
   </div>
 
@@ -2863,7 +2847,7 @@
     </div>
 
     <div class="section" id="update-section" data-group-id="updates">
-      <button type="button" class="section-head" id="update-section-head" aria-expanded="false">
+      <button type="button" class="section-head" id="update-section-head" aria-expanded="true">
         <span class="section-title" id="update-section-title">版本更新</span>
         <span class="section-head-right">
           <span class="section-badge" id="update-section-badge">v2.2.3</span>
@@ -3219,7 +3203,7 @@
           smoothCaret: ['丝滑打字光标', '打字时让光标平滑跟随滑动，兼容多行与中文输入法'],
           mascot: ['像素小螃蟹 Clawd', '输入框右上角像素小螃蟹，随思考/回复状态实时互动'],
           homeRipple: ['首页字符波纹海', '点击首页空白处触发字符水波扩散动画'],
-          pinRightPane: ['常驻右侧边栏', '开启后常驻 Claude Studio 侧栏；打开浏览器、文件或终端等标签时自动独立分栏停靠，不再被遮挡'],
+          pinRightPane: ['常驻右侧边栏', '开启后常驻 Claude Studio 侧栏'],
           usageStatsEnabled: ['开启内置用量统计', '显示底栏统计、余量圆环及上下文进度条'],
           inlineStats: ['底栏统计与电量环', '在输入框底栏显示生成速度、缓存命中率与余量圆环'],
           ringMode: ['右下角圆环指标', '切换右下角圆环显示上下文剩余或模型配额剩余', [['context', '上下文剩余'], ['quota', '模型配额剩余']]],
@@ -3386,7 +3370,7 @@
           smoothCaret: ['絲滑打字游標', '打字時讓游標平滑跟隨滑動，相容多行與中文輸入法'],
           mascot: ['像素小螃蟹 Clawd', '輸入框右上角像素小螃蟹，隨思考/回覆狀態即時互動'],
           homeRipple: ['首頁字元波紋海', '點擊首頁空白處觸發字元水波擴散動畫'],
-          pinRightPane: ['常駐右側邊欄', '開啟後常駐 Claude Studio 側欄；開啟瀏覽器、檔案或終端等分頁時自動獨立分欄停靠，不再被遮擋'],
+          pinRightPane: ['常駐右側邊欄', '開啟後常駐 Claude Studio 側欄'],
           usageStatsEnabled: ['開啟內建用量統計', '顯示底列統計、餘量圓環與上下文進度條'],
           inlineStats: ['底列統計與電量環', '在輸入框底列顯示生成速度、快取命中率與餘量圓環'],
           ringMode: ['右下角圓環指標', '切換右下角圓環顯示上下文剩餘或模型配額剩餘', [['context', '上下文剩餘'], ['quota', '模型配額剩餘']]],
@@ -3553,7 +3537,7 @@
           smoothCaret: ['順滑打字光標', '打字時光標順滑跟住滑動，支援多行同中文輸入法'],
           mascot: ['像素小螃蟹 Clawd', '輸入框右上角像素小螃蟹，隨思考/回覆狀態互動'],
           homeRipple: ['首頁字符波紋海', '撳首頁空白位觸發字符水波擴散動畫'],
-          pinRightPane: ['長駐右邊側欄', '開咗之後長駐 Claude Studio 側欄；開瀏覽器、檔案或者終端分頁時自動獨立分欄停靠，唔會俾遮住'],
+          pinRightPane: ['長駐右邊側欄', '開咗之後長駐 Claude Studio 側欄'],
           usageStatsEnabled: ['開啟內置用量統計', '顯示底欄統計、餘量圓環同上下文進度條'],
           inlineStats: ['底欄統計同電量環', '喺輸入框底欄顯示生成速度、快取命中率同餘量圓環'],
           ringMode: ['右下角圓環指標', '切換右下角圓環顯示上下文剩餘定模型配額剩餘', [['context', '上下文剩餘'], ['quota', '模型配額剩餘']]],
@@ -3720,7 +3704,7 @@
           smoothCaret: ['Smooth Typing Caret', 'Glide the typing caret smoothly (multiline & IME friendly)'],
           mascot: ['Pixel Crab Clawd', 'Pixel crab on top-right of input reacting to thinking & replies'],
           homeRipple: ['Home Ripple Waves', 'Click empty home background to trigger character ripple waves'],
-          pinRightPane: ['Pin Claude Studio Sidebar', 'Keep Claude Studio pinned on the right; docks as an independent column when Browser, Files, or Terminal tabs are open'],
+          pinRightPane: ['Pin Claude Studio Sidebar', 'Keep Claude Studio pinned on the right'],
           usageStatsEnabled: ['Built-in Usage Stats', 'Show footer stats, capacity ring, and context progress bar'],
           inlineStats: ['Footer Stats & Ring', 'Show generation speed, cache rate & capacity ring in the composer footer'],
           ringMode: ['Ring Metric', 'Show remaining context capacity or model quota in the bottom-right ring', [['context', 'Context Left'], ['quota', 'Quota Left']]],
@@ -3887,7 +3871,7 @@
           smoothCaret: ['スムーズカーソル', '入力時にカーソルを滑らかに追従（複数行・日本語入力対応）'],
           mascot: ['ピクセルカニ Clawd', '入力欄右上のカニが思考・応答状態に合わせて反応'],
           homeRipple: ['ホーム波紋エフェクト', 'ホーム背景クリックで文字グリッドの波紋を再生'],
-          pinRightPane: ['Claude Studio をサイドバー常駐', 'オンにすると Claude Studio を常時表示し、ブラウザやファイル等のタブを開いても独立カラムで表示し続けます'],
+          pinRightPane: ['Claude Studio をサイドバー常駐', 'オンにすると Claude Studio を常時表示'],
           usageStatsEnabled: ['内蔵使用量統計を有効化', 'フッター統計・残量リング・コンテキストバーを表示します'],
           inlineStats: ['フッター統計＆残量リング', '入力欄フッターに生成速度・キャッシュ率・残量リングを表示します'],
           ringMode: ['右下リング指標', 'コンテキスト残量またはモデルクォータ残量を選択', [['context', 'コンテキスト残量'], ['quota', 'クォータ残量']]],
@@ -3910,41 +3894,41 @@
 
     const COMPACT_PRESET_COPY = {
       'zh-CN': {
-        clean: '丢弃已完成任务的琐碎过程与历史噪音，保留核心业务逻辑框架、已确定的关键约束，以及当前进行中任务的全部细节和待办计划。',
-        dev: '压缩已完成任务的历史过程与冗余输出；完整保留当前进行中任务的实现细节、未完成待办、核心业务架构，以及关键文件路径与已踩过的坑。',
-        continue: '丢弃已完成任务的琐碎过程与历史噪音，完整保留核心架构、已确定约束、当前被打断任务的全流程细节与剩余待办；压缩完成后请直接衔接进度，继续推进刚才未完成的工作。',
+        clean: '丢弃冗长的工具调用输入输出、完整日志、已完成任务的试错过程，以及已处理完的图片/视频等大体积附件细节（仅留结论；若属当前未完任务，先提炼关键视觉与内容要点）；保留核心业务逻辑与架构框架、已敲定方案及用户偏好/否决项、关键约束，以及进行中任务的完整上下文与待办计划。',
+        dev: '丢弃冗长的工具输入输出、大段源码原文、完整 diff 与命令/测试日志、已完成任务的试错过程，以及已处理完的截图/视频细节（仅留结论；若属当前未完任务，先提炼关键视觉问题与定位）；完整保留核心业务与技术架构、关键文件路径与接口/符号契约、当前分支及未提交改动与验证状态、报错根因、已踩过的坑与硬约束/否决项、进行中任务的实现细节及剩余待办。',
+        continue: '丢弃冗长的工具输入输出与日志、已完成任务的试错过程，以及已处理完的图片/视频等大附件细节（仅留结论；若属当前未完任务，先提炼关键要点）；完整保留核心架构、硬约束与用户偏好/否决项，以及被打断任务的完整断点现场（已完成与进行中进度、关键文件路径、未提交改动、未决报错与下一步动作）和剩余待办。压缩完成后无需复述确认，直接衔接断点继续执行未完成的工作（除非存在必须由用户拍板的阻塞项）。',
         placeholder: '输入你希望点击 /compact 后自动填入的压缩要求…',
         hint: '直接修改上方文字并点保存，会自动切为「自定义文案」',
         saveBtn: '保存文案',
       },
       'zh-TW': {
-        clean: '略過已完成任務的瑣碎過程與歷史雜訊，保留核心業務邏輯框架、已確定的關鍵約束，以及目前進行中任務的全部細節與待辦計畫。',
-        dev: '壓縮已完成任務的歷史過程與冗餘輸出；完整保留目前進行中任務的實作細節、未完成待辦、核心業務架構，以及關鍵檔案路徑與踩過的坑。',
-        continue: '略過已完成任務的瑣碎過程與歷史雜訊，完整保留核心架構、已確定約束、目前被打斷任務的全流程細節與剩餘待辦；壓縮完成後請直接銜接進度，繼續推進剛才未完成的工作。',
+        clean: '略過冗長的工具呼叫輸入輸出、完整日誌、已完成任務的試錯過程，以及已處理完的圖片/影片等大體積附件細節（僅留結論；若屬目前未完任務，先提煉關鍵視覺與內容要點）；保留核心業務邏輯與架構框架、已敲定方案及使用者偏好/否決項、關鍵約束，以及進行中任務的完整上下文與待辦計畫。',
+        dev: '略過冗長的工具輸入輸出、大段原始碼全文、完整 diff 與指令/測試日誌、已完成任務的試錯過程，以及已處理完的截圖/影片細節（僅留結論；若屬目前未完任務，先提煉關鍵視覺問題與定位）；完整保留核心業務與技術架構、關鍵檔案路徑與介面/符號契約、目前分支及未提交改動與驗證狀態、報錯根因、已踩過的坑與硬約束/否決項、進行中任務的實作細節及剩餘待辦。',
+        continue: '略過冗長的工具輸入輸出與日誌、已完成任務的試錯過程，以及已處理完的圖片/影片等大附件細節（僅留結論；若屬目前未完任務，先提煉關鍵要點）；完整保留核心架構、硬約束與使用者偏好/否決項，以及被打斷任務的完整斷點現場（已完成與進行中進度、關鍵檔案路徑、未提交改動、未決報錯與下一步動作）與剩餘待辦。壓縮完成後無需複述確認，直接銜接斷點繼續執行未完成的工作（除非存在必須由使用者拍板的阻塞項）。',
         placeholder: '輸入點擊 /compact 後希望自動填入的壓縮要求…',
         hint: '直接修改上方文字並點儲存，會自動切為「自訂文案」',
         saveBtn: '儲存文案',
       },
       yue: {
-        clean: '丟走已完成任務嘅瑣碎過程同歷史雜訊，保留核心業務邏輯框架、已確定嘅關鍵約束，同埋而家做緊嘅任務全部細節同待辦計畫。',
-        dev: '壓縮已完成任務嘅歷史過程同冗餘輸出；完整保留而家做緊嘅任務實作細節、未完成待辦、核心業務架構，同埋關鍵檔案路徑同踩過嘅坑。',
-        continue: '丟走已完成任務嘅瑣碎過程同歷史雜訊，完整保留核心架構、已確定約束、啱啱被打斷任務嘅全流程細節同剩餘待辦；壓縮完之後請直接駁返進度，繼續推進啱啱未做完嘅工作。',
+        clean: '丟走冗長嘅工具呼叫輸入輸出、完整日誌、已完成任務嘅試錯過程，同埋已處理完嘅圖片/影片等大體積附件細節（只留結論；如果屬於而家未完任務，先提煉關鍵視覺同內容要點）；保留核心業務邏輯同架構框架、已拍板方案同用戶偏好/否決項、關鍵約束，同埋進行中任務嘅完整上下文同待辦計畫。',
+        dev: '丟走冗長嘅工具輸入輸出、大段源碼原文、完整 diff 同指令/測試日誌、已完成任務嘅試錯過程，同埋已處理完嘅截圖/影片細節（只留結論；如果屬於而家未完任務，先提煉關鍵視覺問題同定位）；完整保留核心業務同技術架構、關鍵檔案路徑同介面/符號契約、目前分支同未提交改動與驗證狀態、報錯根因、踩過嘅坑同硬約束/否決項、進行中任務嘅實作細節同剩餘待辦。',
+        continue: '丟走冗長嘅工具輸入輸出同日誌、已完成任務嘅試錯過程，同埋已處理完嘅圖片/影片等大附件細節（只留結論；如果屬於而家未完任務，先提煉關鍵要點）；完整保留核心架構、硬約束同用戶偏好/否決項，同埋被打斷任務嘅完整斷點現場（已完成同進行中進度、關鍵檔案路徑、未提交改動、未決報錯同下一步動作）同剩餘待辦。壓縮完成後唔使重複確認，直接駁返斷點繼續做未完成嘅工作（除非有一定要由用戶拍板嘅阻塞項）。',
         placeholder: '輸入撳 /compact 之後想自動填入嘅壓縮要求…',
         hint: '直接改上面段字再撳儲存，會自動轉做「自訂文案」',
         saveBtn: '儲存文案',
       },
       en: {
-        clean: 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.',
-        dev: 'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.',
-        continue: 'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of the interrupted work, and remaining TODOs. Right after compaction completes, resume and continue executing the unfinished task.',
+        clean: 'Drop verbose tool I/O, full logs, finished-task trial-and-error, and processed image/video details (keep conclusions only; for active unfinished tasks, extract key visual/content points first). Keep core business logic and architecture, finalized decisions, user preferences and rejected options, key constraints, full context of work in progress, and open TODOs.',
+        dev: 'Drop verbose tool I/O, raw file dumps, full diffs/logs, finished-task trial-and-error, and processed screenshot/video details (keep conclusions only; for active unfinished tasks, extract visual defects and locations first). Preserve core architecture, key file paths and symbol/API contracts, current branch, uncommitted changes and verification status, error root causes, known pitfalls, hard constraints and rejected options, active task details, and open TODOs.',
+        continue: 'Drop verbose tool I/O/logs, finished-task trial-and-error, and processed image/video details (keep conclusions only; for active unfinished tasks, extract key points first). Preserve core architecture, hard constraints, user preferences/rejected options, the interrupted task checkpoint (progress, key paths, uncommitted changes, open errors, next action), and remaining TODOs. After compaction, resume immediately without recapping unless a user decision is required.',
         placeholder: 'Enter the compaction directive to pre-fill after clicking /compact…',
         hint: 'Editing and saving switches automatically to Custom Prompt',
         saveBtn: 'Save Prompt',
       },
       ja: {
-        clean: '完了済みタスクの冗長な経緯やログを省き、中核の業務ロジック構造、確定した制約、進行中タスクの詳細と未完了のTODOを保持してください。',
-        dev: '完了済みタスクの経緯と冗長な出力を圧縮し、進行中タスクの実装詳細、未完了TODO、中核アーキテクチャ、主要ファイルパスと既知の落とし穴を完全に残してください。',
-        continue: '完了済みタスクの冗長な経緯やログを省き、中核アーキテクチャ、確定した制約、中断中タスクの全詳細と残りのTODOを完全に保持してください。圧縮完了後はそのまま進捗を引き継ぎ、未完了の作業を継続してください。',
+        clean: '冗長なツール入出力、完全なログ、完了済みタスクの試行錯誤、および処理済みの画像・動画など大容量添付の詳細を省き（結論のみ保持；進行中の未完タスクに関するものは重要な視覚・内容の要点を先に抽出）、中核の業務ロジックとアーキテクチャ、確定方針・ユーザー好み・却下案、重要な制約、進行中タスクの完全な文脈と未完了TODOを保持してください。',
+        dev: '冗長なツール入出力、長大なソース全文、完全な diff やコマンド・テストログ、完了済みタスクの試行錯誤、処理済みのスクショ・動画の詳細を省き（結論のみ保持；進行中の未完タスクは重要な視覚課題と箇所を先に抽出）、中核の業務・技術アーキテクチャ、主要ファイルパスとシンボル/API契約、現在のブランチ・未コミット変更と検証状況、エラー根本原因、既知の落とし穴・厳守制約・却下案、進行中タスクの実装詳細と残りTODOを完全に残してください。',
+        continue: '冗長なツール入出力とログ、完了済みタスクの試行錯誤、処理済みの画像・動画など大容量添付の詳細を省き（結論のみ保持；進行中の未完タスクは要点を先に抽出）、中核アーキテクチャ、厳守制約とユーザー好み・却下案、中断中タスクの完全な再開コンテキスト（完了・進行状況、主要ファイルパス、未コミット変更、未解決エラーと次の手）および残りTODOを完全に保持してください。圧縮完了後は復唱や確認で止まらず、ユーザー判断が必須なブロッカーがない限り、中断地点から直ちに作業を再開してください。',
         placeholder: '/compact 押下後に自動入力する圧縮指示を入力…',
         hint: '編集して保存すると自動的に「カスタム」に切り替わります',
         saveBtn: '指示を保存',
@@ -3983,7 +3967,7 @@
         id: 'basics',
         iconKey: 'basics',
         titleKey: 'grpBasics',
-        keys: ['palette', 'homeLayout'],
+        keys: ['pinRightPane', 'palette', 'homeLayout'],
       },
       {
         id: 'translation',
@@ -3995,23 +3979,25 @@
         id: 'layout',
         iconKey: 'layout',
         titleKey: 'grpLayout',
-        keys: ['glassEffect', 'sidebarRestyle', 'sidebarCompact', 'composerRestyle', 'placeholderStyle', 'logoInk', 'geminiLoader'],
+        keys: ['glassEffect', 'sidebarRestyle', 'sidebarCompact', 'placeholderStyle', 'logoInk', 'geminiLoader', 'smoothCaret', 'mascot', 'homeRipple'],
       },
       {
         id: 'advanced',
         iconKey: 'advanced',
         titleKey: 'grpAdvanced',
-        keys: ['periodicSelector', 'orchestratorSwitch', 'compactPreset', 'fileLinkContextMenu', 'effortSliderStyle', 'effortAccent', 'smoothCaret', 'mascot', 'homeRipple'],
+        keys: ['composerRestyle', 'periodicSelector', 'orchestratorSwitch', 'compactPreset', 'fileLinkContextMenu', 'effortSliderStyle', 'effortAccent'],
       },
       {
         id: 'telemetry',
         iconKey: 'telemetry',
         titleKey: 'grpTelemetry',
-        keys: ['pinRightPane', 'usageStatsEnabled', 'inlineStats', 'ringMode', 'turnBadges', 'hudTopBar', 'hudBottomBar', 'hudRimProgress'],
+        keys: ['usageStatsEnabled', 'inlineStats', 'ringMode', 'turnBadges', 'hudTopBar', 'hudBottomBar', 'hudRimProgress'],
       },
     ];
 
     const ALL_SETTINGS_GROUP_IDS = ['basics', 'translation', 'layout', 'advanced', 'telemetry', 'notify', 'updates'];
+    const SETTINGS_GROUP_SET = new Set(ALL_SETTINGS_GROUP_IDS);
+    const DEFAULT_OPEN_SETTINGS_GROUP = 'updates';
 
     const apiFetch = async (url, { body = '{}' } = {}) => {
       if (typeof window.sidecar?.fetch !== 'function') {
@@ -4024,6 +4010,7 @@
 
     const COLLAPSED_STORAGE_KEY = 'agCsStudioCollapsedGroups';
     const COLLAPSE_V2_MIGRATION_KEY = 'agCsStudioCollapseDefaultV2';
+    const COLLAPSE_V3_ACCORDION_MIGRATION_KEY = 'agCsStudioCollapseAccordionV3';
     const ACTIVE_TAB_STORAGE_KEY = 'agCsStudioActiveTab';
 
     let currentConfig = { language: 'zh-CN' };
@@ -4129,21 +4116,55 @@
       }
     }
 
+    function defaultCollapsedSettingsIds() {
+      return ALL_SETTINGS_GROUP_IDS.filter((id) => id !== DEFAULT_OPEN_SETTINGS_GROUP);
+    }
+
+    function enforceSettingsAccordion(groupSet, preferredOpenId = '') {
+      const target = groupSet instanceof Set ? groupSet : new Set();
+      let openId =
+        preferredOpenId && SETTINGS_GROUP_SET.has(preferredOpenId) && !target.has(preferredOpenId)
+          ? preferredOpenId
+          : '';
+      if (!openId) {
+        for (const id of ALL_SETTINGS_GROUP_IDS) {
+          if (!target.has(id)) {
+            openId = id;
+            break;
+          }
+        }
+      }
+      if (!openId) {
+        openId = DEFAULT_OPEN_SETTINGS_GROUP;
+      }
+      for (const id of ALL_SETTINGS_GROUP_IDS) {
+        if (id === openId) target.delete(id);
+        else target.add(id);
+      }
+      return target;
+    }
+
     function loadCollapsedGroups() {
       try {
-        const migrated = window.localStorage?.getItem(COLLAPSE_V2_MIGRATION_KEY);
-        if (!migrated) {
-          const initial = new Set(ALL_SETTINGS_GROUP_IDS);
+        const migratedV3 = window.localStorage?.getItem(COLLAPSE_V3_ACCORDION_MIGRATION_KEY);
+        const raw = window.localStorage?.getItem(COLLAPSED_STORAGE_KEY);
+        if (!migratedV3) {
+          const parsed = raw ? JSON.parse(raw) : [];
+          const nonSettings = Array.isArray(parsed)
+            ? parsed.filter((x) => typeof x === 'string' && !SETTINGS_GROUP_SET.has(x))
+            : [];
+          const initial = new Set([...nonSettings, ...defaultCollapsedSettingsIds()]);
           window.localStorage?.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(Array.from(initial)));
           window.localStorage?.setItem(COLLAPSE_V2_MIGRATION_KEY, '1');
+          window.localStorage?.setItem(COLLAPSE_V3_ACCORDION_MIGRATION_KEY, '1');
           return initial;
         }
-        const raw = window.localStorage?.getItem(COLLAPSED_STORAGE_KEY);
-        if (!raw) return new Set(ALL_SETTINGS_GROUP_IDS);
+        if (!raw) return new Set(defaultCollapsedSettingsIds());
         const arr = JSON.parse(raw);
-        return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []);
+        const set = new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : defaultCollapsedSettingsIds());
+        return enforceSettingsAccordion(set);
       } catch {
-        return new Set(ALL_SETTINGS_GROUP_IDS);
+        return new Set(defaultCollapsedSettingsIds());
       }
     }
 
@@ -4153,7 +4174,41 @@
       } catch {}
     }
 
+    function syncSettingsAccordionDom() {
+      const panel = document.getElementById('panel-settings');
+      if (!panel) return;
+      const sections = panel.querySelectorAll('.section[data-group-id]');
+      for (const el of sections) {
+        const gid = el.getAttribute('data-group-id');
+        if (!gid || !SETTINGS_GROUP_SET.has(gid)) continue;
+        const isCollapsed = collapsedGroups.has(gid);
+        el.classList.toggle('is-collapsed', isCollapsed);
+        const headEl = el.querySelector('.section-head');
+        if (headEl) headEl.setAttribute('aria-expanded', String(!isCollapsed));
+      }
+    }
+
+    function setSettingsAccordionOpen(groupId) {
+      const targetId = SETTINGS_GROUP_SET.has(groupId) ? groupId : DEFAULT_OPEN_SETTINGS_GROUP;
+      for (const id of ALL_SETTINGS_GROUP_IDS) {
+        if (id === targetId) collapsedGroups.delete(id);
+        else collapsedGroups.add(id);
+      }
+      syncSettingsAccordionDom();
+      saveCollapsedGroups();
+    }
+
     function toggleGroupCollapse(groupId, sec, head) {
+      if (SETTINGS_GROUP_SET.has(groupId)) {
+        const isCurrentlyCollapsed = collapsedGroups.has(groupId);
+        if (isCurrentlyCollapsed) {
+          setSettingsAccordionOpen(groupId);
+        } else {
+          // Closing the last open settings section automatically opens the Updates section.
+          setSettingsAccordionOpen(DEFAULT_OPEN_SETTINGS_GROUP);
+        }
+        return;
+      }
       const nextCollapsed = !collapsedGroups.has(groupId);
       if (nextCollapsed) collapsedGroups.add(groupId);
       else collapsedGroups.delete(groupId);
@@ -4163,12 +4218,17 @@
     }
 
     function expandGroupAndScroll(groupId, secId) {
-      collapsedGroups.delete(groupId);
-      saveCollapsedGroups();
+      if (SETTINGS_GROUP_SET.has(groupId)) {
+        setSettingsAccordionOpen(groupId);
+      } else {
+        collapsedGroups.delete(groupId);
+        saveCollapsedGroups();
+        const secEl = document.getElementById(secId);
+        const headEl = secEl ? secEl.querySelector('.section-head') : null;
+        if (secEl) secEl.classList.remove('is-collapsed');
+        if (headEl) headEl.setAttribute('aria-expanded', 'true');
+      }
       const sec = document.getElementById(secId);
-      const head = sec ? sec.querySelector('.section-head') : null;
-      if (sec) sec.classList.remove('is-collapsed');
-      if (head) head.setAttribute('aria-expanded', 'true');
       setActiveTab('settings');
       if (sec && typeof sec.scrollIntoView === 'function') {
         requestAnimationFrame(() => {
@@ -4356,8 +4416,7 @@
         return { text: t.notifyBadgeUnconfigured, cls: 'is-warn', configured, enabled, chName, minSec };
       }
       const durText = formatNotifyDurHuman(minSec, lang);
-      const durLabel = minSec > 0 ? `≥${durText}` : t.notifyImmediate;
-      return { text: `${chName} · ${durLabel}`, cls: 'is-ok', configured, enabled, chName, minSec, durText };
+      return { text: chName, cls: 'is-ok', configured, enabled, chName, minSec, durText };
     }
 
     function renderOverviewNotifyCard() {
@@ -5059,22 +5118,23 @@
           cfg.glassEffect !== false,
           Boolean(cfg.sidebarRestyle),
           Boolean(cfg.sidebarCompact),
-          Boolean(cfg.composerRestyle),
           cfg.placeholderStyle !== 'host',
           cfg.logoInk !== 'foreground',
           cfg.geminiLoader !== false,
+          Boolean(cfg.smoothCaret),
+          cfg.mascot === 'crab',
+          Boolean(cfg.homeRipple),
         ];
         const on = flags.filter(Boolean).length;
         return { text: t.activeRatioBadge(on, flags.length), cls: '' };
       }
       if (groupId === 'advanced') {
         const flags = [
+          Boolean(cfg.composerRestyle),
           Boolean(cfg.periodicSelector),
           cfg.orchestratorSwitch !== false,
+          cfg.fileLinkContextMenu !== false,
           cfg.effortSliderStyle === 'off' ? false : cfg.effortSliderStyle === 'claude' ? Boolean(cfg.effortAccent) : true,
-          Boolean(cfg.smoothCaret),
-          cfg.mascot === 'crab',
-          Boolean(cfg.homeRipple),
         ];
         const on = flags.filter(Boolean).length;
         return { text: t.activeRatioBadge(on, flags.length), cls: '' };
@@ -5238,12 +5298,12 @@
             const head = document.createElement('div');
             head.className = 'i18n-packs-head';
             head.textContent = isEnUi
-              ? 'Language Packs (Simplified/Traditional Chinese & English built-in; others download on demand from GitHub)'
+              ? 'Language Packs (Simplified Chinese & English built-in; others download on demand from GitHub)'
               : isJaUi
-              ? '言語パック（簡体/繁体中国語・英語は内蔵、その他は GitHub からオンデマンド取得）'
+              ? '言語パック（簡体中国語・英語は内蔵、その他は GitHub からオンデマンド取得）'
               : isTradUi
-              ? '多語種詞庫（預設內建繁簡中 + 英文，其他語言按需從 GitHub 下載）'
-              : '多语种词库（默认内置繁简中 + 英文，其他语种按需从 GitHub 手动下载）';
+              ? '多語種詞庫（預設內建簡中 + 英文，其他語言按需從 GitHub 下載）'
+              : '多语种词库（默认内置简中 + 英文，其他语种按需从 GitHub 手动下载）';
             box.appendChild(head);
 
             for (const pack of lastStatus.i18nPack.packs) {
@@ -5663,6 +5723,7 @@
     if (notifySecEl && notifyHeadEl) {
       notifyHeadEl.addEventListener('click', () => toggleGroupCollapse('notify', notifySecEl, notifyHeadEl));
     }
+    syncSettingsAccordionDom();
 
     const ovNotifySecEl = document.getElementById('overview-notify-card');
     const ovNotifyHeadEl = document.getElementById('ov-notify-head');
@@ -6251,7 +6312,11 @@
       if (running.length > 0) {
         for (const item of running) renderItem(item, true);
       } else if (recent.length > 0) {
-        renderItem(recent[0], false);
+        const preferred =
+          !isConversationUnbound && activeConversationId
+            ? recent.find((item) => item && item.id === activeConversationId) || recent[0]
+            : recent[0];
+        renderItem(preferred, false);
       } else {
         const empty = document.createElement('div');
         empty.className = 'cd-empty';
@@ -6310,19 +6375,9 @@
       const head = document.createElement('div');
       head.className = 'cd-btw-head';
       const heading = document.createElement('span');
-      heading.className = 'cd-btw-heading';
+      heading.className = 'cd-heading';
       heading.textContent = c.btwHeading(items.length);
-      const newBtn = document.createElement('button');
-      newBtn.type = 'button';
-      newBtn.className = 'cd-btw-new-btn';
-      newBtn.textContent = c.btwNewBtn;
-      newBtn.title = c.btwStartTip;
-      newBtn.disabled = isConversationUnbound;
-      newBtn.addEventListener('click', () => {
-        triggerSideQuestionOpen({ conversationId: convoId, forceNew: true });
-      });
       head.appendChild(heading);
-      head.appendChild(newBtn);
       block.appendChild(head);
 
       const list = document.createElement('div');
@@ -6779,8 +6834,6 @@
       closeEnvPopover();
       hideBranchTooltip();
       inspectorState = null;
-      selectedWorktreePath = '';
-      lastInspectorWorkspacePath = '';
       renderConversationInspector();
       liveTasksState = {
         ...liveTasksState,
@@ -6995,16 +7048,10 @@
 
     let envPopoverKind = '';
     let envPopoverAnchor = null;
-    let selectedWorktreePath = '';
-    let lastInspectorWorkspacePath = '';
 
     function getActiveEnvWorktree(env) {
       const list = Array.isArray(env?.worktrees) ? env.worktrees : [];
       if (!list.length) return null;
-      if (selectedWorktreePath) {
-        const hit = list.find((wt) => wt && wt.path === selectedWorktreePath);
-        if (hit) return hit;
-      }
       return list.find((wt) => wt && wt.active) || list[0] || null;
     }
 
@@ -7014,7 +7061,7 @@
       const worktreePath = String(activeWt?.path || env?.worktreePath || '').trim();
       const worktreeRel = String(activeWt?.relPath || '').trim();
       const actionPath = worktreePath || String(env?.fullPath || '').trim();
-      const inferredRecent = Boolean(!selectedWorktreePath && (activeWt ? activeWt.inferredRecent : env?.inferredRecent));
+      const inferredRecent = Boolean(activeWt ? activeWt.inferredRecent : env?.inferredRecent);
       return { activeWt, branch, worktreePath, worktreeRel, actionPath, inferredRecent };
     }
 
@@ -7212,12 +7259,9 @@
           for (const wt of wtList) {
             if (!wt?.path || !wt?.branch) continue;
             const isCurrent = Boolean(activeWt && activeWt.path === wt.path);
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = `cd-env-menu-item is-worktree-item${isCurrent ? ' is-active' : ''}`;
-            btn.setAttribute('role', 'menuitemradio');
-            btn.setAttribute('aria-checked', String(isCurrent));
-            btn.title = `${wt.branch}${wt.relPath ? ` (${wt.relPath})` : ''}`;
+            const row = document.createElement('div');
+            row.className = `cd-env-wt-row${isCurrent ? ' is-active' : ''}`;
+            row.title = `${wt.branch}${wt.relPath ? ` (${wt.relPath})` : ''}`;
 
             const left = document.createElement('span');
             left.className = 'cd-env-wt-left';
@@ -7233,19 +7277,9 @@
             sub.className = 'cd-env-wt-sub';
             sub.textContent = wt.name || '';
 
-            btn.appendChild(left);
-            btn.appendChild(sub);
-            btn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              if (isConversationUnbound || menuConvoId !== activeConversationId) {
-                closeEnvPopover();
-                return;
-              }
-              selectedWorktreePath = wt.path;
-              closeEnvPopover({ restoreFocus: true });
-              renderConversationInspector();
-            });
-            pop.appendChild(btn);
+            row.appendChild(left);
+            row.appendChild(sub);
+            pop.appendChild(row);
           }
         }
       } else {
@@ -7318,16 +7352,6 @@
       const branchEl = document.getElementById('cd-env-branch');
       const wtTagEl = document.getElementById('cd-env-worktree-tag');
       const env = data?.environment || {};
-      const nextWsPath = String(env.fullPath || '');
-      if (nextWsPath !== lastInspectorWorkspacePath) {
-        lastInspectorWorkspacePath = nextWsPath;
-        selectedWorktreePath = '';
-      } else if (
-        selectedWorktreePath &&
-        (!Array.isArray(env.worktrees) || !env.worktrees.some((wt) => wt && wt.path === selectedWorktreePath))
-      ) {
-        selectedWorktreePath = '';
-      }
       if (wsRow) {
         if (env.workspaceName) {
           wsRow.hidden = false;

@@ -669,7 +669,7 @@ test('multi-word case-insensitive fallback fixes v2.35.2 sentence-case settings,
 test('i18n-sync validates, syncs, checksums, falls back to bundled offline packs, and hot-reloads in i18n-core', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-i18n-sync-'));
   try {
-    // 1. Only zh-CN & zh-TW are bundled offline; yue & ja require on-demand download!
+    // 1. Only zh-CN is bundled offline; zh-TW, yue & ja require on-demand download!
     for (const lang of i18nSync.BUNDLED_PACK_LANGS) {
       const bundled = i18nSync.readLocalePack(lang, dataDir);
       assert.ok(bundled, `bundled pack exists for ${lang}`);
@@ -690,7 +690,7 @@ test('i18n-sync validates, syncs, checksums, falls back to bundled offline packs
       catalogStatus.map((p) => [p.lang, p.bundled, p.installed]),
       [
         ['zh-CN', true, true],
-        ['zh-TW', true, true],
+        ['zh-TW', false, false],
         ['yue', false, false],
         ['ja', false, false],
       ]

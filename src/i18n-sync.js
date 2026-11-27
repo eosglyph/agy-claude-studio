@@ -1,17 +1,17 @@
 'use strict';
 // Cloud on-demand i18n locale pack loader, schema validator, and GitHub syncer (zero external deps, MIT).
-// Built-in offline baseline: zh-CN, zh-TW (plus native en).
-// On-demand cloud downloadable: yue, ja (downloaded manually from GitHub into PLUGIN_DATA/i18n-packs/).
+// Built-in offline baseline: zh-CN (plus native en).
+// On-demand cloud downloadable: zh-TW, yue, ja (downloaded manually from GitHub into PLUGIN_DATA/i18n-packs/).
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const BUNDLED_PACK_LANGS = Object.freeze(['zh-CN', 'zh-TW']);
-const ON_DEMAND_PACK_LANGS = Object.freeze(['yue', 'ja']);
+const BUNDLED_PACK_LANGS = Object.freeze(['zh-CN']);
+const ON_DEMAND_PACK_LANGS = Object.freeze(['zh-TW', 'yue', 'ja']);
 const SUPPORTED_PACK_LANGS = Object.freeze([...BUNDLED_PACK_LANGS, ...ON_DEMAND_PACK_LANGS]);
 const LANGUAGE_CATALOG = Object.freeze([
   Object.freeze({ lang: 'zh-CN', label: '简体中文', bundled: true }),
-  Object.freeze({ lang: 'zh-TW', label: '繁體中文', bundled: true }),
+  Object.freeze({ lang: 'zh-TW', label: '繁體中文', bundled: false }),
   Object.freeze({ lang: 'yue', label: '粵語', bundled: false }),
   Object.freeze({ lang: 'ja', label: '日本語', bundled: false }),
 ]);

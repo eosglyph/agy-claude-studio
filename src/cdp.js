@@ -101,7 +101,10 @@ function atomicWriteFileSync(filePath, content) {
   }
 }
 
+const CURRENT_CONFIG_SCHEMA_VERSION = 2;
+
 const DEFAULT_CONFIG = {
+  configSchemaVersion: CURRENT_CONFIG_SCHEMA_VERSION,
   language: 'zh-CN',
   palette: 'claude',
   glassEffect: true,
@@ -259,7 +262,28 @@ function sanitizeConfig(raw) {
   }
   out.compactCustomText =
     typeof out.compactCustomText === 'string' ? out.compactCustomText.replace(/\0/g, '').slice(0, 600) : '';
+  out.configSchemaVersion =
+    Number.isInteger(out.configSchemaVersion) && out.configSchemaVersion >= 1
+      ? out.configSchemaVersion
+      : CURRENT_CONFIG_SCHEMA_VERSION;
   return out;
+}
+
+function upgradePersistedConfig(raw) {
+  const prevSchema =
+    raw && typeof raw === 'object' && Number.isInteger(raw.configSchemaVersion)
+      ? raw.configSchemaVersion
+      : 1;
+  const config = sanitizeConfig(raw);
+  let migrated = false;
+  if (prevSchema < CURRENT_CONFIG_SCHEMA_VERSION) {
+    // Schema v2: independent 3-column Claude Studio dock no longer blocks browser/files/terminal,
+    // so enable pinRightPane ('studio') once when upgrading from v1 configs.
+    config.pinRightPane = 'studio';
+    config.configSchemaVersion = CURRENT_CONFIG_SCHEMA_VERSION;
+    migrated = true;
+  }
+  return { config, migrated };
 }
 
 function parseI18nCompatJson(raw) {
@@ -420,8 +444,8 @@ function ensureMigratedPluginConfig({
     try {
       if (!fs.existsSync(cand)) continue;
       const raw = fs.readFileSync(cand, 'utf8');
-      const sanitized = sanitizeConfig(JSON.parse(raw));
-      atomicWriteFileSync(configFile, JSON.stringify(sanitized, null, 2) + '\n');
+      const { config: upgraded } = upgradePersistedConfig(JSON.parse(raw));
+      atomicWriteFileSync(configFile, JSON.stringify(upgraded, null, 2) + '\n');
       return true;
     } catch {
       // try next candidate
@@ -435,7 +459,16 @@ function readConfig(configPath = CONFIG_FILE) {
     ensureMigratedPluginConfig();
   }
   try {
-    return sanitizeConfig(JSON.parse(fs.readFileSync(configPath, 'utf8')));
+    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { config, migrated } = upgradePersistedConfig(raw);
+    if (migrated) {
+      try {
+        atomicWriteFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+      } catch {
+        // Best-effort persistence when configPath is read-only
+      }
+    }
+    return config;
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -2110,6 +2143,7 @@ module.exports = {
   LOCK_FILE,
   LEGACY_CONFIG_FILE,
   CONFIG_FILE,
+  CURRENT_CONFIG_SCHEMA_VERSION,
   DEFAULT_CONFIG,
   CONFIG_VALIDATORS,
   I18N_COMPAT_FILE,
@@ -2124,6 +2158,7 @@ module.exports = {
   resolvePluginDataDir,
   atomicWriteFileSync,
   sanitizeConfig,
+  upgradePersistedConfig,
   ensureMigratedPluginConfig,
   readConfig,
   updateConfigSetting,

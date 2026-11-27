@@ -1322,7 +1322,8 @@ test('cdp.ensureMigratedPluginConfig migrates legacy agy-claude-style plugin_dat
     assert.equal(parsed.palette, 'obsidian');
     assert.equal(parsed.glassEffect, false);
     assert.equal(parsed.usageStatsEnabled, false);
-    assert.equal(parsed.pinRightPane, 'off', 'Legacy pinUsageMonitorPane:true migrates safely to pinRightPane:off after usage-monitor pin removal');
+    assert.equal(parsed.pinRightPane, 'studio', 'Legacy v1 config upgrades once to pinRightPane:studio for the independent 3-column dock');
+    assert.equal(parsed.configSchemaVersion, 2);
   } finally {
     fs.rmSync(tmpBase, { recursive: true, force: true });
   }
@@ -2778,7 +2779,7 @@ test('compactPreset config validation, sanitization, and auto-fill after /compac
 
     assert.equal(insertedTexts[0], '/compact');
     assert.ok(
-      insertedTexts[1] && insertedTexts[1].includes('丢弃已完成任务的琐碎过程与历史噪音') && !insertedTexts[1].startsWith(' '),
+      insertedTexts[1] && insertedTexts[1].includes('丢弃冗长的工具调用输入输出') && !insertedTexts[1].startsWith(' '),
       'Must insert clean preset text right after trailing space without double-spacing'
     );
     assert.equal(wrap.querySelector('.ag-cs-compact-hint'), null, 'Guide hint must stay hidden once preset text is filled');
@@ -4120,10 +4121,12 @@ test('Environment container worktree detection discovers .repo & worktree/* layo
     assert.equal(blockedOutside.ok, false);
     assert.equal(blockedOutside.error, 'path_not_allowed');
 
-    // Verify Studio HTML dark branch tooltip markup and inline script syntax
+    // Verify Studio HTML dark branch tooltip markup, read-only worktree list rows, and inline script syntax
     const html = fs.readFileSync(new URL('../sidecars/studio/index.html', import.meta.url), 'utf8');
     assert.match(html, /id="cd-env-branch-tooltip"/);
     assert.match(html, /function showBranchTooltip\(/);
+    assert.match(html, /className = `cd-env-wt-row/);
+    assert.doesNotMatch(html, /is-worktree-item|selectedWorktreePath/);
     const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
     assert.ok(scriptMatch && scriptMatch[1], 'Studio HTML contains inline script');
     new vm.Script(scriptMatch[1]);
@@ -4254,8 +4257,7 @@ test('Sticky dock selects active conversation Studio iframe, syncs active conver
   const ed = makeEl('div', { contenteditable: 'true' });
 
   // Simulate Lexical editor with an existing /compact chip + built-in preset text
-  const builtinCleanPreset =
-    'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.';
+  const builtinCleanPreset = i18nLocales.getUiStrings('en').compactPresetClean;
   let lexChildren = [
     { type: 'beautifulMention', trigger: '/', value: 'compact' },
     { type: 'text', text: ` ${builtinCleanPreset}` },
@@ -4493,6 +4495,7 @@ test('Slash draft protection, Dock multi-view & unbound sync, and multi-window c
           if (part === '[data-aux-pane-open]') return this.hasAttribute('data-aux-pane-open');
           if (part === '[data-side-panel-strip]') return this.hasAttribute('data-side-panel-strip');
           if (part === '[contenteditable="true"]') return this.getAttribute('contenteditable') === 'true';
+          if (part === '[data-lexical-decorator="true"]') return this.getAttribute('data-lexical-decorator') === 'true';
           if (part === '[data-lexical-decorator="true"]') return this.getAttribute('data-lexical-decorator') === 'true';
           if (part === '[data-chip]') return this.hasAttribute('data-chip');
           return false;
@@ -4768,6 +4771,80 @@ test('Slash draft protection, Dock multi-view & unbound sync, and multi-window c
     assert.equal(failedInsertRes.ok, false, 'failed execCommand must not report ok: true');
     assert.notEqual(ed.textContent, '/btw', 'failed execCommand must not fake /btw in DOM');
 
+    // 7a. Real Lexical async microtask: execCommand('insertText') returns true before DOM text updates synchronously
+    lexChildren = [];
+    ed.textContent = '';
+    doc.execCommand = (cmd, _ui, val) => {
+      if (cmd === 'insertText') {
+        Promise.resolve().then(() => { ed.textContent = String(val || ''); });
+        return true;
+      }
+      return true;
+    };
+    const asyncLexRes = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    doc.execCommand = origExec;
+    assert.equal(asyncLexRes.ok, true, 'execCommand returning true must succeed even before async Lexical DOM flush');
+    await Promise.resolve();
+    assert.equal(ed.textContent, '/btw');
+
+    // 7a2. Real Antigravity contextScopeItemMention chip (trigger: '@', value: 'contextScopeItemMention') for /compact + preset replacement & /btw <-> /compact
+    const realCompactChip = {
+      type: 'contextScopeItemMention',
+      trigger: '@',
+      value: 'contextScopeItemMention',
+      data: { mentionText: 'compact', data: JSON.stringify({ slashCommand: { info: { name: 'compact', type: 'SLASH_COMMAND_TYPE_SYSTEM' } } }) },
+    };
+    const realBtwChip = {
+      type: 'contextScopeItemMention',
+      trigger: '@',
+      value: 'contextScopeItemMention',
+      data: { mentionText: 'btw', data: JSON.stringify({ recipe: { recipeId: 'btw', title: 'btw', uri: 'file:///btw' } }) },
+    };
+    const realFileRecipeChip = {
+      type: 'contextScopeItemMention',
+      trigger: '@',
+      value: 'contextScopeItemMention',
+      data: { data: JSON.stringify({ filePath: 'src/recipe.js', uri: 'file:///src/recipe.js', recipe: true }) },
+    };
+    // Standalone real /compact chip -> fillCompactCommand inserts configured preset text after chip
+    const presetStr = i18nLocales.getUiStrings('en').compactPresetClean;
+    lexChildren = [realCompactChip];
+    ed.textContent = '';
+    const decChip = makeEl('span', { 'data-lexical-decorator': 'true' });
+    decChip.textContent = 'compact';
+    ed.appendChild(decChip);
+    doc.execCommand = (cmd, _ui, val) => {
+      if (cmd === 'insertText') {
+        const sp = makeEl('span');
+        sp.textContent = String(val || '');
+        ed.appendChild(sp);
+        return true;
+      }
+      return true;
+    };
+    const compactAfterRealChip = sandbox.window.__agClaudeStudio.fillCompactCommand(box);
+    assert.equal(compactAfterRealChip, true, 'fillCompactCommand must recognize real Antigravity contextScopeItemMention /compact chip');
+    assert.ok(ed.textContent.length > 'compact'.length, 'fillCompactCommand must insert preset text after real /compact chip');
+    // Real /compact + known preset -> /btw replaces cleanly
+    lexChildren = [realCompactChip, { type: 'text', text: ` ${presetStr}` }];
+    doc.execCommand = origExec;
+    const btwOverRealCompact = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    assert.equal(btwOverRealCompact.ok, true, '/btw must replace real contextScopeItemMention /compact + preset');
+    assert.equal(ed.textContent, '/btw');
+    // Real /btw chip -> /compact replaces cleanly
+    lexChildren = [realBtwChip];
+    ed.textContent = 'btw';
+    const compactOverRealBtw = sandbox.window.__agClaudeStudio.fillCompactCommand(box);
+    assert.equal(compactOverRealBtw, true, '/compact must replace real contextScopeItemMention /btw chip');
+    assert.equal(ed.textContent, '/compact');
+    // Real @file mention containing "recipe" in metadata must NEVER be mistaken for slash chip
+    lexChildren = [realFileRecipeChip];
+    ed.textContent = 'recipe.js';
+    const btwOverFileChip = sandbox.window.__agClaudeStudio.fillBtwCommand({ conversationId: cid2 });
+    assert.equal(btwOverFileChip.ok, false, '@file contextScopeItemMention must be protected as draft');
+    assert.equal(btwOverFileChip.reason, 'draft_present');
+    assert.equal(ed.textContent, 'recipe.js');
+
     // 7b. When execCommand is absent and beforeinput is cancelled, fallback must NOT fake DOM text or return ok: true
     lexChildren = [{ type: 'beautifulMention', trigger: '/', value: 'compact' }];
     ed.textContent = 'compact';
@@ -4853,5 +4930,462 @@ test('Slash draft protection, Dock multi-view & unbound sync, and multi-window c
     cvActive.appendChild(box);
   } finally {
     for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('Settings and /customizations Skills section mounts compact translate pill and preserves skill slugs', async () => {
+  const mkNode = (tag) => {
+    const attrs = new Map();
+    const listeners = new Map();
+    const node = {
+      nodeType: 1,
+      tagName: String(tag || 'DIV').toUpperCase(),
+      style: {},
+      children: [],
+      childNodes: [],
+      parentElement: null,
+      get isConnected() {
+        let cur = this;
+        while (cur) {
+          if (cur === doc.body || cur === doc.documentElement) return true;
+          cur = cur.parentElement;
+        }
+        return false;
+      },
+      get nextElementSibling() {
+        if (!this.parentElement) return null;
+        const sibs = this.parentElement.children;
+        const idx = sibs.indexOf(this);
+        return idx >= 0 && idx + 1 < sibs.length ? sibs[idx + 1] : null;
+      },
+      get firstChild() { return this.childNodes[0] || null; },
+      get className() { return attrs.get('class') || ''; },
+      set className(v) { attrs.set('class', String(v || '')); },
+      classList: {
+        add(...cs) {
+          const cur = new Set(String(attrs.get('class') || '').split(/\s+/).filter(Boolean));
+          for (const c of cs) cur.add(c);
+          attrs.set('class', [...cur].join(' '));
+        },
+        remove(...cs) {
+          const cur = new Set(String(attrs.get('class') || '').split(/\s+/).filter(Boolean));
+          for (const c of cs) cur.delete(c);
+          attrs.set('class', [...cur].join(' '));
+        },
+        contains(c) { return String(attrs.get('class') || '').split(/\s+/).includes(c); },
+        toggle(c, force) {
+          const has = this.contains(c);
+          const next = force === undefined ? !has : Boolean(force);
+          if (next) this.add(c); else this.remove(c);
+          return next;
+        },
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      appendChild(ch) {
+        if (!ch) return ch;
+        if (ch.parentElement) ch.remove();
+        ch.parentElement = this;
+        this.childNodes.push(ch);
+        if (ch.nodeType === 1) this.children.push(ch);
+        return ch;
+      },
+      insertBefore(ch, ref) {
+        if (!ref) return this.appendChild(ch);
+        if (ch.parentElement) ch.remove();
+        ch.parentElement = this;
+        const idx = this.childNodes.indexOf(ref);
+        if (idx >= 0) this.childNodes.splice(idx, 0, ch);
+        else this.childNodes.push(ch);
+        this.children = this.childNodes.filter((n) => n.nodeType === 1);
+        return ch;
+      },
+      remove() {
+        if (!this.parentElement) return;
+        const p = this.parentElement;
+        p.childNodes = p.childNodes.filter((n) => n !== this);
+        p.children = p.children.filter((n) => n !== this);
+        this.parentElement = null;
+      },
+      contains(target) {
+        let cur = target;
+        while (cur) {
+          if (cur === this) return true;
+          cur = cur.parentElement;
+        }
+        return false;
+      },
+      get textContent() {
+        if (this.childNodes.length === 0) return this._text || '';
+        return this.childNodes.map((c) => (c.nodeType === 3 ? c.nodeValue : c.textContent)).join('');
+      },
+      set textContent(v) {
+        this.childNodes = [];
+        this.children = [];
+        this._text = String(v ?? '');
+      },
+      set innerHTML(v) { this._html = String(v || ''); },
+      get innerHTML() { return this._html || ''; },
+      addEventListener(type, fn) {
+        const list = listeners.get(type) || [];
+        list.push(fn);
+        listeners.set(type, list);
+      },
+      removeEventListener(type, fn) {
+        const list = listeners.get(type) || [];
+        listeners.set(type, list.filter((f) => f !== fn));
+      },
+      dispatchEvent(ev) {
+        for (const fn of listeners.get(ev.type) || []) fn(ev);
+        return true;
+      },
+      click() {
+        this.dispatchEvent({ type: 'click', preventDefault() {}, stopPropagation() {} });
+      },
+      matches(sel) {
+        return String(sel).split(',').map((s) => s.trim()).filter(Boolean).some((s) => {
+          if (s === '[role="dialog"]') return this.getAttribute('role') === 'dialog';
+          if (s === 'button[aria-expanded]') return this.tagName === 'BUTTON' && this.hasAttribute('aria-expanded');
+          if (s === 'h2' || s === 'h3' || s === 'h4') return this.tagName === s.toUpperCase();
+          if (s === 'span') return this.tagName === 'SPAN';
+          if (s === '.ag-cs-page-translate-btn') return this.classList.contains('ag-cs-page-translate-btn');
+          if (s === '.md-divider-spacing') return this.classList.contains('md-divider-spacing');
+          if (s === '.text-muted-foreground') return this.classList.contains('text-muted-foreground');
+          if (s === '.border-b') return this.classList.contains('border-b');
+          if (s === '[data-tooltip-id$="-name"]') return /-name$/i.test(this.getAttribute('data-tooltip-id') || '');
+          return false;
+        });
+      },
+      closest(sel) {
+        let cur = this;
+        while (cur && cur.nodeType === 1) {
+          if (cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (el) => {
+          for (const c of el.children || []) {
+            if (c.matches(sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+    };
+    return node;
+  };
+  const mkText = (val) => ({
+    nodeType: 3,
+    nodeValue: String(val),
+    parentElement: null,
+    get isConnected() { return Boolean(this.parentElement && this.parentElement.isConnected); },
+    remove() {
+      if (!this.parentElement) return;
+      this.parentElement.childNodes = this.parentElement.childNodes.filter((n) => n !== this);
+      this.parentElement = null;
+    },
+  });
+
+  const buildSkillsSection = (slug, desc, hidden = false) => {
+    const tabPane = mkNode('div');
+    if (hidden) tabPane.style.display = 'none';
+    const sectionRoot = mkNode('div');
+    sectionRoot.className = 'space-y-2';
+    const headerWrap = mkNode('div');
+    headerWrap.className = 'flex flex-col gap-1';
+    const headerRow = mkNode('div');
+    headerRow.className = 'flex items-center justify-between';
+    const expandBtn = mkNode('button');
+    expandBtn.setAttribute('type', 'button');
+    expandBtn.setAttribute('aria-expanded', 'true');
+    const h3 = mkNode('h3');
+    h3.appendChild(mkText('技能'));
+    const countSpan = mkNode('span');
+    countSpan.appendChild(mkText('26'));
+    expandBtn.appendChild(h3);
+    expandBtn.appendChild(countSpan);
+    headerRow.appendChild(expandBtn);
+    headerWrap.appendChild(headerRow);
+    sectionRoot.appendChild(headerWrap);
+
+    const listBox = mkNode('div');
+    const card = mkNode('div');
+    card.className = 'group flex items-start justify-between gap-3 px-3 py-2 border-border border-b';
+    const nameSpan = mkNode('span');
+    nameSpan.className = 'font-medium truncate';
+    nameSpan.setAttribute('data-tooltip-id', ':r1:-name');
+    const slugText = mkText(slug);
+    nameSpan.appendChild(slugText);
+    const badgeSpan = mkNode('span');
+    badgeSpan.appendChild(mkText('全局'));
+    const descDiv = mkNode('div');
+    descDiv.className = 'text-sm text-muted-foreground line-clamp-2 mt-1';
+    const descText = mkText(desc);
+    descDiv.appendChild(descText);
+    card.appendChild(nameSpan);
+    card.appendChild(badgeSpan);
+    card.appendChild(descDiv);
+    listBox.appendChild(card);
+    sectionRoot.appendChild(listBox);
+    tabPane.appendChild(sectionRoot);
+    return { tabPane, headerRow, slugText, descText };
+  };
+
+  const doc = {
+    documentElement: mkNode('html'),
+    head: mkNode('head'),
+    body: mkNode('body'),
+    createElement: mkNode,
+    getElementById: () => null,
+    querySelector(sel) { return this.body.querySelector(sel); },
+    querySelectorAll(sel) { return this.body.querySelectorAll(sel); },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  doc.documentElement.appendChild(doc.head);
+  doc.documentElement.appendChild(doc.body);
+
+  const dialog = mkNode('div');
+  dialog.setAttribute('role', 'dialog');
+  const hiddenSec = buildSkillsSection('hidden-skill', 'Hidden tab English description that must not mount.', true);
+  const visibleSec = buildSkillsSection('agy-customizations', 'Comprehensive guide and reference for Antigravity.', false);
+  dialog.appendChild(hiddenSec.tabPane);
+  dialog.appendChild(visibleSec.tabPane);
+  doc.body.appendChild(dialog);
+
+  const fetchCalls = [];
+  const timers = new Set();
+  const sandbox = {
+    document: doc,
+    location: { pathname: '/c/test', search: '?settingsOpen=true', href: 'https://127.0.0.1/c/test?settingsOpen=true', origin: 'https://127.0.0.1' },
+    getComputedStyle: (el) => ({ display: el?.style?.display || 'block', visibility: el?.style?.visibility || 'visible' }),
+    fetch: async (url) => {
+      fetchCalls.push(String(url));
+      return { ok: true, status: 200, json: async () => [[['Antigravity 自定义系统的完整指南与参考。']]] };
+    },
+    AbortController,
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    encodeURIComponent,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    const res = vm.runInNewContext(
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, language: 'zh-CN', pluginPageTranslate: true, mascot: 'off', pinRightPane: 'off' }),
+      sandbox
+    );
+    assert.equal(res.status, 'ok');
+    await new Promise((r) => setTimeout(r, 30));
+
+    // Must mount ONLY on the visible Skills headerRow, with compact section modifier & "翻译说明" label
+    assert.equal(hiddenSec.headerRow.querySelector('.ag-cs-page-translate-btn'), null, 'Hidden tab Skills header must not mount pill');
+    const btn = visibleSec.headerRow.querySelector('.ag-cs-page-translate-btn');
+    assert.ok(btn, 'Visible Skills headerRow must mount translate pill');
+    assert.equal(btn.classList.contains('is-section'), true, 'Skills translate pill must carry is-section compact style');
+    assert.match(btn.innerHTML, /翻译说明/);
+
+    // Click to translate: description is translated, slug name is strictly preserved
+    btn.click();
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(fetchCalls.length, 1, 'Translate click must fetch translation for English description');
+    assert.equal(visibleSec.slugText.nodeValue, 'agy-customizations', 'Skill slug name must never be translated');
+    assert.equal(visibleSec.descText.nodeValue, 'Antigravity 自定义系统的完整指南与参考。');
+    assert.match(btn.innerHTML, /显示原文/);
+
+    // Click again to restore original English description
+    btn.click();
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(visibleSec.descText.nodeValue, 'Comprehensive guide and reference for Antigravity.');
+    assert.match(btn.innerHTML, /翻译说明/);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('Studio Settings groups and single-open accordion keep exactly one section open (defaulting to updates)', () => {
+  const html = fs.readFileSync(path.join(ROOT_DIR, 'sidecars', 'studio', 'index.html'), 'utf8');
+  const startIdx = html.indexOf('const GROUP_DEFS = [');
+  const endIdx = html.indexOf('const apiFetch =', startIdx);
+  assert.ok(startIdx > 0 && endIdx > startIdx, 'GROUP_DEFS block must exist in Studio index.html');
+  const accordionStart = html.indexOf('function defaultCollapsedSettingsIds()');
+  const accordionEnd = html.indexOf('function getT()', accordionStart);
+  assert.ok(accordionStart > 0 && accordionEnd > accordionStart, 'Accordion helpers must exist in Studio index.html');
+
+  const storage = new Map([
+    ['agCsStudioCollapseDefaultV2', '1'],
+    ['agCsStudioCollapsedGroups', JSON.stringify(['basics', 'translation', 'layout', 'advanced', 'telemetry', 'notify', 'updates', 'ovNotify'])],
+  ]);
+  const makeSectionEl = (gid) => {
+    const cls = new Set(['section']);
+    const headAttrs = new Map();
+    const head = { setAttribute(k, v) { headAttrs.set(k, String(v)); }, getAttribute(k) { return headAttrs.get(k); } };
+    return {
+      gid,
+      head,
+      getAttribute: (k) => (k === 'data-group-id' ? gid : null),
+      classList: {
+        toggle(c, force) { if (force) cls.add(c); else cls.delete(c); },
+        remove(c) { cls.delete(c); },
+        contains(c) { return cls.has(c); },
+      },
+      querySelector: (sel) => (sel === '.section-head' ? head : null),
+    };
+  };
+  const groupIds = ['basics', 'translation', 'layout', 'advanced', 'telemetry', 'notify', 'updates'];
+  const secMap = new Map(groupIds.map((id) => [id, makeSectionEl(id)]));
+  const ovNotifySec = makeSectionEl('ovNotify');
+  const panelSettings = { querySelectorAll: () => Array.from(secMap.values()) };
+
+  const sandbox = {
+    window: {
+      localStorage: {
+        getItem: (k) => (storage.has(k) ? storage.get(k) : null),
+        setItem: (k, v) => { storage.set(k, String(v)); },
+      },
+    },
+    document: {
+      getElementById: (id) => {
+        if (id === 'panel-settings') return panelSettings;
+        if (id === 'notify-section') return secMap.get('notify');
+        return null;
+      },
+    },
+    setActiveTab() {},
+    requestAnimationFrame: (fn) => fn(),
+    Set, Array, JSON,
+  };
+  const script = `
+    const COLLAPSED_STORAGE_KEY = 'agCsStudioCollapsedGroups';
+    const COLLAPSE_V2_MIGRATION_KEY = 'agCsStudioCollapseDefaultV2';
+    const COLLAPSE_V3_ACCORDION_MIGRATION_KEY = 'agCsStudioCollapseAccordionV3';
+    ${html.slice(startIdx, endIdx)}
+    ${html.slice(accordionStart, accordionEnd)}
+    const collapsedGroups = loadCollapsedGroups();
+    syncSettingsAccordionDom();
+    ({ GROUP_DEFS, collapsedGroups, toggleGroupCollapse, expandGroupAndScroll, loadCollapsedGroups })
+  `;
+  const api = vm.runInNewContext(script, sandbox);
+
+  // 1. Verify requested setting item placements
+  const byId = Object.fromEntries(api.GROUP_DEFS.map((g) => [g.id, g.keys]));
+  assert.equal(byId.basics[0], 'pinRightPane', 'pinRightPane must be the first item in basics');
+  assert.ok(!byId.telemetry.includes('pinRightPane'), 'pinRightPane must no longer be in telemetry');
+  assert.ok(byId.advanced.includes('composerRestyle'), 'composerRestyle must be in advanced');
+  assert.ok(!byId.layout.includes('composerRestyle'), 'composerRestyle must no longer be in layout');
+  for (const k of ['smoothCaret', 'mascot', 'homeRipple']) {
+    assert.ok(byId.layout.includes(k), `${k} must be in layout`);
+    assert.ok(!byId.advanced.includes(k), `${k} must no longer be in advanced`);
+  }
+
+  const getOpenSettings = () => groupIds.filter((id) => !secMap.get(id).classList.contains('is-collapsed'));
+
+  // 2. Default state: only 'updates' open, non-settings 'ovNotify' preserved
+  assert.deepEqual(getOpenSettings(), ['updates']);
+  assert.equal(api.collapsedGroups.has('ovNotify'), true);
+
+  // 3. Opening 'basics' closes 'updates'
+  api.toggleGroupCollapse('basics', secMap.get('basics'), secMap.get('basics').head);
+  assert.deepEqual(getOpenSettings(), ['basics']);
+
+  // 4. Opening 'layout' closes 'basics'
+  api.toggleGroupCollapse('layout', secMap.get('layout'), secMap.get('layout').head);
+  assert.deepEqual(getOpenSettings(), ['layout']);
+
+  // 5. Closing the last open section ('layout') automatically opens 'updates'
+  api.toggleGroupCollapse('layout', secMap.get('layout'), secMap.get('layout').head);
+  assert.deepEqual(getOpenSettings(), ['updates']);
+
+  // 6. Clicking 'updates' when it is the only open section keeps 'updates' open
+  api.toggleGroupCollapse('updates', secMap.get('updates'), secMap.get('updates').head);
+  assert.deepEqual(getOpenSettings(), ['updates']);
+
+  // 7. expandGroupAndScroll('notify') opens only 'notify' and closes 'updates'
+  api.expandGroupAndScroll('notify', 'notify-section');
+  assert.deepEqual(getOpenSettings(), ['notify']);
+
+  // 8. Closing 'notify' automatically re-opens 'updates'
+  api.toggleGroupCollapse('notify', secMap.get('notify'), secMap.get('notify').head);
+  assert.deepEqual(getOpenSettings(), ['updates']);
+
+  // 9. Tools tab collapse toggle ('ovNotify') remains independent of Settings accordion
+  api.toggleGroupCollapse('ovNotify', ovNotifySec, ovNotifySec.head);
+  assert.equal(api.collapsedGroups.has('ovNotify'), false);
+  assert.deepEqual(getOpenSettings(), ['updates']);
+});
+
+test('configSchemaVersion v2 enables pinRightPane once on upgrade while respecting later manual off, and 5-lang /compact presets stay synced & <=600 chars', () => {
+  // 1. Pure in-memory sanitizeConfig still honors explicit pinRightPane:'off'
+  assert.equal(cdp.sanitizeConfig({ pinRightPane: 'off' }).pinRightPane, 'off');
+  assert.equal(cdp.DEFAULT_CONFIG.configSchemaVersion, 2);
+  assert.equal(cdp.DEFAULT_CONFIG.pinRightPane, 'studio');
+
+  // 2. File-level v1 -> v2 upgrade enables pinRightPane once, then respects manual off forever
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-schema-v2-'));
+  try {
+    const cfgOffPath = path.join(tmpDir, 'cfg-off.json');
+    fs.writeFileSync(
+      cfgOffPath,
+      JSON.stringify({ palette: 'obsidian', compactPreset: 'dev', pinRightPane: 'off' }),
+      'utf8'
+    );
+    const upgraded = cdp.readConfig(cfgOffPath);
+    assert.equal(upgraded.pinRightPane, 'studio', 'Upgrading v1 config with pinRightPane:off enables studio dock once');
+    assert.equal(upgraded.palette, 'obsidian', 'Upgrade preserves existing palette');
+    assert.equal(upgraded.compactPreset, 'dev', 'Upgrade preserves existing compactPreset');
+    assert.equal(upgraded.configSchemaVersion, 2);
+    const persisted = JSON.parse(fs.readFileSync(cfgOffPath, 'utf8'));
+    assert.equal(persisted.configSchemaVersion, 2);
+    assert.equal(persisted.pinRightPane, 'studio');
+
+    // User manually disables pinRightPane after upgrading -> must stay off on subsequent reads
+    assert.equal(cdp.updateConfigSetting('pinRightPane', 'off', cfgOffPath), true);
+    const afterOff = cdp.readConfig(cfgOffPath);
+    assert.equal(afterOff.pinRightPane, 'off', 'Manual off after v2 upgrade must persist across reloads');
+    assert.equal(afterOff.configSchemaVersion, 2);
+
+    // v1 config with retired usage-monitor also upgrades cleanly to studio
+    const cfgUmPath = path.join(tmpDir, 'cfg-um.json');
+    fs.writeFileSync(cfgUmPath, JSON.stringify({ pinRightPane: 'usage-monitor' }), 'utf8');
+    const upgradedUm = cdp.readConfig(cfgUmPath);
+    assert.equal(upgradedUm.pinRightPane, 'studio');
+    assert.equal(upgradedUm.configSchemaVersion, 2);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  // 3. Verify all 5-language /compact presets stay within 600-char validator limit and match Studio HTML
+  const html = fs.readFileSync(path.join(ROOT_DIR, 'sidecars', 'studio', 'index.html'), 'utf8');
+  const copyStart = html.indexOf('const COMPACT_PRESET_COPY = {');
+  const copyEnd = html.indexOf('const SECTION_ICONS =', copyStart);
+  assert.ok(copyStart > 0 && copyEnd > copyStart);
+  const studioCopy = vm.runInNewContext(`${html.slice(copyStart, copyEnd)}; COMPACT_PRESET_COPY;`, {});
+  for (const lang of ['zh-CN', 'zh-TW', 'yue', 'en', 'ja']) {
+    const ui = i18nLocales.getUiStrings(lang);
+    for (const [uiKey, htmlKey] of [
+      ['compactPresetClean', 'clean'],
+      ['compactPresetDev', 'dev'],
+      ['compactPresetContinue', 'continue'],
+    ]) {
+      const text = ui[uiKey];
+      assert.ok(text && text.length <= 600, `${lang}.${uiKey} must fit <= 600 chars (got ${text?.length})`);
+      assert.equal(studioCopy[lang][htmlKey], text, `Studio COMPACT_PRESET_COPY.${lang}.${htmlKey} must match i18n-locales`);
+    }
   }
 });

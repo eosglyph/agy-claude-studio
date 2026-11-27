@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "agyVersion": "2.35.2",
-  "updatedAt": "2026-11-26",
+  "updatedAt": "2026-11-27",
   "locales": {
     "zh-CN": {
       "file": "zh-CN.json",
@@ -17,13 +17,13 @@
     "zh-TW": {
       "file": "zh-TW.json",
       "label": "繁體中文",
-      "bundled": true,
+      "bundled": false,
       "dictCount": 2058,
       "ruleCount": 130,
       "timeRuleCount": 9,
       "sentenceCount": 4,
-      "bytes": 132355,
-      "sha256": "1be9fb1d13b60072102d61ef35a58bd17d2428a13276de12ca210eb2cb1040d6"
+      "bytes": 132356,
+      "sha256": "55ed14f2a984c3a991247ea222b1f3d82f347a171623d0e8c17817b10f2beebb"
     },
     "yue": {
       "file": "yue.json",
