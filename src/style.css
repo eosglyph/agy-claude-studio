@@ -4986,6 +4986,28 @@ html[data-ag-cs-style][data-ag-cs-gemini-loader="on"] .ripple-container > .rippl
 
 [data-testid="aux-pane-split"][data-ag-cs-dock-solo="1"] .ag-cs-pinned-dock.is-collapsed {
   padding-top: 48px;
+  border-left: 0;
+  background: var(--background, #ffffff);
+}
+
+[data-testid="aux-pane-split"][data-ag-cs-dock-solo="1"] .ag-cs-pinned-dock.is-collapsed::before {
+  content: "";
+  position: absolute;
+  top: 40px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--sidebar, var(--background, #faf9f5));
+  border-left: 1px solid var(--border, rgba(128, 128, 128, 0.16));
+  border-top: 1px solid var(--border, rgba(128, 128, 128, 0.16));
+  border-top-left-radius: 10px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-testid="aux-pane-split"][data-ag-cs-dock-solo="1"] .ag-cs-pinned-dock.is-collapsed .ag-cs-dock-expand-rail {
+  position: relative;
+  z-index: 1;
 }
 
 .ag-cs-pinned-dock {
