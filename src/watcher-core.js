@@ -126,7 +126,7 @@ async function startWatchController(options = {}) {
   });
 
   if (!lock.acquired) {
-    const err = new Error(`守护进程已在运行 (PID ${lock.existingPid})。如需重启请先运行 remove.bat`);
+    const err = new Error(`守护进程已在运行 (PID ${lock.existingPid})。如需重启请先运行 node src/remove.js 或 npm run remove`);
     err.code = 'WATCHER_LOCKED';
     err.existingPid = lock.existingPid;
     err.existingMode = lock.existingMode || null;
