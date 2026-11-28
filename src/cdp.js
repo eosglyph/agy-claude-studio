@@ -166,6 +166,7 @@ const DEFAULT_CONFIG = {
   geminiLoader: true,
   receivePrerelease: false,
   i18nIgnoreSelectors: [],
+  pinnedToolbarPlugins: [],
   autoRelaunchWithCdp: true,
   exitOnHostClose: false,
   pollIntervalMs: 2500,
@@ -228,6 +229,28 @@ function sanitizeSelectorList(raw) {
   return out;
 }
 
+const PINNED_TOOLBAR_SIDECAR_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._/-]+$/;
+
+function isValidPinnedToolbarSidecarId(raw) {
+  const s = typeof raw === 'string' ? raw.trim().replace(/\/+$/, '') : '';
+  if (!s || s.length > 120 || !PINNED_TOOLBAR_SIDECAR_RE.test(s)) return false;
+  return !s.split('/').some((seg) => !seg || seg === '.' || seg === '..');
+}
+
+function sanitizePinnedToolbarPlugins(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    const s = typeof item === 'string' ? item.trim().replace(/\/+$/, '') : '';
+    if (!isValidPinnedToolbarSidecarId(s) || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 function validateConfigSetting(key, value) {
   if (key === 'pollIntervalMs') {
     return Number.isInteger(value) && value >= 250 && value <= 60000;
@@ -235,6 +258,10 @@ function validateConfigSetting(key, value) {
   if (key === 'i18nIgnoreSelectors') {
     if (!Array.isArray(value) || value.length > 50) return false;
     return value.every((s) => typeof s === 'string' && s.trim().length > 0 && s.trim().length <= 160 && !/[\r\n\0<>{};]/.test(s));
+  }
+  if (key === 'pinnedToolbarPlugins') {
+    if (!Array.isArray(value) || value.length > 12) return false;
+    return value.every((s) => isValidPinnedToolbarSidecarId(s));
   }
   if (key === 'compactCustomText') {
     return typeof value === 'string' && value.length <= 600 && !/\0/.test(value);
@@ -290,6 +317,7 @@ function sanitizeConfig(raw) {
     out.palette = 'obsidian';
   }
   out.i18nIgnoreSelectors = sanitizeSelectorList(out.i18nIgnoreSelectors);
+  out.pinnedToolbarPlugins = sanitizePinnedToolbarPlugins(out.pinnedToolbarPlugins);
   if (!CONFIG_VALIDATORS.compactPreset.includes(out.compactPreset)) {
     out.compactPreset = DEFAULT_CONFIG.compactPreset;
   }
@@ -782,6 +810,87 @@ function computeHash(str) {
   return (h >>> 0).toString(36);
 }
 
+const PLUGIN_ICON_MIMES = Object.freeze({
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+});
+
+function readPluginLogoDataUri(pluginName, { pluginRoots } = {}) {
+  const safeName = typeof pluginName === 'string' ? pluginName.trim() : '';
+  if (!safeName || !/^[a-zA-Z0-9._-]+$/.test(safeName) || safeName === '.' || safeName === '..') {
+    return '';
+  }
+  const roots = Array.isArray(pluginRoots) && pluginRoots.length
+    ? pluginRoots
+    : [
+        path.join(os.homedir(), '.gemini', 'config', 'plugins'),
+        path.join(os.homedir(), '.gemini', 'antigravity', 'builtin', 'plugins'),
+      ];
+  for (const rootDir of roots) {
+    if (!rootDir) continue;
+    const pluginDir = path.join(rootDir, safeName);
+    let realPluginDir = '';
+    try {
+      const st = fs.statSync(pluginDir);
+      if (!st.isDirectory()) continue;
+      realPluginDir = fs.realpathSync(pluginDir);
+    } catch {
+      continue;
+    }
+    let logoRel = 'assets/logo.svg';
+    try {
+      const manifestPath = path.join(realPluginDir, 'plugin.json');
+      if (fs.existsSync(manifestPath)) {
+        const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        if (typeof parsed?.logo === 'string' && parsed.logo.trim()) {
+          logoRel = parsed.logo.trim();
+        }
+      }
+    } catch {}
+    if (/^https?:\/\//i.test(logoRel)) {
+      return logoRel;
+    }
+    if (/^data:image\//i.test(logoRel) && logoRel.length <= 96 * 1024) {
+      return logoRel;
+    }
+    try {
+      const candidate = path.resolve(realPluginDir, logoRel);
+      const realFile = fs.realpathSync(candidate);
+      const relCheck = path.relative(realPluginDir, realFile);
+      if (!relCheck || relCheck.startsWith('..') || path.isAbsolute(relCheck)) continue;
+      const ext = path.extname(realFile).toLowerCase();
+      const mime = PLUGIN_ICON_MIMES[ext];
+      if (!mime) continue;
+      const fst = fs.statSync(realFile);
+      if (!fst.isFile() || fst.size <= 0 || fst.size > 64 * 1024) continue;
+      if (ext === '.svg') {
+        const svgText = fs.readFileSync(realFile, 'utf8');
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+      }
+      const buf = fs.readFileSync(realFile);
+      return `data:${mime};base64,${buf.toString('base64')}`;
+    } catch {}
+  }
+  return '';
+}
+
+function readPinnedPluginIcons(pinnedSidecarIds, opts = {}) {
+  const list = sanitizePinnedToolbarPlugins(pinnedSidecarIds);
+  const out = {};
+  for (const sidecarId of list) {
+    const slash = sidecarId.indexOf('/');
+    const pluginName = slash > 0 ? sidecarId.slice(0, slash) : sidecarId;
+    const uri = readPluginLogoDataUri(pluginName, opts);
+    if (uri) out[sidecarId] = uri;
+  }
+  return out;
+}
+
 function buildInjectExpression(customConfig) {
   const config = customConfig || readConfig();
   const css = readCss();
@@ -870,9 +979,11 @@ function buildInjectExpression(customConfig) {
               const extraOptOut = resolveExtraI18nOptOutSelectors(config);
               const periodicOverride = readPeriodicOverride();
               const cloudPack = readCloudLocalePackOverride(config.language);
+              const pinnedPluginIcons = readPinnedPluginIcons(config.pinnedToolbarPlugins);
               const out = { ...config, binding: SETTING_BINDING, codeHash };
               if (extraOptOut.length) out.i18nOptOutSelectors = extraOptOut;
               if (periodicOverride) out.periodicOverride = periodicOverride;
+              if (Object.keys(pinnedPluginIcons).length) out.pinnedPluginIcons = pinnedPluginIcons;
               if (cloudPack && cloudPack.pack) {
                 out.i18nPackOverride = cloudPack.pack;
                 out.i18nPackHash = cloudPack.hash || '';
@@ -924,9 +1035,11 @@ function buildConfigScriptExpression(customConfig, expectedCodeHash) {
   const extraOptOut = resolveExtraI18nOptOutSelectors(config);
   const periodicOverride = readPeriodicOverride();
   const cloudPack = readCloudLocalePackOverride(config.language);
+  const pinnedPluginIcons = readPinnedPluginIcons(config.pinnedToolbarPlugins);
   const payload = { ...config, binding: SETTING_BINDING, codeHash: expectedHash };
   if (extraOptOut.length) payload.i18nOptOutSelectors = extraOptOut;
   if (periodicOverride) payload.periodicOverride = periodicOverride;
+  if (Object.keys(pinnedPluginIcons).length) payload.pinnedPluginIcons = pinnedPluginIcons;
   if (cloudPack && cloudPack.pack) {
     payload.i18nPackOverride = cloudPack.pack;
     payload.i18nPackHash = cloudPack.hash || '';
@@ -1049,7 +1162,7 @@ const REMOVE_EXPRESSION = `(() => {
     }
   });
   const nodes = document.querySelectorAll(
-    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
+    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-toolbar-pin-group, .ag-cs-toolbar-pin-btn, .ag-cs-menu-pin-btn, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
   );
   nodes.forEach((n) => n.remove());
   try {
@@ -2235,6 +2348,9 @@ module.exports = {
   readCss,
   readRuntimeBundle,
   computeHash,
+  sanitizePinnedToolbarPlugins,
+  readPluginLogoDataUri,
+  readPinnedPluginIcons,
   buildInjectExpression,
   buildConfigScriptExpression,
   buildRefreshExpression,
