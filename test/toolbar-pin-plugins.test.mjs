@@ -511,12 +511,32 @@ test('Plugins submenu pin buttons pin/unpin to titlebar without closing menu, su
     assert.equal(sandbox.window.__agClaudeStudio.getState().pinnedDockCollapsed, true);
     assert.equal(studioToolbarBtn.classList.contains('is-active'), false);
 
-    // 5. Unpinning removes button from toolbar
-    umPinBtn.click();
-    assert.deepEqual(Array.from(sandbox.window.__agClaudeStudio.getPinnedToolbarPlugins()), ['agy-claude-studio/studio']);
-    assert.equal(pinGroup.children.length, 1);
+    // 5. Disabling toolbarPluginPin removes menu pin buttons & toolbar pin group, preserves pinned list, and restores collapsed Studio sparkle button
+    sandbox.window.__agClaudeStudio.refreshConfig({ toolbarPluginPin: false });
+    assert.equal(docEl.querySelector('.ag-cs-toolbar-pin-group'), null, 'Disabling toolbarPluginPin must remove toolbar pin group');
+    assert.equal(docEl.querySelector('.ag-cs-menu-pin-btn'), null, 'Disabling toolbarPluginPin must remove submenu pin buttons');
+    assert.deepEqual(
+      Array.from(sandbox.window.__agClaudeStudio.getPinnedToolbarPlugins()),
+      ['usage-monitor/panel', 'agy-claude-studio/studio'],
+      'Disabling toolbarPluginPin should preserve saved pinnedToolbarPlugins list'
+    );
+    assert.ok(
+      toolbar.querySelector('.ag-cs-dock-toolbar-btn'),
+      'Collapsed Studio dock should restore terracotta sparkle button when toolbarPluginPin is disabled'
+    );
 
-    // 6. REMOVE_EXPRESSION removes toolbar group and menu pin buttons cleanly
+    // Re-enabling toolbarPluginPin restores menu pin buttons, toolbar pin group, and deduplication
+    sandbox.window.__agClaudeStudio.refreshConfig({ toolbarPluginPin: true });
+    assert.ok(docEl.querySelector('.ag-cs-toolbar-pin-group'), 'Re-enabling toolbarPluginPin should restore toolbar pin group');
+    assert.ok(umMenuItem.querySelector('.ag-cs-menu-pin-btn'), 'Re-enabling toolbarPluginPin should restore submenu pin buttons');
+    assert.equal(toolbar.querySelector('.ag-cs-dock-toolbar-btn'), null, 'Collapsed dock sparkle button should deduplicate again once re-enabled');
+
+    // 6. Unpinning removes button from toolbar
+    umMenuItem.querySelector('.ag-cs-menu-pin-btn').click();
+    assert.deepEqual(Array.from(sandbox.window.__agClaudeStudio.getPinnedToolbarPlugins()), ['agy-claude-studio/studio']);
+    assert.equal(toolbar.querySelector('.ag-cs-toolbar-pin-group').children.length, 1);
+
+    // 7. REMOVE_EXPRESSION removes toolbar group and menu pin buttons cleanly
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
     assert.equal(docEl.querySelector('.ag-cs-toolbar-pin-group'), null);
     assert.equal(docEl.querySelector('.ag-cs-menu-pin-btn'), null);

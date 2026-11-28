@@ -288,6 +288,7 @@
       delete cleanBase.binding;
       delete cleanBase.pollIntervalMs;
       delete cleanBase.codeHash;
+      delete cleanBase.pinnedPluginIcons;
       const baseJson = JSON.stringify(cleanBase);
       const prevBaseJson = localStorage.getItem(STORAGE_FILE_CFG_KEY);
       let saved = {};
@@ -301,9 +302,18 @@
         try {
           prevBase = JSON.parse(prevBaseJson) || {};
         } catch {}
+        const sameConfigVal = (a, b) => {
+          if (a === b) return true;
+          if (a && b && typeof a === 'object' && typeof b === 'object') {
+            try {
+              return JSON.stringify(a) === JSON.stringify(b);
+            } catch {}
+          }
+          return false;
+        };
         const merged = { ...saved };
         for (const key of Object.keys(cleanBase)) {
-          if (prevBase[key] !== cleanBase[key]) {
+          if (!sameConfigVal(prevBase[key], cleanBase[key])) {
             merged[key] = cleanBase[key];
           }
         }
@@ -8504,7 +8514,12 @@
     return out;
   }
 
+  function isToolbarPluginPinEnabled() {
+    return cfg.toolbarPluginPin !== false;
+  }
+
   function isToolbarPluginPinned(sidecarId) {
+    if (!isToolbarPluginPinEnabled()) return false;
     const id = normalizeToolbarSidecarId(sidecarId);
     if (!id) return false;
     return getPinnedToolbarPlugins().includes(id);
@@ -8854,6 +8869,14 @@
 
   function syncPluginsSubmenuPinButtons() {
     if (destroyed) return;
+    if (!isToolbarPluginPinEnabled()) {
+      document.querySelectorAll('.ag-cs-menu-pin-btn').forEach((el) => {
+        try {
+          el.remove();
+        } catch {}
+      });
+      return;
+    }
     const items = document.querySelectorAll('[role="menu"] [role="menuitem"]');
     if (!items.length) return;
     const copy = getToolbarPinCopy(getLang());
@@ -8967,6 +8990,14 @@
 
   function syncToolbarPinnedPlugins() {
     if (destroyed) return;
+    if (!isToolbarPluginPinEnabled()) {
+      if (toolbarPinGroupEl && toolbarPinGroupEl.parentElement) {
+        try {
+          toolbarPinGroupEl.remove();
+        } catch {}
+      }
+      return;
+    }
     const pinned = getPinnedToolbarPlugins();
     if (!pinned.length) {
       if (toolbarPinGroupEl && toolbarPinGroupEl.parentElement) {
@@ -12061,6 +12092,9 @@
         for (const pending of pendingFileActions.values()) clearTimeout(pending.timer);
         pendingFileActions.clear();
         clearFileLinkToast();
+      }
+      if (cfg.toolbarPluginPin === false && typeof teardownToolbarPinnedPlugins === 'function') {
+        teardownToolbarPinnedPlugins();
       }
       refreshOpenEffortPopover();
       refreshOpenPeriodicSelector();

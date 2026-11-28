@@ -29,6 +29,7 @@
   "orchestratorSwitch": true,
   "pluginPageTranslate": true,
   "fileLinkContextMenu": true,
+  "toolbarPluginPin": true,
   "receivePrerelease": false,
   "i18nIgnoreSelectors": [],
   "pinnedToolbarPlugins": [],

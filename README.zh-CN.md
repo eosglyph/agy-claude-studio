@@ -293,7 +293,7 @@ npm run remove                        # 停止守护并无损还原原生界面
 <a id="配置参考"></a>
 ## 配置参考
 
-所有选项均可在右侧 **Claude Studio** 面板实时调整并自动保存（完整模板见 [config.example.json](config.example.json)）。手机推送配置与凭据单独隔离保存在本机 `PLUGIN_DATA/notify.json` 中，不会写入 `config.json` 也不会注入渲染进程。
+日常偏好均可在右侧 **Claude Studio → 设置** 面板实时调整并自动保存（完整模板见 [config.example.json](config.example.json)）；部分列表或底层项则通过专属入口管理（如 `pinnedToolbarPlugins` 直接在 `⋮ → 插件` 点 `📌`、`i18nIgnoreSelectors` 通过 `studio-translation-protect` 技能或 `config.json`、运行时参数通过 `config.json`）。手机推送配置与凭据单独隔离保存在本机 `PLUGIN_DATA/notify.json` 中，不会写入 `config.json` 也不会注入渲染进程。
 
 <details>
 <summary><b>展开查看全部配置项说明</b></summary>
@@ -309,18 +309,19 @@ npm run remove                        # 停止守护并无损还原原生界面
 | 界面微调 | `logoInk` | `'accent'` \| `'foreground'` | `'accent'` | 首页及左上角应用 Logo 着色模式 |
 | 界面微调 | `geminiLoader` | `boolean` | `true` | 加载动效：用可爱的 Gemini 娘和 12 刻度环替换原生转圈 |
 | 进阶交互 | `fileLinkContextMenu` | `boolean` | `true` | 对话文件右键菜单：右击本地文件链接唤起打开/定位/复制路径菜单 |
+| 进阶交互 | `toolbarPluginPin` | `boolean` | `true` | 顶栏插件钉选：允许在 `⋮ → 插件` 子菜单中将常用插件钉在对话顶栏，一键显隐切换 |
 | 进阶交互 | `periodicSelector` / `orchestratorSwitch` | `boolean` | `true` | Gemini 4 元素周期表选择器与协作模式快捷开关 |
 | 进阶交互 | `effortSliderStyle` / `effortAccent` | `'chatgpt'` \| `'claude'` \| `'off'` / `boolean` | `'chatgpt'` / `true` | 思考强度滑块风格（`'off'` 保留原生控件）与色阶 |
 | 进阶交互 | `compactPreset` / `compactCustomText` | `'empty'` \| `'clean'` \| `'dev'` \| `'continue'` \| `'custom'` / `string` | `'clean'` / `''` | `/compact` 压缩预设（含 `continue` 继续压缩）与自定义指令文案 |
 | 进阶交互 | `smoothCaret` / `mascot` / `homeRipple` | `boolean` / `'crab'` \| `'off'` / `boolean` | `true` / `'crab'` / `true` | 丝滑光标、Clawd 挂件、首页字符水波纹 |
-| 翻译保护 | `pluginPageTranslate` / `i18nIgnoreSelectors` | `boolean` / `string[]` | `true` / `[]` | 插件市场及技能页按需翻译小胶囊与自定义免翻译 CSS 选择器 |
+| 翻译保护 | `pluginPageTranslate` / `i18nIgnoreSelectors` | `boolean` / `string[]` | `true` / `[]` | 插件市场及技能页按需翻译小胶囊；自定义免翻译 CSS 选择器通过 `studio-translation-protect` 技能或 `config.json` 管理 |
 | 侧栏与顶栏 | `pinRightPane` | `'studio'` \| `'off'` | `'studio'` | 独立三栏常驻 Claude Studio 侧栏开关 |
-| 侧栏与顶栏 | `pinnedToolbarPlugins` | `string[]` | `[]` | 钉选至对话顶栏 `⋮` 左侧的 UI 侧栏插件 ID 列表（最多 12 项，通过 `⋮ → 插件` 的 `📌` 按钮管理） |
+| 侧栏与顶栏 | `pinnedToolbarPlugins` | `string[]` | `[]` | *(由 `⋮ → 插件` 的 `📌` 按钮直接管理)* 钉选至对话顶栏 `⋮` 左侧的 UI 侧栏插件 ID 列表（最多 12 项） |
 | 用量统计 | `usageStatsEnabled` | `boolean` | `true` | 内置用量统计总开关（关闭时不覆盖子项偏好） |
 | 用量统计 | `inlineStats` / `ringMode` / `turnBadges` | `boolean` / `'context'` \| `'quota'` / `boolean` | `true` / `'context'` / `true` | *(总开关开启后生效)* 内置底栏统计、圆环与轮次徽章 |
 | 用量统计 | `hudTopBar` / `hudBottomBar` / `hudRimProgress` | `boolean` | `true` / `false` / `false` | *(总开关开启后生效)* 顶部 HUD、底部统计条与环绕进度条 |
 | 更新与运行时 | `receivePrerelease` | `boolean` | `false` | 是否接收测试版本（prerelease）更新推送 |
-| 更新与运行时 | `autoRelaunchWithCdp` / `exitOnHostClose` / `pollIntervalMs` | `boolean` / `boolean` / `number` | `true` / `false` / `2500` | CDP 自动接管、宿主关闭随同退出与轮询间隔 |
+| 更新与运行时 | `pollIntervalMs` / `autoRelaunchWithCdp` / `exitOnHostClose` | `number` / `boolean` / `boolean` | `2500` / `true` / `false` | *(高级 `config.json` 项)* 内置 HUD 轮询间隔；后两项仅用于独立 CLI 守护模式，原生插件模式无需配置 |
 
 </details>
 
