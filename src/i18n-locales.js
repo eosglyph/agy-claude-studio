@@ -2703,6 +2703,55 @@
     ['Background color picker', '背景色选择器', '背景色選擇器', '背景色選擇器', '背景色ピッカー'],
     ['Foreground color picker', '前景色选择器', '前景色選擇器', '前景色選擇器', '前景色ピッカー'],
     ['Accent color picker', '强调色选择器', '強調色選擇器', '強調色選擇器', 'アクセント色ピッカー'],
+    // ── AGY 2.36.0 Sweep (Side Question /btw, New Tab, Settings, Quota & Accessibility) ──
+    [
+      'Ask a side question without interrupting the main conversation',
+      '发起旁支提问，不打断主对话',
+      '發起旁支提問，不打斷主對話',
+      '順便問句嘢，唔會打斷主對話',
+      'メインの会話を中断せずにサイド質問をする',
+    ],
+    [
+      'Ask a side question without interrupting the main conversation.',
+      '发起旁支提问，不打断主对话。',
+      '發起旁支提問，不打斷主對話。',
+      '順便問句嘢，唔會打斷主對話。',
+      'メインの会話を中断せずにサイド質問をします。',
+    ],
+    ['Started from', '发起自', '發起自', '開自', '開始元'],
+    ['Started during', '发起于', '發起於', '開於', '開始時'],
+    ['Show', '显示', '顯示', '顯示', '表示'],
+    ['Hide', '隐藏', '隱藏', '收埋', '非表示'],
+    ['Side Question Conversation Log', '旁支提问对话记录', '旁支提問對話紀錄', '旁支提問對話紀錄', 'サイド質問の会話ログ'],
+    ['Side Question header', '旁支提问标题栏', '旁支提問標題列', '旁支提問標題欄', 'サイド質問ヘッダー'],
+    ['New Side Question', '新建旁支提问', '新增旁支提問', '新旁支提問', '新しいサイド質問'],
+    ['Close New Side Question', '关闭新建旁支提问', '關閉新增旁支提問', '閂咗新旁支提問', '新しいサイド質問を閉じる'],
+    ['Search or enter a URL', '搜索或输入网址', '搜尋或輸入網址', '搜尋或者輸入網址', '検索または URL を入力'],
+    ['Set up', '去配置', '前往設定', '去設定', '設定する'],
+    ['Announcements and tips', '公告与使用技巧', '公告與使用技巧', '公告同使用貼士', 'お知らせとヒント'],
+    ['Switch to RTL text direction', '切换为从右到左文本方向', '切換為由右至左文字方向', '轉做由右至左文字方向', '右から左のテキスト方向に切り替え'],
+    ['Switch to LTR text direction', '切换为从左到右文本方向', '切換為由左至右文字方向', '轉做由左至右文字方向', '左から右のテキスト方向に切り替え'],
+    ['Scrollable table', '可滚动表格', '可捲動表格', '可碌表格', 'スクロール可能なテーブル'],
+    ['Delete All Data', '删除所有数据', '刪除所有資料', '刪除全部資料', 'すべてのデータを削除'],
+    [
+      'Permanently delete your remote conversations, projects, scheduled tasks, connected plugins and settings. Data in the desktop app and your Google account are not affected.',
+      '永久删除你的云端对话、项目、定时任务、已连接插件和设置。桌面应用本地数据与你的 Google 账号不受影响。',
+      '永久刪除您的遠端對話、專案、排程任務、已連線外掛與設定。桌面應用程式本機資料與您的 Google 帳戶不受影響。',
+      '永久刪除你嘅雲端對話、專案、定時任務、已連接插件同設定。桌面應用本機資料同你嘅 Google 帳戶唔會受影響。',
+      'リモートの会話、プロジェクト、スケジュール済みタスク、接続済みプラグイン、設定を完全に削除します。デスクトップアプリ内のデータと Google アカウントには影響しません。',
+    ],
+    ['Loading token usage...', '正在加载 Token 用量…', '正在載入 Token 用量…', '載入緊 Token 用量…', 'トークン使用量を読み込み中…'],
+    ['Loading workspace customizations...', '正在加载工作区自定义配置…', '正在載入工作區自訂設定…', '載入緊工作區自訂配置…', 'ワークスペースのカスタマイズを読み込み中…'],
+    ['Plugin:', '插件：', '外掛：', '插件：', 'プラグイン：'],
+    ['Unlock the power of agent swarms.', '释放智能体蜂群协作的强大能力。', '釋放代理蜂群協作的強大能力。', '釋放代理蜂群協作嘅強大威力。', 'エージェントスウォームの力を解き放ちます。'],
+    ['Error ID:', '错误 ID：', '錯誤 ID：', '錯誤 ID：', 'エラー ID：'],
+    [
+      'Individual quota reached. Please upgrade your subscription to increase your limits.',
+      '个人配额已用尽，请升级订阅以提升额度上限。',
+      '個人配額已用盡，請升級訂閱以提升額度上限。',
+      '個人配額用晒，請升級訂閱提高額度上限。',
+      '個人クォータの上限に達しました。上限を引き上げるにはサブスクリプションをアップグレードしてください。',
+    ],
   );
 
   // ── Part 4: Sentences, Duration Units, Dynamic Rules & Bundle Resolver ─
@@ -2953,6 +3002,23 @@
     ['^(\\d+) posts? since the view was updated$', '', '自上次更新视图以来新增 $1 条帖子', '自上次更新檢視以來新增 $1 則貼文', '自上次更新畫面後多咗 $1 條帖文', 'ビュー更新以降に $1 件の投稿'],
     ['^read #(\\d+) · updated (.+) ago$', '', '已读 #$1 · $D2前更新', '已讀 #$1 · $D2前更新', '睇到 #$1 · $D2前更新', '#$1 読了 · $D2前に更新'],
     ['^read #(\\d+)$', '', '已读 #$1', '已讀 #$1', '睇到 #$1', '#$1 読了'],
+    // ── AGY 2.36.0 Dynamic Rules (Side Question, Environment, Actions & Quota) ──
+    ['^Side Question:\\s*(.+)$', '', '旁支提问：$1', '旁支提問：$1', '旁支提問：$1', 'サイド質問：$1'],
+    ['^Edit side question title:\\s*(.+)$', '', '编辑旁支提问标题：$1', '編輯旁支提問標題：$1', '改旁支提問標題：$1', 'サイド質問のタイトルを編集：$1'],
+    ['^Delete side question:\\s*(.+)$', '', '删除旁支提问：$1', '刪除旁支提問：$1', '刪走旁支提問：$1', 'サイド質問を削除：$1'],
+    ['^Started (?:from|during) (.+?)\\.\\s*Show in main conversation$', '', '发起自 $1 · 在主对话中查看', '發起自 $1 · 在主對話中檢視', '開自 $1 · 喺主對話睇返', '$1 から開始 · メインの会話で表示'],
+    ['^Started (?:from|during) (.+)$', '', '发起自 $1', '發起自 $1', '開自 $1', '開始元：$1'],
+    ['^Where the agent runs, current: (.+)$', '', '智能体运行位置，当前：$T1', '代理執行位置，目前：$T1', '代理運行位置，而家：$T1', 'エージェントの実行場所（現在: $T1）'],
+    ['^More actions for (.+)$', '', '$1 的更多操作', '$1 的更多動作', '$1 嘅更多操作', '$1 のその他の操作'],
+    ['^Error ID:\\s*(.+)$', '', '错误 ID：$1', '錯誤 ID：$1', '錯誤 ID：$1', 'エラー ID：$1'],
+    [
+      '^Individual quota reached\\. Please upgrade your subscription to increase your limits\\. Resets in (.+)\\.$',
+      '',
+      '个人配额已用尽，请升级订阅以提升额度上限。将于 $D1后重置。',
+      '個人配額已用盡，請升級訂閱以提升額度上限。將於 $D1後重設。',
+      '個人配額用晒，請升級訂閱提高額度上限。$D1後會重設。',
+      '個人クォータの上限に達しました。上限を引き上げるにはサブスクリプションをアップグレードしてください。$D1後にリセットされます。',
+    ],
   ];
 
   // Relative timestamp rows in sidebar conversation lists: [pattern, flags, zh-CN, zh-TW, yue, ja]
@@ -2968,6 +3034,8 @@
     ['^just now$', 'i', '刚刚', '剛剛', '啱啱', 'たった今'],
   ];
 
+  const LOCALE_PACK_VERSION = '2.36.0';
+  const LOCALE_PACK_UPDATED_AT = '2026-11-28';
   const BUNDLE_CACHE = {};
   const BUNDLE_COLS = {
     'zh-CN': { dict: 1, rule: 2, sent: 0 },
@@ -3007,6 +3075,8 @@
     }
     BUNDLE_CACHE[key] = {
       lang: key,
+      agyVersion: LOCALE_PACK_VERSION,
+      updatedAt: LOCALE_PACK_UPDATED_AT,
       cjkLatinSpacing: key !== 'ja',
       units: UNITS_TABLE[key],
       dict,
@@ -3018,6 +3088,8 @@
   }
 
   return {
+    LOCALE_PACK_VERSION,
+    LOCALE_PACK_UPDATED_AT,
     UI_TABLE,
     getUiStrings,
     DICT_ROWS,

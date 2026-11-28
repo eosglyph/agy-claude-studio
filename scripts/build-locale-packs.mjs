@@ -22,7 +22,7 @@ const LOCALE_SPECS = [
   { lang: 'ja', label: '日本語', bundled: false },
 ];
 const TARGET_LANGS = LOCALE_SPECS.map((s) => s.lang);
-const DEFAULT_AGY_VERSION = '2.35.2';
+const DEFAULT_AGY_VERSION = '2.36.0';
 
 function sha256Hex(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
