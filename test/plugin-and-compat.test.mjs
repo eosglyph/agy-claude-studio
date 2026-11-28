@@ -978,9 +978,12 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
           if (p === 'iframe[src*="agy-claude-studio--studio"]') return c.tagName === 'IFRAME' && String(c.getAttribute('src') || '').includes('agy-claude-studio--studio');
           if (p === '[data-ag-cs-dock-open]') return c.hasAttribute('data-ag-cs-dock-open');
           if (p === '[data-ag-cs-dock-solo]') return c.hasAttribute('data-ag-cs-dock-solo');
+          if (p === '[data-ag-cs-dock-aux-max]') return c.hasAttribute('data-ag-cs-dock-aux-max');
           if (p === '[data-ag-cs-docked-slot]') return c.hasAttribute('data-ag-cs-docked-slot');
           if (p === '[data-ag-cs-dock-hidden]') return c.hasAttribute('data-ag-cs-dock-hidden');
           if (p === '.ag-cs-pinned-dock') return c.classList.contains('ag-cs-pinned-dock');
+          if (p === '.ag-cs-dock-toolbar-btn') return c.classList.contains('ag-cs-dock-toolbar-btn');
+          if (p === '[data-testid="pane-titlebar-toolbar"]') return c.getAttribute('data-testid') === 'pane-titlebar-toolbar';
           if (p === '[data-testid="agent-input-box"] .surface-composer-card') return c.classList.contains('surface-composer-card');
           if (p === '.agy-composer-footer') return c.classList.contains('agy-composer-footer');
           return false;
@@ -1069,6 +1072,8 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
 
   const storage = new Map();
   const timers = new Set();
+  const winListeners = new Map();
+  let hostResizeCount = 0;
   const sandbox = {
     document: doc,
     localStorage: {
@@ -1081,6 +1086,23 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     matchMedia: () => ({ matches: false }),
     MutationObserver: class { observe() {} disconnect() {} },
     ResizeObserver: class { observe() {} disconnect() {} },
+    addEventListener: (ev, fn) => {
+      if (!winListeners.has(ev)) winListeners.set(ev, []);
+      winListeners.get(ev).push(fn);
+    },
+    removeEventListener: (ev, fn) => {
+      const list = winListeners.get(ev);
+      if (!list) return;
+      const i = list.indexOf(fn);
+      if (i >= 0) list.splice(i, 1);
+    },
+    dispatchEvent: (ev) => {
+      const type = ev?.type || '';
+      if (type === 'resize') hostResizeCount += 1;
+      for (const fn of [...(winListeners.get(type) || [])]) fn(ev);
+      return true;
+    },
+    Event: class { constructor(type) { this.type = type; } },
     requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
     cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
     setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
@@ -1100,7 +1122,14 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
       sandbox
     );
 
-    // 1. Active Browser tab with pinRightPane='studio' -> 3-column dock mounts between chatCol & nativeSplitter
+    // 0. CSS pins dock to the far right (order: 99) while keeping native aux pane as :last-child
+    const cssText = cdp.readCss();
+    assert.match(cssText, /\.ag-cs-pinned-dock\s*\{[^}]*\border:\s*99\s*;/, 'Pinned dock CSS must force far-right flex order');
+    assert.match(cssText, /\[data-testid="aux-pane-split"\]\[data-ag-cs-dock-open="1"\]\s+\.ag-cs-dock-head/, 'Dock header must reserve top-right controls padding in both solo and 3-column modes');
+    assert.match(cssText, /\[data-side-panel-strip\]\s*\{\s*padding-right:\s*max\(8px,\s*calc\(var\(--ag-cs-dock-solo-pr/, 'Middle aux strip must compensate right padding for far-right dock');
+    assert.match(cssText, />\s*:last-child\s*>\s*\[data-split-sized\]/, 'Inner split-sized container must match clamped aux pane max-width');
+
+    // 1. Active Browser tab with pinRightPane='studio' -> DOM stays before nativeSplitter while CSS places dock far right
     const dockEl = split.children[1];
     assert.ok(dockEl && dockEl.classList.contains('ag-cs-pinned-dock'), 'Dock must insert right before native splitter');
     assert.equal(split.children[0], chatCol);
@@ -1108,6 +1137,7 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(split.getAttribute('data-ag-cs-dock-open'), '1');
     assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false);
     assert.equal(split.style.getPropertyValue('--ag-cs-dock-w'), '310px');
+    assert.equal(split.style.getPropertyValue('--ag-cs-dock-solo-pr'), '76px', 'Must reserve top-right controls padding in 3-column mode too');
     assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
     assert.equal(studioSlot.hasAttribute('data-ag-cs-dock-hidden'), false);
     assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-left'), '443px');
@@ -1115,14 +1145,17 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-width'), '310px');
     assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-height'), '900px');
 
-    // 2. Collapsing dock shrinks to 28px rail, releases docked slot, and marks slot hidden (prevents ghost overlay)
+    // 2. Collapsing dock shrinks to 28px rail, notifies host aux layout to shift cleanly, releases docked slot, and marks slot hidden
+    const resizeBeforeCollapse = hostResizeCount;
     sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(true);
     assert.equal(dockEl.classList.contains('is-collapsed'), true);
     assert.equal(split.style.getPropertyValue('--ag-cs-dock-w'), '28px');
     assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false);
     assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
+    assert.ok(hostResizeCount > resizeBeforeCollapse, 'Collapsing far-right dock in 3-column mode must notify host aux layout');
 
     // openStudioPane expands collapsed pinned dock instead of reverting to native tab
+    const resizeBeforeExpand = hostResizeCount;
     const expandRes = sandbox.window.__agClaudeStudio.openStudioPane({ forceSwitch: true });
     assert.equal(expandRes.ok, true);
     assert.equal(expandRes.status, 'dock_expanded');
@@ -1130,6 +1163,7 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
     assert.equal(studioSlot.hasAttribute('data-ag-cs-dock-hidden'), false);
     assert.equal(studioTabBtn.clicks, 0, 'Must not click native Studio tab when pinned dock handles it');
+    assert.ok(hostResizeCount > resizeBeforeExpand, 'Expanding far-right dock in 3-column mode must notify host aux layout');
 
     // 3. Switching active tab to Claude Studio (with no other tabs) stays pinned in solo mode (never reverts to regular sidebar!)
     strip.setAttribute('data-active-tab-id', 'sidecar__agy-claude-studio/studio__/');
@@ -1216,13 +1250,77 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false, 'Other plugin opens Column 3 alongside pinned Studio dock');
     assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
 
-    // 6. REMOVE_EXPRESSION tears everything down cleanly including solo/hidden attrs
+    // 5d. Maximizing the right aux pane (e.g. fullscreen image/file viewer) hides the pinned Studio dock & iframe
+    // during maximizing, settled overlaid, and restoring transitions, then restores cleanly without losing state
+    chatCol.setAttribute('data-split-overlaid', 'true');
+    split.setAttribute('data-split-transition', 'maximizing');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1', 'Marks split aux-maximized during maximize');
+    assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false, 'Releases docked slot while aux pane is maximized');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1', 'Hides Studio iframe while aux pane is maximized');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().pinnedDockAuxMaximized, true);
+
+    // Settled maximized state (transition cleared, data-split-overlaid remains)
+    split.removeAttribute('data-split-transition');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1', 'Stays hidden while aux pane remains overlaid');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
+
+    // Restoring transition (data-split-overlaid removed, data-split-transition="restoring" still active)
+    chatCol.removeAttribute('data-split-overlaid');
+    split.setAttribute('data-split-transition', 'restoring');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1', 'Keeps Studio hidden during restoring slide animation');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
+
+    // Settled restored state -> re-docks Studio cleanly
+    split.removeAttribute('data-split-transition');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.hasAttribute('data-ag-cs-dock-aux-max'), false, 'Clears aux-max attribute once restored');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1', 'Re-docks Studio iframe after restore');
+    assert.equal(studioSlot.hasAttribute('data-ag-cs-dock-hidden'), false);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().pinnedDockAuxMaximized, false);
+
+    // Nested split child with data-split-overlaid must NOT falsely trigger aux-pane maximize
+    const nestedSplitChild = auxWrap.appendChild(makeEl('div', { attrs: { 'data-split-overlaid': 'true' } }));
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.hasAttribute('data-ag-cs-dock-aux-max'), false, 'Ignores nested split overlaid attr');
+    assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
+    nestedSplitChild.remove();
+
+    // 5e. When pane-titlebar-toolbar exists, collapsing shrinks dock to 0px and mounts a single sparkle button before native actions
+    const titlebarToolbar = chatCol.appendChild(makeEl('div', {
+      attrs: { 'data-testid': 'pane-titlebar-toolbar' },
+      rect: { left: 1200, top: 36, width: 320, height: 28, right: 1520, bottom: 64 },
+    }));
+    const capsuleHost = titlebarToolbar.appendChild(makeEl('div', { className: 'wm-capsule-host' }));
+    const nativeBtnGroup = titlebarToolbar.appendChild(makeEl('div', { className: 'flex items-center gap-1' }));
+    sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(true);
+    assert.equal(dockEl.classList.contains('is-toolbar-collapsed'), true, 'Uses 0px toolbar-collapsed mode when titlebar toolbar exists');
+    assert.equal(split.style.getPropertyValue('--ag-cs-dock-w'), '0px');
+    const tbBtn = titlebarToolbar.querySelector('.ag-cs-dock-toolbar-btn');
+    assert.ok(tbBtn, 'Mounts sparkle expand button in pane-titlebar-toolbar');
+    assert.equal(titlebarToolbar.children[0], capsuleHost, 'Keeps third-party capsule host on the left');
+    assert.equal(titlebarToolbar.children[1], tbBtn, 'Places sparkle button right before native toolbar icons');
+    assert.equal(titlebarToolbar.children[2], nativeBtnGroup);
+    tbBtn.click();
+    assert.equal(dockEl.classList.contains('is-collapsed'), false, 'Clicking toolbar sparkle expands Studio dock');
+    assert.equal(dockEl.classList.contains('is-toolbar-collapsed'), false);
+    assert.equal(titlebarToolbar.querySelector('.ag-cs-dock-toolbar-btn'), null, 'Removes toolbar sparkle button once expanded');
+
+    // 6. REMOVE_EXPRESSION tears everything down cleanly including solo/aux-max/hidden attrs and toolbar button
+    chatCol.setAttribute('data-split-overlaid', 'true');
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, pinRightPane: 'studio' });
+    assert.equal(split.getAttribute('data-ag-cs-dock-aux-max'), '1');
     sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(true);
     assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
+    assert.ok(titlebarToolbar.querySelector('.ag-cs-dock-toolbar-btn'), 'Toolbar button mounted before remove');
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
     assert.equal(split.querySelector('.ag-cs-pinned-dock'), null);
+    assert.equal(titlebarToolbar.querySelector('.ag-cs-dock-toolbar-btn'), null, 'REMOVE_EXPRESSION removes toolbar sparkle button');
     assert.equal(split.hasAttribute('data-ag-cs-dock-open'), false);
     assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false);
+    assert.equal(split.hasAttribute('data-ag-cs-dock-aux-max'), false);
     assert.equal(split.style.getPropertyValue('--ag-cs-dock-solo-pr'), '');
     assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false);
     assert.equal(studioSlot.hasAttribute('data-ag-cs-dock-hidden'), false);

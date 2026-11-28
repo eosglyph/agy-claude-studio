@@ -7710,6 +7710,12 @@
   function openStudioPane(opts = {}) {
     const found = getEffectivePinRightPane() === 'studio' && pinnedDock.el && pinnedDock.el.isConnected ? findLiveStudioSlot() : null;
     if (found) {
+      if (pinnedDock.auxMaximized) {
+        const maxBtn = document.querySelector('[data-testid="toggle-maximize-pane"]');
+        if (maxBtn && typeof maxBtn.click === 'function') {
+          try { maxBtn.click(); } catch {}
+        }
+      }
       if (pinnedDock.collapsed) {
         setPinnedDockCollapsed(false);
         return { ok: true, status: 'dock_expanded' };
@@ -7759,6 +7765,7 @@
     collapseBtn: null,
     expandBtn: null,
     expandLabelEl: null,
+    toolbarBtn: null,
     bodyEl: null,
     resizerEl: null,
     splitEl: null,
@@ -7773,7 +7780,9 @@
     splitTransitionEnd: null,
     width: DOCK_DEFAULT_WIDTH,
     collapsed: false,
+    toolbarCollapsed: false,
     soloMode: false,
+    auxMaximized: false,
     lastNonStudioTabId: '',
     prevActiveTabId: '',
     prevAuxOpen: false,
@@ -7787,6 +7796,7 @@
     dragging: false,
     dragMove: null,
     dragUp: null,
+    dispatchingHostResize: false,
     lastLang: '',
   };
 
@@ -7983,6 +7993,7 @@
       try {
         pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-open');
         pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-solo');
+        pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-aux-max');
         pinnedDock.splitEl.style?.removeProperty?.('--ag-cs-dock-w');
         pinnedDock.splitEl.style?.removeProperty?.('--ag-cs-dock-solo-pr');
       } catch {}
@@ -8038,9 +8049,16 @@
     detachDockSplitListeners();
     detachDockToggleListeners();
     pinnedDock.soloMode = false;
+    pinnedDock.auxMaximized = false;
+    pinnedDock.toolbarCollapsed = false;
     pinnedDock.auxCloseAttempted = false;
     pinnedDock.userForcedAuxOpen = false;
     pinnedDock.pendingHostAction = null;
+    if (pinnedDock.toolbarBtn) {
+      try {
+        pinnedDock.toolbarBtn.remove();
+      } catch {}
+    }
     if (pinnedDock.el) {
       try {
         pinnedDock.el.remove();
@@ -8201,9 +8219,35 @@
     return { ...chosen, activeCid, matched };
   }
 
+  function isAuxPaneMaximized(split) {
+    if (!split) return false;
+    const trans = split.getAttribute?.('data-split-transition') || '';
+    if (trans === 'maximizing' || trans === 'restoring') return true;
+    const children = Array.from(split.children || []);
+    for (const ch of children) {
+      if (ch && ch.getAttribute?.('data-split-overlaid') === 'true') return true;
+    }
+    return false;
+  }
+
+  function notifyHostAuxReposition() {
+    if (destroyed || pinnedDock.dispatchingHostResize) return;
+    if (typeof window.dispatchEvent !== 'function') return;
+    pinnedDock.dispatchingHostResize = true;
+    try {
+      const ev = typeof Event === 'function' ? new Event('resize') : { type: 'resize' };
+      window.dispatchEvent(ev);
+    } catch {} finally {
+      pinnedDock.dispatchingHostResize = false;
+    }
+  }
+
   function syncPinnedStudioDockPosition(preFound = null) {
     if (destroyed || !pinnedDock.el || !pinnedDock.el.isConnected) return;
-    if (pinnedDock.collapsed) {
+    if (pinnedDock.splitEl?.style) {
+      setStylePropIfChanged(pinnedDock.splitEl.style, '--ag-cs-dock-solo-pr', `${measureSoloHeadRightPadding()}px`);
+    }
+    if (pinnedDock.collapsed || pinnedDock.auxMaximized || isAuxPaneMaximized(pinnedDock.splitEl)) {
       releaseDockedStudioSlot({ keepHidden: true });
       hideStudioSlotWhileCollapsed(preFound);
       return;
@@ -8273,6 +8317,7 @@
   function trackDockTransition(durationMs = 620) {
     if (destroyed || typeof requestAnimationFrame !== 'function') {
       syncPinnedStudioDockPosition();
+      if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
       return;
     }
     const now = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
@@ -8282,6 +8327,7 @@
       pinnedDock.trackRaf = 0;
       if (destroyed || !pinnedDock.el || !pinnedDock.el.isConnected) return;
       syncPinnedStudioDockPosition();
+      if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
       const t = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
       if (t < pinnedDock.trackUntil) {
         pinnedDock.trackRaf = requestAnimationFrame(tick);
@@ -8290,42 +8336,126 @@
     pinnedDock.trackRaf = requestAnimationFrame(tick);
   }
 
+  function ensureDockToolbarButton() {
+    if (pinnedDock.toolbarBtn) return pinnedDock.toolbarBtn;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ag-cs-dock-toolbar-btn';
+    btn.setAttribute('data-ag-no-i18n', '1');
+    btn.setAttribute('data-testid', 'ag-cs-dock-expand-btn');
+    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5 14.35 9.65 21.5 12l-7.15 2.35L12 21.5l-2.35-7.15L2.5 12l7.15-2.35Z"/></svg>';
+    const copy = getDockCopy(getLang());
+    btn.setAttribute('title', copy.expandTitle);
+    btn.setAttribute('aria-label', copy.expandTitle);
+    btn.addEventListener?.('click', (ev) => {
+      ev.stopPropagation?.();
+      setPinnedDockCollapsed(false);
+    });
+    pinnedDock.toolbarBtn = btn;
+    return btn;
+  }
+
+  function findDockTitlebarToolbar(split) {
+    if (!split) return null;
+    const root = split.firstElementChild && !split.firstElementChild.classList?.contains?.('ag-cs-pinned-dock')
+      ? split.firstElementChild
+      : split;
+    const list = typeof root.querySelectorAll === 'function'
+      ? Array.from(root.querySelectorAll('[data-testid="pane-titlebar-toolbar"]'))
+      : [];
+    if (!list.length) return null;
+    for (const tb of list) {
+      const r = typeof tb.getBoundingClientRect === 'function' ? tb.getBoundingClientRect() : null;
+      if (!r || (r.width > 0 && r.height > 0)) return tb;
+    }
+    return list[0];
+  }
+
+  function syncDockToolbarButton(split) {
+    if (!split || !pinnedDock.collapsed) {
+      if (pinnedDock.toolbarBtn && pinnedDock.toolbarBtn.parentElement) {
+        try {
+          pinnedDock.toolbarBtn.remove();
+        } catch {}
+      }
+      return false;
+    }
+    const toolbar = findDockTitlebarToolbar(split);
+    if (!toolbar) {
+      if (pinnedDock.toolbarBtn && pinnedDock.toolbarBtn.parentElement) {
+        try {
+          pinnedDock.toolbarBtn.remove();
+        } catch {}
+      }
+      return false;
+    }
+    const btn = ensureDockToolbarButton();
+    const kids = Array.from(toolbar.children || []).filter((ch) => ch !== btn);
+    let refNode = null;
+    for (let i = kids.length - 1; i >= 0; i -= 1) {
+      const ch = kids[i];
+      if (!ch.classList?.contains?.('wm-capsule-host')) {
+        refNode = ch;
+        break;
+      }
+    }
+    if (refNode && typeof toolbar.insertBefore === 'function') {
+      if (btn.parentElement !== toolbar || btn.nextElementSibling !== refNode) {
+        toolbar.insertBefore(btn, refNode);
+      }
+    } else if (btn.parentElement !== toolbar) {
+      toolbar.appendChild(btn);
+    }
+    return true;
+  }
+
   function applyPinnedDockStateToDom(opts = {}) {
     if (!pinnedDock.el || !pinnedDock.splitEl) return;
     const splitRect = typeof pinnedDock.splitEl.getBoundingClientRect === 'function'
       ? pinnedDock.splitEl.getBoundingClientRect()
       : null;
     const splitW = splitRect?.width || 0;
+    const useToolbarCollapsed = syncDockToolbarButton(pinnedDock.splitEl);
+    pinnedDock.toolbarCollapsed = Boolean(pinnedDock.collapsed && useToolbarCollapsed);
     const activeWidth = pinnedDock.collapsed
-      ? DOCK_COLLAPSED_WIDTH
+      ? (useToolbarCollapsed ? 0 : DOCK_COLLAPSED_WIDTH)
       : clampPinnedDockWidth(pinnedDock.width, splitW, pinnedDock.soloMode);
 
     const wasOpen = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-open') === '1';
     const wasSolo = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-solo') === '1';
+    const wasAuxMax = pinnedDock.splitEl.getAttribute?.('data-ag-cs-dock-aux-max') === '1';
     const wasCollapsed = Boolean(pinnedDock.el.classList?.contains?.('is-collapsed'));
+    const wasToolbarCollapsed = Boolean(pinnedDock.el.classList?.contains?.('is-toolbar-collapsed'));
     const prevDockW = pinnedDock.splitEl.style?.getPropertyValue?.('--ag-cs-dock-w') || '';
     const nextDockW = `${activeWidth}px`;
 
     if (wasCollapsed !== Boolean(pinnedDock.collapsed)) {
       pinnedDock.el.classList?.toggle?.('is-collapsed', pinnedDock.collapsed);
     }
+    if (wasToolbarCollapsed !== pinnedDock.toolbarCollapsed) {
+      pinnedDock.el.classList?.toggle?.('is-toolbar-collapsed', pinnedDock.toolbarCollapsed);
+    }
     if (!wasOpen) {
       pinnedDock.splitEl.setAttribute('data-ag-cs-dock-open', '1');
     }
+    if (pinnedDock.auxMaximized) {
+      stopDockDrag();
+      if (!wasAuxMax) pinnedDock.splitEl.setAttribute('data-ag-cs-dock-aux-max', '1');
+    } else if (wasAuxMax) {
+      pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-aux-max');
+    }
     if (pinnedDock.soloMode) {
       if (!wasSolo) pinnedDock.splitEl.setAttribute('data-ag-cs-dock-solo', '1');
-      setStylePropIfChanged(pinnedDock.splitEl.style, '--ag-cs-dock-solo-pr', `${measureSoloHeadRightPadding()}px`);
-    } else {
-      if (wasSolo) pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-solo');
-      if (pinnedDock.splitEl.style?.getPropertyValue?.('--ag-cs-dock-solo-pr')) {
-        pinnedDock.splitEl.style.removeProperty('--ag-cs-dock-solo-pr');
-      }
+    } else if (wasSolo) {
+      pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-solo');
     }
+    setStylePropIfChanged(pinnedDock.splitEl.style, '--ag-cs-dock-solo-pr', `${measureSoloHeadRightPadding()}px`);
     const widthChanged = setStylePropIfChanged(pinnedDock.splitEl.style, '--ag-cs-dock-w', nextDockW) || prevDockW !== nextDockW;
     const stateChanged =
       Boolean(opts.forceTrack) ||
       !wasOpen ||
       wasSolo !== Boolean(pinnedDock.soloMode) ||
+      wasAuxMax !== Boolean(pinnedDock.auxMaximized) ||
       wasCollapsed !== Boolean(pinnedDock.collapsed) ||
       widthChanged;
 
@@ -8345,15 +8475,24 @@
         pinnedDock.expandBtn.setAttribute('title', copy.expandTitle);
         pinnedDock.expandBtn.setAttribute('aria-label', copy.expandTitle);
       }
+      if (pinnedDock.toolbarBtn) {
+        pinnedDock.toolbarBtn.setAttribute('title', copy.expandTitle);
+        pinnedDock.toolbarBtn.setAttribute('aria-label', copy.expandTitle);
+      }
       if (pinnedDock.expandLabelEl) pinnedDock.expandLabelEl.textContent = copy.railLabel;
     }
 
-    if (pinnedDock.collapsed) {
+    if (pinnedDock.collapsed || pinnedDock.auxMaximized) {
       releaseDockedStudioSlot({ keepHidden: true });
       hideStudioSlotWhileCollapsed(opts.preFound || null);
+      if (stateChanged && !pinnedDock.soloMode && !pinnedDock.auxMaximized) {
+        notifyHostAuxReposition();
+        trackDockTransition(240);
+      }
     } else {
       syncPinnedStudioDockPosition(opts.preFound || null);
       if (stateChanged) {
+        if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
         trackDockTransition(240);
       }
     }
@@ -8398,6 +8537,7 @@
           pinnedDock.splitEl?.style?.setProperty?.('--ag-cs-dock-w', `${nextW}px`);
         }
         syncPinnedStudioDockPosition();
+        if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
       };
       pinnedDock.dragUp = () => {
         stopDockDrag();
@@ -8405,6 +8545,7 @@
           localStorage.setItem(DOCK_WIDTH_KEY, String(pinnedDock.width));
         } catch {}
         syncPinnedStudioDockPosition();
+        if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
       };
       window.addEventListener?.('pointermove', pinnedDock.dragMove, true);
       window.addEventListener?.('pointerup', pinnedDock.dragUp, true);
@@ -8639,6 +8780,7 @@
     }
 
     pinnedDock.soloMode = soloMode;
+    pinnedDock.auxMaximized = isAuxPaneMaximized(split);
 
     const dockEl = ensurePinnedDockElement();
     if (pinnedDock.splitEl !== split) {
@@ -10245,7 +10387,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-pinned-dock, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
+        '.ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-studio-css, #ag-claude-style-css'
       )
@@ -10676,7 +10818,7 @@
   }
 
   function onWindowResize() {
-    if (destroyed) return;
+    if (destroyed || pinnedDock.dispatchingHostResize) return;
     if (openFileMenu) closeFileLinkMenu();
     if (openPopover && openPopover.isConnected && openPopoverAnchor && openPopoverAnchor.isConnected) {
       positionPopoverAboveAnchor(openPopover, openPopoverAnchor);
@@ -10697,12 +10839,20 @@
       attr !== 'data-aux-pane-open' &&
       attr !== 'data-active-tab-id' &&
       attr !== 'data-cascade-id' &&
-      attr !== 'data-visible'
+      attr !== 'data-visible' &&
+      attr !== 'data-split-overlaid' &&
+      attr !== 'data-split-transition'
     ) {
       return false;
     }
     const targetEl = m.target && typeof m.target.closest === 'function' ? m.target : m.target?.parentElement;
     if (!targetEl || typeof targetEl.closest !== 'function') return false;
+    if (attr === 'data-split-transition') {
+      return Boolean(targetEl.matches?.('[data-testid="aux-pane-split"]'));
+    }
+    if (attr === 'data-split-overlaid') {
+      return Boolean(targetEl.parentElement?.matches?.('[data-testid="aux-pane-split"]'));
+    }
     if (attr === 'data-aux-pane-open') {
       return Boolean(
         targetEl.hasAttribute?.('data-aux-pane-open') ||
@@ -10931,7 +11081,7 @@
       characterData: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'data-aux-pane-open', 'data-active-tab-id', 'data-cascade-id', 'data-visible'],
+      attributeFilter: ['class', 'data-aux-pane-open', 'data-active-tab-id', 'data-cascade-id', 'data-visible', 'data-split-overlaid', 'data-split-transition'],
     });
     for (const [evName, handler] of DOC_LISTENERS) {
       document.addEventListener(evName, handler, true);
@@ -11310,6 +11460,7 @@
         hasPinnedDock: Boolean(pinnedDock.el && pinnedDock.el.isConnected),
         pinnedDockCollapsed: Boolean(pinnedDock.collapsed),
         pinnedDockSolo: Boolean(pinnedDock.soloMode),
+        pinnedDockAuxMaximized: Boolean(pinnedDock.auxMaximized),
         hasSmoothCaret: Boolean(document.querySelector('.ag-cs-smooth-caret')),
         hasEffortPopover: Boolean(openEffortPop && openEffortPop.isConnected),
         hasContextPopover: Boolean(openPopover && openPopover.isConnected),
