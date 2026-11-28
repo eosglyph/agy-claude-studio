@@ -1,23 +1,36 @@
 #!/usr/bin/env node
-// GitHub & Bilibili Metrics Daily Report Ops Script (0-Token, MIT).
+// GitHub & Bilibili Metrics Daily Report Script (MIT, zero external dependencies).
 // Usage:
-//   node scripts/ops/check-repo-metrics.mjs [--repo owner/name] [--bvid BV1xxx] [--push]
+//   node scripts/ops/check-repo-metrics.mjs [--repo owner/name] [--bvid BV1xxx,BV2xxx] [--push]
 // Fetches public GitHub repo + release download stats and optional Bilibili video stats,
-// computes deltas against PLUGIN_DATA/ops-state.json, and prints a clean report.
+// computes deltas against PLUGIN_DATA/ops-state.json, and prints a clean Markdown table report.
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
-function parseCliArgs(argv) {
+export function extractBvid(token) {
+  const m = String(token || '').trim().match(/BV[0-9A-Za-z]{8,}/i);
+  if (!m) return '';
+  return 'BV' + m[0].slice(2);
+}
+
+export function parseCliArgs(argv) {
   const out = { repo: 'eosglyph/agy-claude-studio', bvids: [], push: false };
+  const seen = new Set();
+  const addBvid = (raw) => {
+    const bvid = extractBvid(raw);
+    if (!bvid || seen.has(bvid)) return;
+    seen.add(bvid);
+    out.bvids.push(bvid);
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--push') out.push = true;
@@ -26,11 +39,10 @@ function parseCliArgs(argv) {
     } else if ((a === '--bvid' || a === '--bv') && argv[i + 1]) {
       const raw = argv[++i];
       for (const part of raw.split(/[,;\s]+/)) {
-        const clean = part.trim();
-        if (/^BV[0-9A-Za-z]+$/i.test(clean)) out.bvids.push(clean);
+        addBvid(part);
       }
-    } else if (/^BV[0-9A-Za-z]{8,}$/i.test(a)) {
-      out.bvids.push(a);
+    } else {
+      addBvid(a);
     }
   }
   return out;
@@ -57,11 +69,130 @@ function writeOpsState(filePath, state) {
   fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
 }
 
-function fmtDelta(cur, prev) {
+export function fmtNum(n) {
+  const v = Number(n || 0);
+  return Number.isFinite(v) ? v.toLocaleString('en-US') : '0';
+}
+
+export function fmtDelta(cur, prev) {
   if (typeof prev !== 'number' || !Number.isFinite(prev)) return '';
   const diff = cur - prev;
   if (diff === 0) return ' (±0)';
-  return diff > 0 ? ` (+${diff})` : ` (${diff})`;
+  return diff > 0 ? ` (+${fmtNum(diff)})` : ` (-${fmtNum(Math.abs(diff))})`;
+}
+
+export function fmtDeltaCell(cur, prev) {
+  if (typeof prev !== 'number' || !Number.isFinite(prev)) return '首次记录';
+  const diff = cur - prev;
+  if (diff === 0) return '±0';
+  return diff > 0 ? `+${fmtNum(diff)}` : `-${fmtNum(Math.abs(diff))}`;
+}
+
+export function fmtMetricWithDelta(cur, prev) {
+  const base = fmtNum(cur);
+  if (typeof prev !== 'number' || !Number.isFinite(prev)) return `${base} (新)`;
+  const diff = cur - prev;
+  if (diff === 0) return base;
+  return diff > 0 ? `${base} (+${fmtNum(diff)})` : `${base} (-${fmtNum(Math.abs(diff))})`;
+}
+
+export function escapeMdCell(text) {
+  return String(text ?? '')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\|/g, '\\|')
+    .trim();
+}
+
+export function shortenVideoTitle(title, maxUnits = 38) {
+  const clean = String(title || '').replace(/\s+/g, ' ').trim();
+  let units = 0;
+  let out = '';
+  for (const ch of clean) {
+    const w = ch.charCodeAt(0) > 127 ? 2 : 1;
+    if (units + w > maxUnits) return out.trimEnd() + '…';
+    out += ch;
+    units += w;
+  }
+  return out;
+}
+
+export function formatMetricsReport({ repo, gh, prevGh = null, biliResults = [], prevBiliMap = {} }) {
+  const dlNote = gh.source === 'web-fallback' ? 'API 限流，沿用上次记录' : `最新 \`${gh.latestTag || 'all'}\``;
+
+  const okVideos = biliResults.filter((x) => x.ok);
+  let totalView = 0;
+  let prevTotalView = 0;
+  let hasAllPrevView = okVideos.length > 0;
+  for (const bv of okVideos) {
+    totalView += bv.view;
+    const prevBv = prevBiliMap?.[bv.bvid];
+    if (typeof prevBv?.view === 'number' && Number.isFinite(prevBv.view)) {
+      prevTotalView += prevBv.view;
+    } else {
+      hasAllPrevView = false;
+    }
+  }
+
+  const biliSummaryPart =
+    okVideos.length > 0
+      ? ` | B站 ${okVideos.length} 稿 播放 ${fmtNum(totalView)}${hasAllPrevView ? fmtDelta(totalView, prevTotalView) : ''}`
+      : '';
+
+  const lines = [
+    `📊 ${repo} · ★ ${fmtNum(gh.stars)}${fmtDelta(gh.stars, prevGh?.stars)} | Fork ${fmtNum(gh.forks)}${fmtDelta(gh.forks, prevGh?.forks)} | 下载 ${fmtNum(gh.releaseDownloads)}${fmtDelta(gh.releaseDownloads, prevGh?.releaseDownloads)}${biliSummaryPart}`,
+    '',
+    `### GitHub 仓库数据（${repo}${gh.source === 'web-fallback' ? ' · Web 兜底' : ''}）`,
+    '| 指标 | 当前 | 较上次 | 备注 |',
+    '| --- | ---: | ---: | --- |',
+    `| Stars | **${fmtNum(gh.stars)}** | ${fmtDeltaCell(gh.stars, prevGh?.stars)} | \`${escapeMdCell(repo)}\` |`,
+    `| Forks | **${fmtNum(gh.forks)}** | ${fmtDeltaCell(gh.forks, prevGh?.forks)} | — |`,
+    `| Open Issues | **${fmtNum(gh.issues)}** | ${fmtDeltaCell(gh.issues, prevGh?.issues)} | — |`,
+    `| Release 总下载 | **${fmtNum(gh.releaseDownloads)}** | ${fmtDeltaCell(gh.releaseDownloads, prevGh?.releaseDownloads)} | ${dlNote} |`,
+  ];
+
+  if (biliResults.length > 0) {
+    lines.push(
+      '',
+      '### Bilibili 视频数据',
+      '| 视频 | 播放 | 点赞 | 投币 | 收藏 | 评论 |',
+      '| --- | ---: | ---: | ---: | ---: | ---: |'
+    );
+
+    const totals = { view: 0, like: 0, coin: 0, favorite: 0, reply: 0 };
+    const prevTotals = { view: 0, like: 0, coin: 0, favorite: 0, reply: 0 };
+    let allHavePrev = okVideos.length > 0;
+
+    for (const bv of biliResults) {
+      if (!bv.ok) {
+        lines.push(`| \`${escapeMdCell(bv.bvid)}\`（获取失败：${escapeMdCell(bv.error)}） | — | — | — | — | — |`);
+        continue;
+      }
+      const prevBv = prevBiliMap?.[bv.bvid] || null;
+      const titleLabel = `**${escapeMdCell(shortenVideoTitle(bv.title))}** \`${escapeMdCell(bv.bvid)}\``;
+      lines.push(
+        `| ${titleLabel} | ${fmtMetricWithDelta(bv.view, prevBv?.view)} | ${fmtMetricWithDelta(bv.like, prevBv?.like)} | ${fmtMetricWithDelta(bv.coin, prevBv?.coin)} | ${fmtMetricWithDelta(bv.favorite, prevBv?.favorite)} | ${fmtMetricWithDelta(bv.reply, prevBv?.reply)} |`
+      );
+      for (const k of Object.keys(totals)) {
+        totals[k] += Number(bv[k] || 0);
+        if (typeof prevBv?.[k] === 'number' && Number.isFinite(prevBv[k])) {
+          prevTotals[k] += prevBv[k];
+        } else {
+          allHavePrev = false;
+        }
+      }
+    }
+
+    if (okVideos.length >= 2) {
+      const fmtSum = (k) => (allHavePrev ? fmtMetricWithDelta(totals[k], prevTotals[k]) : fmtNum(totals[k]));
+      lines.push(
+        `| **合计（${okVideos.length} 稿）** | **${fmtSum('view')}** | **${fmtSum('like')}** | **${fmtSum('coin')}** | **${fmtSum('favorite')}** | **${fmtSum('reply')}** |`
+      );
+    }
+  } else {
+    lines.push('', '提示：在脚本启动参数中加上 `--bvid BVxxxxxxxxxx` 即可同步抓取 B 站视频播放与三连增量。');
+  }
+
+  return lines.join('\n');
 }
 
 async function fetchJson(url, headers = {}) {
@@ -196,51 +327,40 @@ async function fetchBilibiliMetrics(bvid) {
   };
 }
 
-async function main() {
+export async function main() {
   const cli = parseCliArgs(process.argv.slice(2));
   const dataDir = resolveDataDir();
   const statePath = path.join(dataDir, 'ops-state.json');
   const state = readOpsState(statePath);
   const prevGh = state.github?.[cli.repo] || null;
+  const prevBiliMap = state.bilibili ? { ...state.bilibili } : {};
 
   const gh = await fetchGithubMetrics(cli.repo, prevGh);
-  const dlNote = gh.source === 'web-fallback' ? '（API 限流，沿用上次记录）' : '';
-  const lines = [
-    `📊 ${cli.repo} · ★ ${gh.stars}${fmtDelta(gh.stars, prevGh?.stars)} | Fork ${gh.forks}${fmtDelta(gh.forks, prevGh?.forks)} | 下载 ${gh.releaseDownloads}${fmtDelta(gh.releaseDownloads, prevGh?.releaseDownloads)}`,
-    '',
-    `### GitHub (${cli.repo})${gh.source === 'web-fallback' ? ' · Web 兜底' : ''}`,
-    `- Stars: **${gh.stars}**${fmtDelta(gh.stars, prevGh?.stars)}`,
-    `- Forks: **${gh.forks}**${fmtDelta(gh.forks, prevGh?.forks)}`,
-    `- Open Issues: **${gh.issues}**${fmtDelta(gh.issues, prevGh?.issues)}`,
-    `- Release 总下载 (${gh.latestTag || 'all'}): **${gh.releaseDownloads}**${fmtDelta(gh.releaseDownloads, prevGh?.releaseDownloads)}${dlNote}`,
-  ];
-
   state.github = state.github || {};
   state.github[cli.repo] = { ...gh, updatedAt: new Date().toISOString() };
 
   const bvids = cli.bvids.length > 0 ? cli.bvids : Array.isArray(state.defaultBvids) ? state.defaultBvids : [];
+  const biliResults = [];
   if (bvids.length > 0) {
     state.bilibili = state.bilibili || {};
-    lines.push('', '### Bilibili 视频数据');
     for (const bvid of bvids) {
-      const prevBv = state.bilibili[bvid] || null;
       const bv = await fetchBilibiliMetrics(bvid);
-      if (!bv.ok) {
-        lines.push(`- ${bvid}: 获取失败 (${bv.error})`);
-        continue;
+      biliResults.push(bv);
+      if (bv.ok) {
+        state.bilibili[bvid] = { ...bv, updatedAt: new Date().toISOString() };
       }
-      lines.push(
-        `- **${bv.title}** (${bv.bvid})`,
-        `  播放 ${bv.view}${fmtDelta(bv.view, prevBv?.view)} · 点赞 ${bv.like}${fmtDelta(bv.like, prevBv?.like)} · 投币 ${bv.coin}${fmtDelta(bv.coin, prevBv?.coin)} · 收藏 ${bv.favorite}${fmtDelta(bv.favorite, prevBv?.favorite)} · 评论 ${bv.reply}${fmtDelta(bv.reply, prevBv?.reply)}`
-      );
-      state.bilibili[bvid] = { ...bv, updatedAt: new Date().toISOString() };
     }
-  } else {
-    lines.push('', '提示：在脚本启动参数中加上 `--bvid BVxxxxxxxxxx` 即可同步抓取 B 站视频播放与三连增量。');
   }
 
+  const report = formatMetricsReport({
+    repo: cli.repo,
+    gh,
+    prevGh,
+    biliResults,
+    prevBiliMap,
+  });
+
   writeOpsState(statePath, state);
-  const report = lines.join('\n');
   console.log(report);
 
   if (cli.push) {
@@ -265,7 +385,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('数据日报抓取失败:', err?.message || err);
-  process.exit(1);
-});
+const isDirectMain =
+  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+
+if (isDirectMain) {
+  main().catch((err) => {
+    console.error('数据日报抓取失败:', err?.message || err);
+    process.exit(1);
+  });
+}

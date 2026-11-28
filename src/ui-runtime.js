@@ -11890,6 +11890,43 @@
     if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
   }
 
+  function parseMdTableRow(rawLine) {
+    const trimmed = String(rawLine || '').trim();
+    if (!trimmed || !trimmed.includes('|')) return null;
+    let body = trimmed;
+    if (body.startsWith('|')) body = body.slice(1);
+    if (body.endsWith('|') && !body.endsWith('\\|')) body = body.slice(0, -1);
+    const cells = [];
+    let cur = '';
+    for (let i = 0; i < body.length; i += 1) {
+      const ch = body[i];
+      if (ch === '\\' && body[i + 1] === '|') {
+        cur += '|';
+        i += 1;
+      } else if (ch === '|') {
+        cells.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    cells.push(cur.trim());
+    return cells.length >= 2 ? cells : null;
+  }
+
+  function parseMdTableAlign(rawLine) {
+    const cells = parseMdTableRow(rawLine);
+    if (!cells) return null;
+    const aligns = [];
+    for (const c of cells) {
+      if (!/^:?-{3,}:?$/.test(c)) return null;
+      if (c.startsWith(':') && c.endsWith(':')) aligns.push('center');
+      else if (c.endsWith(':')) aligns.push('right');
+      else aligns.push('left');
+    }
+    return aligns;
+  }
+
   function renderScriptOutputBody(container, payload) {
     const combined = String(payload?.combined || '').trim();
     const stderrIdx = combined.indexOf('[stderr]\n');
@@ -11905,7 +11942,8 @@
           curList = null;
         }
       };
-      for (const rawLine of lines) {
+      for (let i = 0; i < lines.length; i += 1) {
+        const rawLine = lines[i];
         const line = rawLine.trimEnd();
         if (!line.trim()) {
           flushList();
@@ -11919,6 +11957,57 @@
           appendInlineRichText(h, hMatch[1].trim());
           container.appendChild(h);
           continue;
+        }
+        if (i + 1 < lines.length && line.includes('|')) {
+          const headCells = parseMdTableRow(line);
+          const aligns = headCells ? parseMdTableAlign(lines[i + 1]) : null;
+          if (headCells && aligns && headCells.length === aligns.length) {
+            flushList();
+            const wrap = document.createElement('div');
+            wrap.className = 'ag-cs-script-md-table-wrap';
+            const table = document.createElement('table');
+            table.className = 'ag-cs-script-md-table';
+            const thead = document.createElement('thead');
+            const headTr = document.createElement('tr');
+            for (let c = 0; c < headCells.length; c += 1) {
+              const th = document.createElement('th');
+              if (aligns[c] === 'right') th.className = 'is-right';
+              else if (aligns[c] === 'center') th.className = 'is-center';
+              appendInlineRichText(th, headCells[c]);
+              headTr.appendChild(th);
+            }
+            thead.appendChild(headTr);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            i += 2;
+            while (i < lines.length) {
+              const rowLine = lines[i].trimEnd();
+              if (!rowLine.trim() || !rowLine.includes('|')) {
+                i -= 1;
+                break;
+              }
+              const rowCells = parseMdTableRow(rowLine);
+              if (!rowCells) {
+                i -= 1;
+                break;
+              }
+              const tr = document.createElement('tr');
+              for (let c = 0; c < headCells.length; c += 1) {
+                const td = document.createElement('td');
+                if (aligns[c] === 'right') td.className = 'is-right';
+                else if (aligns[c] === 'center') td.className = 'is-center';
+                appendInlineRichText(td, rowCells[c] ?? '');
+                tr.appendChild(td);
+              }
+              tbody.appendChild(tr);
+              i += 1;
+            }
+            table.appendChild(tbody);
+            wrap.appendChild(table);
+            container.appendChild(wrap);
+            continue;
+          }
         }
         const liMatch = line.match(/^\s*[-*•]\s+(.+)$/);
         if (liMatch) {
