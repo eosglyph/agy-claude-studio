@@ -7622,31 +7622,66 @@
   }
 
   function findSidecarLinkBridge() {
+    const activeCid = getActiveConversationIdFast();
+    let fallback = null;
     try {
+      const searchFiber = (start, limit) => {
+        if (!start) return null;
+        const queue = [start];
+        let visited = 0;
+        while (queue.length && visited < limit) {
+          const f = queue.shift();
+          visited += 1;
+          const v = f?.memoizedProps?.value;
+          if (v && typeof v.onSidecarLinkClick === 'function' && typeof v.resolveSidecarLink === 'function') {
+            const bridgeCid = normalizeCascadeId(v.cascadeId) || String(v.cascadeId || '').trim();
+            if (activeCid && bridgeCid === activeCid) {
+              return v;
+            }
+            if (!fallback) fallback = v;
+            if (!activeCid) return v;
+          }
+          if (f?.child) queue.push(f.child);
+          if (f?.sibling) queue.push(f.sibling);
+        }
+        return null;
+      };
+
+      const convoViews = Array.from(document.querySelectorAll('[data-testid="conversation-view"]'));
+      const activeView =
+        convoViews.find((el) => {
+          const cid = normalizeCascadeId(el.getAttribute?.('data-cascade-id')) || String(el.getAttribute?.('data-cascade-id') || '').trim();
+          return activeCid && cid === activeCid;
+        }) ||
+        convoViews.find((el) => {
+          const r = typeof el.getBoundingClientRect === 'function' ? el.getBoundingClientRect() : null;
+          return r && r.width > 0 && r.height > 0;
+        }) ||
+        null;
+      if (activeView) {
+        const cfk = Object.keys(activeView).find((k) => k.startsWith('__reactFiber'));
+        if (cfk && activeView[cfk]) {
+          const hit = searchFiber(activeView[cfk], 4000);
+          if (hit) return hit;
+        }
+      }
+
       const rootEl = document.getElementById('root') || document.body?.firstElementChild;
-      if (!rootEl) return null;
+      if (!rootEl) return fallback;
       const fk = Object.keys(rootEl).find((k) => k.startsWith('__reactContainer') || k.startsWith('__reactFiber'));
       const start = fk ? rootEl[fk]?.current || rootEl[fk] : null;
-      if (!start) return null;
-      const queue = [start];
-      let visited = 0;
-      while (queue.length && visited < 6000) {
-        const f = queue.shift();
-        visited++;
-        const v = f?.memoizedProps?.value;
-        if (v && typeof v.onSidecarLinkClick === 'function' && typeof v.resolveSidecarLink === 'function') {
-          return v;
-        }
-        if (f?.child) queue.push(f.child);
-        if (f?.sibling) queue.push(f.sibling);
-      }
+      const rootHit = searchFiber(start, 12000);
+      if (rootHit) return rootHit;
     } catch {}
-    return null;
+    return fallback;
   }
 
   function findRightSidecarTabButton(strip, spec) {
     if (!strip || !spec) return null;
     for (const btn of strip.querySelectorAll('button')) {
+      const aria = btn.getAttribute('aria-label') || '';
+      const hasTabIdAttr = btn.hasAttribute('data-tab-id');
+      if (aria && !hasTabIdAttr) continue;
       try {
         const fk = Object.keys(btn).find((k) => k.startsWith('__reactFiber'));
         let f = fk ? btn[fk] : null;
@@ -7658,7 +7693,6 @@
         }
       } catch {}
       const label = (btn.textContent || '').trim();
-      const aria = btn.getAttribute('aria-label') || '';
       if (!aria && spec.labelRe.test(label)) {
         return btn;
       }
@@ -8372,6 +8406,7 @@
   }
 
   function syncDockToolbarButton(split) {
+    const studioPinnedInToolbar = isToolbarPluginPinned(RIGHT_PANE_TARGETS.studio.sidecarId);
     if (!split || !pinnedDock.collapsed) {
       if (pinnedDock.toolbarBtn && pinnedDock.toolbarBtn.parentElement) {
         try {
@@ -8389,12 +8424,20 @@
       }
       return false;
     }
+    if (studioPinnedInToolbar) {
+      if (pinnedDock.toolbarBtn && pinnedDock.toolbarBtn.parentElement) {
+        try {
+          pinnedDock.toolbarBtn.remove();
+        } catch {}
+      }
+      return true;
+    }
     const btn = ensureDockToolbarButton();
     const kids = Array.from(toolbar.children || []).filter((ch) => ch !== btn);
     let refNode = null;
     for (let i = kids.length - 1; i >= 0; i -= 1) {
       const ch = kids[i];
-      if (!ch.classList?.contains?.('wm-capsule-host')) {
+      if (!ch.classList?.contains?.('wm-capsule-host') && !ch.classList?.contains?.('ag-cs-toolbar-pin-group')) {
         refNode = ch;
         break;
       }
@@ -8407,6 +8450,627 @@
       toolbar.appendChild(btn);
     }
     return true;
+  }
+
+  // ── Titlebar Pinned Plugins (Pin from "⋮ → Plugins" submenu) ──────────────
+  const TOOLBAR_PLUGIN_ICONS_KEY = 'agCsToolbarPluginIconsV1';
+  const TOOLBAR_SIDECAR_ID_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._/-]+$/;
+  const TOOLBAR_PIN_SVG =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8"/><path d="M9.5 4v6L6.5 13.5V15h11v-1.5L14.5 10V4"/><path d="M12 15v6"/></svg>';
+  const TOOLBAR_STUDIO_SPARK_SVG =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="color:var(--ag-cs-accent,var(--primary,#d97757))"><path d="M12 2.5 14.35 9.65 21.5 12l-7.15 2.35L12 21.5l-2.35-7.15L2.5 12l7.15-2.35Z"/></svg>';
+  const TOOLBAR_FALLBACK_PLUGIN_SVG =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 3.5a2.5 2.5 0 0 1 2.5 2.5v1.5h1.5a2 2 0 0 1 2 2v3h-1.5a2.5 2.5 0 0 0 0 5H20.5v1a2 2 0 0 1-2 2h-3v-1.5a2.5 2.5 0 0 0-5 0V20.5H5.5a2 2 0 0 1-2-2v-3H5a2.5 2.5 0 0 0 0-5H3.5v-1a2 2 0 0 1 2-2H12V6a2.5 2.5 0 0 1 2.5-2.5Z"/></svg>';
+
+  const toolbarPluginIcons = new Map();
+  const toolbarPluginMeta = new Map();
+  let toolbarPinGroupEl = null;
+  let hostSidecarPluginsCache = { at: 0, map: new Map() };
+
+  function getToolbarPinCopy(lang) {
+    if (lang === 'en') {
+      return { pinTitle: 'Pin to top bar', unpinTitle: 'Unpin from top bar' };
+    }
+    if (lang === 'ja') {
+      return { pinTitle: 'トップバーにピン留め', unpinTitle: 'トップバーからピン留め解除' };
+    }
+    if (lang === 'zh-TW') {
+      return { pinTitle: '釘選到頂欄', unpinTitle: '取消頂欄釘選' };
+    }
+    if (lang === 'yue') {
+      return { pinTitle: '釘上頂欄', unpinTitle: '取消頂欄釘選' };
+    }
+    return { pinTitle: '钉到顶栏', unpinTitle: '取消顶栏钉选' };
+  }
+
+  function normalizeToolbarSidecarId(raw) {
+    const s = typeof raw === 'string' ? raw.trim().replace(/\/+$/, '') : '';
+    if (!s || s.length > 120 || !TOOLBAR_SIDECAR_ID_RE.test(s)) return '';
+    if (s.split('/').some((seg) => !seg || seg === '.' || seg === '..')) return '';
+    return s;
+  }
+
+  function getPinnedToolbarPlugins() {
+    const raw = Array.isArray(cfg.pinnedToolbarPlugins) ? cfg.pinnedToolbarPlugins : [];
+    const out = [];
+    const seen = new Set();
+    for (const item of raw) {
+      const id = normalizeToolbarSidecarId(item);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+      if (out.length >= 12) break;
+    }
+    return out;
+  }
+
+  function isToolbarPluginPinned(sidecarId) {
+    const id = normalizeToolbarSidecarId(sidecarId);
+    if (!id) return false;
+    return getPinnedToolbarPlugins().includes(id);
+  }
+
+  function isSafePluginIconSrc(src) {
+    if (typeof src !== 'string') return false;
+    const s = src.trim();
+    if (!s || s.length > 96 * 1024) return false;
+    return /^data:image\/(?:svg\+xml|png|webp|jpeg|jpg|gif|x-icon);/i.test(s) || /^https?:\/\//i.test(s);
+  }
+
+  function hydrateToolbarPluginIcons(iconMapObj) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TOOLBAR_PLUGIN_ICONS_KEY) || '{}');
+      if (saved && typeof saved === 'object') {
+        for (const [k, v] of Object.entries(saved)) {
+          const id = normalizeToolbarSidecarId(k);
+          if (id && isSafePluginIconSrc(v) && !toolbarPluginIcons.has(id)) {
+            toolbarPluginIcons.set(id, v.trim());
+          }
+        }
+      }
+    } catch {}
+    if (iconMapObj && typeof iconMapObj === 'object') {
+      for (const [k, v] of Object.entries(iconMapObj)) {
+        const id = normalizeToolbarSidecarId(k);
+        if (id && isSafePluginIconSrc(v)) {
+          toolbarPluginIcons.set(id, v.trim());
+        }
+      }
+    }
+  }
+
+  function persistToolbarPluginIconsCache() {
+    try {
+      const pinned = new Set(getPinnedToolbarPlugins());
+      const out = {};
+      for (const id of pinned) {
+        const src = toolbarPluginIcons.get(id);
+        if (src && isSafePluginIconSrc(src)) out[id] = src;
+      }
+      localStorage.setItem(TOOLBAR_PLUGIN_ICONS_KEY, JSON.stringify(out));
+    } catch {}
+  }
+
+  function rememberToolbarPluginIcon(sidecarId, src) {
+    const id = normalizeToolbarSidecarId(sidecarId);
+    if (!id || !isSafePluginIconSrc(src)) return;
+    const clean = src.trim();
+    const prev = toolbarPluginIcons.get(id);
+    if (prev !== clean) {
+      toolbarPluginIcons.set(id, clean);
+      if (isToolbarPluginPinned(id)) persistToolbarPluginIconsCache();
+    }
+  }
+
+  hydrateToolbarPluginIcons(runtimeInitConfig?.pinnedPluginIcons);
+
+  function discoverHostSidecarPlugins(force = false) {
+    const now = Date.now();
+    if (!force && hostSidecarPluginsCache.at && now - hostSidecarPluginsCache.at < 3000) {
+      return hostSidecarPluginsCache.map;
+    }
+    const found = new Map();
+    try {
+      const rootEl = document.getElementById('root') || document.body?.firstElementChild;
+      if (rootEl) {
+        const fk = Object.keys(rootEl).find((k) => k.startsWith('__reactContainer') || k.startsWith('__reactFiber'));
+        const start = fk ? rootEl[fk]?.current || rootEl[fk] : null;
+        if (start) {
+          const queue = [start];
+          let visited = 0;
+          while (queue.length && visited < 6000) {
+            const f = queue.shift();
+            visited += 1;
+            const val = f?.memoizedProps?.value;
+            if (val && typeof val === 'object' && Array.isArray(val.plugins) && val.plugins.length > 0) {
+              let matched = false;
+              for (const p of val.plugins) {
+                if (!p || typeof p !== 'object' || !Array.isArray(p.sidecars)) continue;
+                matched = true;
+                if (p.disabled || p.forceDisabled) continue;
+                for (const sc of p.sidecars) {
+                  const id = normalizeToolbarSidecarId(sc?.sidecarId);
+                  if (!id) continue;
+                  const scCfg = sc?.config || {};
+                  if (scCfg.disabled || scCfg.hasWebUi === false) continue;
+                  const views = Array.isArray(scCfg.uiConfig?.views) ? scCfg.uiConfig.views : [];
+                  const view = views.find((v) => v && v.entrypoint === 1) || views[0] || null;
+                  const rawPath = typeof view?.path === 'string' && view.path.trim() ? view.path.trim() : '/';
+                  const viewPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+                  const title = String(
+                    view?.title || scCfg.uiConfig?.displayName || scCfg.displayName || p.displayName || p.name || id
+                  ).trim();
+                  const meta = {
+                    sidecarId: id,
+                    pluginName: String(p.name || ''),
+                    title,
+                    viewPath,
+                    targetPath: `${id}${viewPath}`,
+                  };
+                  found.set(id, meta);
+                  toolbarPluginMeta.set(id, { ...(toolbarPluginMeta.get(id) || {}), ...meta });
+                }
+              }
+              if (matched) break;
+            }
+            if (f?.child) queue.push(f.child);
+            if (f?.sibling) queue.push(f.sibling);
+          }
+        }
+      }
+    } catch {}
+    hostSidecarPluginsCache = { at: now, map: found };
+    return found;
+  }
+
+  function extractSidecarIdFromReactChildren(node, depth = 5) {
+    if (!node || depth <= 0) return '';
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const hit = extractSidecarIdFromReactChildren(child, depth - 1);
+        if (hit) return hit;
+      }
+      return '';
+    }
+    if (typeof node === 'object') {
+      const props = node.props;
+      if (props && typeof props === 'object') {
+        if (typeof props.sidecarId === 'string') {
+          const id = normalizeToolbarSidecarId(props.sidecarId);
+          if (id) return id;
+        }
+        if (props.children) {
+          return extractSidecarIdFromReactChildren(props.children, depth - 1);
+        }
+      }
+    }
+    return '';
+  }
+
+  function extractSidecarIdFromMenuItem(itemEl) {
+    if (!itemEl) return '';
+    const attrId = normalizeToolbarSidecarId(itemEl.getAttribute?.('data-ag-cs-sidecar-id') || '');
+    if (attrId) return attrId;
+    try {
+      const fk = Object.keys(itemEl).find((k) => k.startsWith('__reactFiber'));
+      let f = fk ? itemEl[fk] : null;
+      for (let i = 0; i < 8 && f; i += 1, f = f.return) {
+        const p = f.memoizedProps;
+        if (!p || typeof p !== 'object') continue;
+        if (typeof p.sidecarId === 'string') {
+          const id = normalizeToolbarSidecarId(p.sidecarId);
+          if (id) return id;
+        }
+        if (p.sidecar && typeof p.sidecar.sidecarId === 'string') {
+          const id = normalizeToolbarSidecarId(p.sidecar.sidecarId);
+          if (id) return id;
+        }
+        const fromChild = extractSidecarIdFromReactChildren(p.children, 5);
+        if (fromChild) return fromChild;
+      }
+    } catch {}
+    return '';
+  }
+
+  function readMenuItemCleanLabel(itemEl) {
+    if (!itemEl) return '';
+    const parts = [];
+    const kids = Array.from(itemEl.childNodes || []);
+    for (const node of kids) {
+      if (node.nodeType === 1 && node.classList?.contains?.('ag-cs-menu-pin-btn')) continue;
+      const t = String(node.textContent || '').trim();
+      if (t) parts.push(t);
+    }
+    return parts.join(' ').trim();
+  }
+
+  function findSidecarTabInStrip(strip, sidecarId) {
+    if (!strip || !sidecarId) return null;
+    const prefix = `sidecar__${sidecarId}__`;
+    const exactId = `${prefix}/`;
+    for (const btn of strip.querySelectorAll('button')) {
+      if (btn.getAttribute('data-testid') === 'side-panel-new-tab-button') continue;
+      const attrTabId = btn.getAttribute('data-tab-id') || '';
+      if (btn.getAttribute('aria-label') && !attrTabId) continue;
+      if (attrTabId === exactId || attrTabId.startsWith(prefix)) {
+        return btn;
+      }
+      try {
+        const fk = Object.keys(btn).find((k) => k.startsWith('__reactFiber'));
+        let f = fk ? btn[fk] : null;
+        for (let i = 0; i < 6 && f; i += 1, f = f.return) {
+          const tab = f?.memoizedProps?.tab;
+          if (
+            tab &&
+            (tab.id === exactId ||
+              (typeof tab.id === 'string' && tab.id.startsWith(prefix)) ||
+              normalizeToolbarSidecarId(tab.content?.sidecarView?.sidecarId) === sidecarId)
+          ) {
+            return btn;
+          }
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  function isSidecarCurrentlyActive(sidecarId) {
+    const id = normalizeToolbarSidecarId(sidecarId);
+    if (!id) return false;
+    if (
+      id === RIGHT_PANE_TARGETS.studio.sidecarId &&
+      getEffectivePinRightPane() === 'studio' &&
+      pinnedDock.el &&
+      pinnedDock.el.isConnected
+    ) {
+      return !pinnedDock.collapsed && !pinnedDock.auxMaximized;
+    }
+    const auxPane = document.querySelector('[data-aux-pane-open]');
+    const strip = document.querySelector('[data-side-panel-strip]');
+    const isAuxOpen = auxPane ? auxPane.getAttribute('data-aux-pane-open') === 'true' : Boolean(strip);
+    if (!isAuxOpen) return false;
+    const activeTabId = strip?.getAttribute('data-active-tab-id') || '';
+    const prefix = `sidecar__${id}__`;
+    if (activeTabId && (activeTabId === `${prefix}/` || activeTabId.startsWith(prefix))) {
+      return true;
+    }
+    if (strip) {
+      const tabBtn = findSidecarTabInStrip(strip, id);
+      if (
+        tabBtn &&
+        (tabBtn.getAttribute('aria-selected') === 'true' ||
+          tabBtn.getAttribute('data-active') === 'true' ||
+          tabBtn.getAttribute('data-state') === 'active')
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function togglePinnedSidecarPlugin(sidecarId) {
+    const id = normalizeToolbarSidecarId(sidecarId);
+    if (!id) return { ok: false, status: 'invalid_sidecar' };
+
+    if (
+      id === RIGHT_PANE_TARGETS.studio.sidecarId &&
+      getEffectivePinRightPane() === 'studio' &&
+      ((pinnedDock.el && pinnedDock.el.isConnected) || findLiveStudioSlot())
+    ) {
+      if (!pinnedDock.collapsed && !pinnedDock.auxMaximized) {
+        setPinnedDockCollapsed(true);
+        syncToolbarPinnedPlugins();
+        return { ok: true, status: 'dock_collapsed' };
+      }
+      const res = openStudioPane();
+      syncToolbarPinnedPlugins();
+      return res;
+    }
+
+    const auxPane = document.querySelector('[data-aux-pane-open]');
+    const strip = document.querySelector('[data-side-panel-strip]');
+    const isAuxOpen = auxPane ? auxPane.getAttribute('data-aux-pane-open') === 'true' : Boolean(strip);
+
+    if (isAuxOpen && isSidecarCurrentlyActive(id)) {
+      const toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+      if (toggleBtn && typeof toggleBtn.click === 'function') {
+        pinnedDock.userToggledAuxAt = Date.now();
+        toggleBtn.click();
+        return { ok: true, status: 'closed' };
+      }
+      return { ok: false, status: 'no_toggle_button' };
+    }
+
+    const existingTab = findSidecarTabInStrip(strip, id);
+    if (existingTab) {
+      pinnedDock.userForcedAuxOpen = true;
+      pinnedDock.userToggledAuxAt = Date.now();
+      if (!isAuxOpen) {
+        const toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+        if (toggleBtn && typeof toggleBtn.click === 'function') toggleBtn.click();
+      }
+      existingTab.click();
+      return { ok: true, status: 'switched' };
+    }
+
+    const bridge = findSidecarLinkBridge();
+    if (bridge) {
+      const meta = toolbarPluginMeta.get(id) || discoverHostSidecarPlugins().get(id) || null;
+      const primaryTarget = meta?.targetPath || `${id}/`;
+      const fallbackTarget = id;
+      let targetToOpen = primaryTarget;
+      let resolved = null;
+      try {
+        resolved = bridge.resolveSidecarLink(primaryTarget);
+        if (!resolved && fallbackTarget !== primaryTarget) {
+          resolved = bridge.resolveSidecarLink(fallbackTarget);
+          if (resolved) targetToOpen = fallbackTarget;
+        }
+      } catch {}
+      if (resolved) {
+        try {
+          pinnedDock.userForcedAuxOpen = true;
+          pinnedDock.userToggledAuxAt = Date.now();
+          bridge.onSidecarLinkClick(targetToOpen);
+          return { ok: true, status: 'opened' };
+        } catch {}
+      }
+    }
+    return { ok: false, status: 'not_found' };
+  }
+
+  function toggleToolbarPluginPin(sidecarId, metaHint = null) {
+    const id = normalizeToolbarSidecarId(sidecarId);
+    if (!id) return { pinned: false, list: getPinnedToolbarPlugins() };
+    if (metaHint && typeof metaHint === 'object') {
+      const prevMeta = toolbarPluginMeta.get(id) || {};
+      if (metaHint.title) {
+        toolbarPluginMeta.set(id, { ...prevMeta, sidecarId: id, title: String(metaHint.title).trim() });
+      }
+      if (metaHint.iconSrc) {
+        rememberToolbarPluginIcon(id, metaHint.iconSrc);
+      }
+    }
+    const current = getPinnedToolbarPlugins();
+    const idx = current.indexOf(id);
+    let nextList;
+    let nextPinned;
+    if (idx >= 0) {
+      nextList = current.filter((x) => x !== id);
+      nextPinned = false;
+    } else {
+      nextList = current.length >= 12 ? [...current.slice(0, 11), id] : [...current, id];
+      nextPinned = true;
+    }
+    saveSetting('pinnedToolbarPlugins', nextList);
+    persistToolbarPluginIconsCache();
+    if (id === RIGHT_PANE_TARGETS.studio.sidecarId && pinnedDock.el && pinnedDock.splitEl) {
+      applyPinnedDockStateToDom();
+    }
+    syncPluginsSubmenuPinButtons();
+    syncToolbarPinnedPlugins();
+    return { pinned: nextPinned, list: nextList };
+  }
+
+  function syncPluginsSubmenuPinButtons() {
+    if (destroyed) return;
+    const items = document.querySelectorAll('[role="menu"] [role="menuitem"]');
+    if (!items.length) return;
+    const copy = getToolbarPinCopy(getLang());
+    const pinnedSet = new Set(getPinnedToolbarPlugins());
+
+    for (const item of items) {
+      const sidecarId = extractSidecarIdFromMenuItem(item);
+      if (!sidecarId) continue;
+
+      const label = readMenuItemCleanLabel(item);
+      if (label) {
+        const prevMeta = toolbarPluginMeta.get(sidecarId) || {};
+        toolbarPluginMeta.set(sidecarId, { ...prevMeta, sidecarId, title: label });
+      }
+      const img = item.querySelector('img');
+      const imgSrc = img ? img.getAttribute('src') || img.src || '' : '';
+      if (imgSrc) {
+        rememberToolbarPluginIcon(sidecarId, imgSrc);
+      }
+
+      let pinBtn = Array.from(item.children || []).find((ch) => ch.classList?.contains?.('ag-cs-menu-pin-btn')) || null;
+      if (!pinBtn) {
+        pinBtn = document.createElement('button');
+        pinBtn.type = 'button';
+        pinBtn.className = 'ag-cs-menu-pin-btn';
+        pinBtn.setAttribute('data-ag-no-i18n', '1');
+        pinBtn.setAttribute('data-testid', 'ag-cs-menu-pin-btn');
+        pinBtn.innerHTML = TOOLBAR_PIN_SVG;
+        const blockMenuEvent = (ev) => {
+          ev.preventDefault?.();
+          ev.stopPropagation?.();
+          ev.stopImmediatePropagation?.();
+        };
+        pinBtn.addEventListener?.('pointerdown', blockMenuEvent);
+        pinBtn.addEventListener?.('pointerup', blockMenuEvent);
+        pinBtn.addEventListener?.('mousedown', blockMenuEvent);
+        pinBtn.addEventListener?.('mouseup', blockMenuEvent);
+        pinBtn.addEventListener?.('click', (ev) => {
+          blockMenuEvent(ev);
+          const sid = pinBtn.getAttribute('data-ag-cs-pin-sidecar') || '';
+          const liveImg = item.querySelector('img');
+          const liveSrc = liveImg ? liveImg.getAttribute('src') || liveImg.src || '' : '';
+          toggleToolbarPluginPin(sid, {
+            title: readMenuItemCleanLabel(item),
+            iconSrc: liveSrc,
+          });
+        });
+        item.appendChild(pinBtn);
+      }
+
+      const pinned = pinnedSet.has(sidecarId);
+      pinBtn.setAttribute('data-ag-cs-pin-sidecar', sidecarId);
+      pinBtn.classList.toggle('is-pinned', pinned);
+      pinBtn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+      const tip = pinned ? copy.unpinTitle : copy.pinTitle;
+      pinBtn.setAttribute('title', tip);
+      pinBtn.setAttribute('aria-label', tip);
+    }
+  }
+
+  function findActiveTitlebarToolbar() {
+    const split = document.querySelector('[data-testid="aux-pane-split"]');
+    if (split) {
+      const fromSplit = findDockTitlebarToolbar(split);
+      if (fromSplit) return fromSplit;
+    }
+    const list = Array.from(document.querySelectorAll('[data-testid="pane-titlebar-toolbar"]'));
+    if (!list.length) return null;
+    for (const tb of list) {
+      const r = typeof tb.getBoundingClientRect === 'function' ? tb.getBoundingClientRect() : null;
+      if (!r || (r.width > 0 && r.height > 0)) return tb;
+    }
+    return list[0];
+  }
+
+  function renderToolbarPinButtonIcon(btn, sidecarId) {
+    const iconSrc = toolbarPluginIcons.get(sidecarId) || '';
+    const isStudio = sidecarId === RIGHT_PANE_TARGETS.studio.sidecarId;
+    const prevKey = btn._agCsIconKey || '';
+    const nextKey = iconSrc ? `img:${iconSrc}` : isStudio ? 'svg:studio' : 'svg:fallback';
+    if (prevKey === nextKey) return;
+    btn._agCsIconKey = nextKey;
+    if (iconSrc) {
+      btn.textContent = '';
+      const img = document.createElement('img');
+      img.className = 'ag-cs-toolbar-pin-icon';
+      img.alt = '';
+      img.draggable = false;
+      img.src = iconSrc;
+      btn.appendChild(img);
+    } else if (isStudio) {
+      btn.innerHTML = TOOLBAR_STUDIO_SPARK_SVG;
+    } else {
+      btn.innerHTML = TOOLBAR_FALLBACK_PLUGIN_SVG;
+    }
+  }
+
+  function teardownToolbarPinnedPlugins() {
+    if (toolbarPinGroupEl && toolbarPinGroupEl.parentElement) {
+      try {
+        toolbarPinGroupEl.remove();
+      } catch {}
+    }
+    toolbarPinGroupEl = null;
+    document.querySelectorAll('.ag-cs-toolbar-pin-group, .ag-cs-menu-pin-btn').forEach((el) => {
+      try {
+        el.remove();
+      } catch {}
+    });
+  }
+
+  function syncToolbarPinnedPlugins() {
+    if (destroyed) return;
+    const pinned = getPinnedToolbarPlugins();
+    if (!pinned.length) {
+      if (toolbarPinGroupEl && toolbarPinGroupEl.parentElement) {
+        try {
+          toolbarPinGroupEl.remove();
+        } catch {}
+      }
+      return;
+    }
+    const toolbar = findActiveTitlebarToolbar();
+    if (!toolbar) {
+      if (toolbarPinGroupEl && toolbarPinGroupEl.parentElement) {
+        try {
+          toolbarPinGroupEl.remove();
+        } catch {}
+      }
+      return;
+    }
+
+    const hostMap = discoverHostSidecarPlugins();
+
+    if (!toolbarPinGroupEl) {
+      toolbarPinGroupEl = document.createElement('div');
+      toolbarPinGroupEl.className = 'ag-cs-toolbar-pin-group';
+      toolbarPinGroupEl.setAttribute('data-ag-no-i18n', '1');
+      toolbarPinGroupEl.setAttribute('data-testid', 'ag-cs-toolbar-pin-group');
+    }
+
+    const existingBtns = new Map();
+    for (const ch of Array.from(toolbarPinGroupEl.children || [])) {
+      const sid = ch.getAttribute?.('data-ag-cs-sidecar-id') || '';
+      if (sid) existingBtns.set(sid, ch);
+    }
+
+    const wantedSet = new Set(pinned);
+    for (const [sid, btn] of existingBtns.entries()) {
+      if (!wantedSet.has(sid)) {
+        btn.remove();
+        existingBtns.delete(sid);
+      }
+    }
+
+    let cursor = toolbarPinGroupEl.firstElementChild;
+    for (const sidecarId of pinned) {
+      let btn = existingBtns.get(sidecarId);
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ag-cs-toolbar-pin-btn';
+        btn.setAttribute('data-ag-no-i18n', '1');
+        btn.setAttribute('data-testid', 'ag-cs-toolbar-pin-btn');
+        btn.setAttribute('data-ag-cs-sidecar-id', sidecarId);
+        btn.addEventListener?.('click', (ev) => {
+          ev.stopPropagation?.();
+          togglePinnedSidecarPlugin(sidecarId);
+        });
+      }
+
+      const meta = toolbarPluginMeta.get(sidecarId) || hostMap.get(sidecarId) || null;
+      const displayTitle =
+        meta?.title ||
+        (sidecarId === RIGHT_PANE_TARGETS.studio.sidecarId ? 'Claude Studio' : sidecarId.split('/')[0]);
+      if (btn.getAttribute('title') !== displayTitle) {
+        btn.setAttribute('title', displayTitle);
+        btn.setAttribute('aria-label', displayTitle);
+      }
+
+      renderToolbarPinButtonIcon(btn, sidecarId);
+
+      const active = isSidecarCurrentlyActive(sidecarId);
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+
+      if (btn !== cursor) {
+        toolbarPinGroupEl.insertBefore(btn, cursor || null);
+      } else {
+        cursor = cursor.nextElementSibling;
+      }
+    }
+
+    const kids = Array.from(toolbar.children || []).filter((ch) => ch !== toolbarPinGroupEl);
+    let refNode = null;
+    for (const ch of kids) {
+      if (ch.classList?.contains?.('ag-cs-dock-toolbar-btn')) {
+        refNode = ch;
+        break;
+      }
+    }
+    if (!refNode) {
+      for (let i = kids.length - 1; i >= 0; i -= 1) {
+        const ch = kids[i];
+        if (!ch.classList?.contains?.('wm-capsule-host')) {
+          refNode = ch;
+          break;
+        }
+      }
+    }
+    if (refNode && typeof toolbar.insertBefore === 'function') {
+      if (toolbarPinGroupEl.parentElement !== toolbar || toolbarPinGroupEl.nextElementSibling !== refNode) {
+        toolbar.insertBefore(toolbarPinGroupEl, refNode);
+      }
+    } else if (toolbarPinGroupEl.parentElement !== toolbar) {
+      toolbar.appendChild(toolbarPinGroupEl);
+    }
   }
 
   function applyPinnedDockStateToDom(opts = {}) {
@@ -8504,6 +9168,7 @@
       localStorage.setItem(DOCK_COLLAPSED_KEY, pinnedDock.collapsed ? '1' : '0');
     } catch {}
     applyPinnedDockStateToDom();
+    syncToolbarPinnedPlugins();
   }
 
   function ensurePinnedDockElement() {
@@ -10387,7 +11052,7 @@
     if (!el || !el.closest) return false;
     return Boolean(
       el.closest(
-        '.ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
+        '.ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-toolbar-pin-group, .ag-cs-toolbar-pin-btn, .ag-cs-menu-pin-btn, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-footer-chip, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
           SETTINGS_SEC_ID +
           ', #ag-claude-studio-css, #ag-claude-style-css'
       )
@@ -10413,6 +11078,8 @@
     syncRipple();
     syncComposers();
     syncPinnedStudioDock();
+    syncToolbarPinnedPlugins();
+    syncPluginsSubmenuPinButtons();
     syncPluginDetailTranslateButton();
     ensureSettingsSection();
   }
@@ -10923,6 +11590,7 @@
         dockSyncIsRaf = false;
         dockSyncQueued = false;
         syncPinnedStudioDock();
+        syncToolbarPinnedPlugins();
       });
     } else {
       dockSyncIsRaf = false;
@@ -10930,6 +11598,7 @@
         dockSyncHandle = 0;
         dockSyncQueued = false;
         syncPinnedStudioDock();
+        syncToolbarPinnedPlugins();
       }, 50);
     }
   }
@@ -11377,6 +12046,9 @@
       if (next && typeof next === 'object') {
         runtimeInitConfig = { ...runtimeInitConfig, ...next };
         cfg = loadSettings(runtimeInitConfig);
+        if (typeof hydrateToolbarPluginIcons === 'function') {
+          hydrateToolbarPluginIcons(runtimeInitConfig.pinnedPluginIcons);
+        }
       } else {
         try {
           const saved = JSON.parse(localStorage.getItem(STORAGE_SETTINGS_KEY) || '{}');
@@ -11432,6 +12104,15 @@
     setPinnedDockCollapsed(next) {
       setPinnedDockCollapsed(next);
     },
+    getPinnedToolbarPlugins() {
+      return getPinnedToolbarPlugins();
+    },
+    toggleToolbarPluginPin(sidecarId, meta) {
+      return toggleToolbarPluginPin(sidecarId, meta);
+    },
+    togglePinnedSidecarPlugin(sidecarId) {
+      return togglePinnedSidecarPlugin(sidecarId);
+    },
     showScriptOutputInChat(payload) {
       return showScriptOutputInChat(payload);
     },
@@ -11461,6 +12142,7 @@
         pinnedDockCollapsed: Boolean(pinnedDock.collapsed),
         pinnedDockSolo: Boolean(pinnedDock.soloMode),
         pinnedDockAuxMaximized: Boolean(pinnedDock.auxMaximized),
+        pinnedToolbarPlugins: getPinnedToolbarPlugins(),
         hasSmoothCaret: Boolean(document.querySelector('.ag-cs-smooth-caret')),
         hasEffortPopover: Boolean(openEffortPop && openEffortPop.isConnected),
         hasContextPopover: Boolean(openPopover && openPopover.isConnected),
@@ -11473,6 +12155,7 @@
       teardownCore();
       for (const fn of [
         teardownPinnedStudioDock,
+        teardownToolbarPinnedPlugins,
         closePeriodicSelector,
         closeContextPopover,
         closeEffortPopover,
@@ -11533,7 +12216,7 @@
       document.getElementById(PERIODIC_DYNAMIC_STYLE_ID)?.remove();
       document
         .querySelectorAll(
-          '.ag-cs-pinned-dock, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
+          '.ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-toolbar-pin-group, .ag-cs-toolbar-pin-btn, .ag-cs-menu-pin-btn, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, .ag-cs-compact-hint, .ag-cs-page-translate-btn, .ag-cs-file-menu, .ag-cs-file-toast, .ag-cs-script-chat-card, #' +
             SETTINGS_SEC_ID
         )
         .forEach((el) => el.remove());

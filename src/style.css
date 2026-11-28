@@ -5046,6 +5046,118 @@ html[data-ag-cs-style] .agy-sheet [data-testid="aux-pane-split"][data-split-root
   display: block;
 }
 
+.ag-cs-toolbar-pin-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.ag-cs-toolbar-pin-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--foreground, #141413);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  transition: background 120ms ease, transform 120ms ease, color 120ms ease;
+}
+
+.ag-cs-toolbar-pin-btn:hover {
+  background: var(--secondary, var(--ag-cs-hover-wash, rgba(128, 128, 128, 0.12)));
+}
+
+.ag-cs-toolbar-pin-btn.is-active {
+  background: color-mix(in srgb, var(--ag-cs-accent, var(--primary, #d97757)) 14%, transparent);
+}
+
+.ag-cs-toolbar-pin-btn.is-active:hover {
+  background: color-mix(in srgb, var(--ag-cs-accent, var(--primary, #d97757)) 20%, transparent);
+}
+
+.ag-cs-toolbar-pin-btn:active {
+  transform: scale(0.95);
+}
+
+.ag-cs-toolbar-pin-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.ag-cs-toolbar-pin-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
+[role="menuitem"]:has(> .ag-cs-menu-pin-btn) {
+  gap: 8px;
+  padding-right: 4px !important;
+}
+
+.ag-cs-menu-pin-btn {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground, #7a7770);
+  opacity: 0.52;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease, transform 120ms ease;
+}
+
+[role="menuitem"]:hover > .ag-cs-menu-pin-btn,
+.ag-cs-menu-pin-btn:hover,
+.ag-cs-menu-pin-btn:focus-visible {
+  opacity: 0.92;
+}
+
+.ag-cs-menu-pin-btn:hover {
+  background: var(--ag-cs-hover-wash, rgba(128, 128, 128, 0.14));
+  color: var(--foreground, #141413);
+}
+
+.ag-cs-menu-pin-btn.is-pinned {
+  opacity: 1;
+  color: var(--ag-cs-accent, var(--primary, #d97757));
+  background: color-mix(in srgb, var(--ag-cs-accent, var(--primary, #d97757)) 14%, transparent);
+}
+
+.ag-cs-menu-pin-btn.is-pinned:hover {
+  background: color-mix(in srgb, var(--ag-cs-accent, var(--primary, #d97757)) 22%, transparent);
+  color: var(--ag-cs-accent, var(--primary, #d97757));
+}
+
+.ag-cs-menu-pin-btn:active {
+  transform: scale(0.92);
+}
+
+.ag-cs-menu-pin-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
 .ag-cs-pinned-dock {
   position: relative;
   order: 99;
