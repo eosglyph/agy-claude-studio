@@ -3326,6 +3326,7 @@
           periodicSelector: ['Gemini 4 元素周期表', '在模型名旁添加四角星按钮，点击打开元素周期表选模型'],
           orchestratorSwitch: ['协作模式快捷开关', '在底栏模型名旁添加独立开关，一键在标准模型与协作模式（Orchestrator）间切换'],
           fileLinkContextMenu: ['聊天文件右键菜单', '在对话中的本地文件链接上右键，可打开文件、在文件夹中显示或复制完整路径'],
+          toolbarPluginPin: ['顶栏插件钉选', '允许在「⋮ → 插件」子菜单中将常用插件钉在对话顶栏，一键显隐切换'],
           geminiLoader: ['加载动效', 'Gemini发现了新玩具'],
           compactPreset: [
             '/compact 预设文案',
@@ -3493,6 +3494,7 @@
           periodicSelector: ['Gemini 4 元素週期表', '在模型名旁加入四角星按鈕，點擊開啟元素週期表選模型'],
           orchestratorSwitch: ['協作模式快捷開關', '在底列模型名旁加入獨立開關，一鍵切換標準模型與協作模式（Orchestrator）'],
           fileLinkContextMenu: ['對話檔案右鍵選單', '在對話中的本機檔案連結按右鍵，可開啟檔案、在資料夾中顯示或複製完整路徑'],
+          toolbarPluginPin: ['頂欄外掛釘選', '允許在「⋮ → 外掛」子選單中將常用外掛釘在對話頂欄，一鍵切換顯示'],
           geminiLoader: ['載入動效', 'Gemini 發現了新玩具'],
           compactPreset: [
             '/compact 預設文案',
@@ -3660,6 +3662,7 @@
           periodicSelector: ['Gemini 4 元素週期表', '喺模型名隔離加粒四角星，撳開元素週期表揀模型'],
           orchestratorSwitch: ['協作模式快捷開關', '喺底欄模型名隔離加粒獨立開關，一鍵切換標準模型同協作模式（Orchestrator）'],
           fileLinkContextMenu: ['對話檔案右鍵選單', '喺對話入面嘅本機檔案連結撳右鍵，可以打開檔案、喺資料夾顯示或者複製完整路徑'],
+          toolbarPluginPin: ['頂欄外掛釘選', '允許喺「⋮ → 外掛」子選單將常用外掛釘喺對話頂欄，一撳切換開關'],
           geminiLoader: ['載入動效', 'Gemini 發現咗新玩具'],
           compactPreset: [
             '/compact 預設文案',
@@ -3827,6 +3830,7 @@
           periodicSelector: ['Gemini 4 Periodic Table', 'Add a sparkle button beside model name to pick from the Periodic Table'],
           orchestratorSwitch: ['Orchestrator Quick Switch', 'Add a compact switch beside the model selector to toggle Orchestrator mode in one click'],
           fileLinkContextMenu: ['Chat File Link Context Menu', 'Right-click local file links in chat to open the file, show it in its folder, or copy its full path'],
+          toolbarPluginPin: ['Titlebar Plugin Pinning', 'Allow pinning UI sidecar plugins to the conversation titlebar from ⋮ → Plugins'],
           geminiLoader: ['Loading Animation', 'Gemini found a new toy'],
           compactPreset: [
             '/compact Preset Prompt',
@@ -3994,6 +3998,7 @@
           periodicSelector: ['Gemini 4 元素周期表', 'モデル名横に星ボタンを追加し、周期表からモデルを選択'],
           orchestratorSwitch: ['Orchestrator クイック切替', 'モデル名横にスイッチを追加し、通常モデルと Orchestrator をワンクリック切替'],
           fileLinkContextMenu: ['チャット内ファイル右クリックメニュー', '会話内のローカルファイルリンクを右クリックして、ファイルを開く・フォルダに表示・パスをコピー'],
+          toolbarPluginPin: ['タイトルバーへのプラグイン固定', '「⋮ → プラグイン」からサイドカープラグインを会話上部バーに固定してワンクリック切替'],
           geminiLoader: ['読み込みアニメ', 'Gemini が新しいおもちゃを見つけた'],
           compactPreset: [
             '/compact プリセット指示',
@@ -4125,7 +4130,7 @@
         id: 'advanced',
         iconKey: 'advanced',
         titleKey: 'grpAdvanced',
-        keys: ['composerRestyle', 'periodicSelector', 'orchestratorSwitch', 'compactPreset', 'fileLinkContextMenu', 'effortSliderStyle', 'effortAccent'],
+        keys: ['composerRestyle', 'periodicSelector', 'orchestratorSwitch', 'compactPreset', 'fileLinkContextMenu', 'toolbarPluginPin', 'effortSliderStyle', 'effortAccent'],
       },
       {
         id: 'telemetry',
@@ -5300,6 +5305,7 @@
           Boolean(cfg.periodicSelector),
           cfg.orchestratorSwitch !== false,
           cfg.fileLinkContextMenu !== false,
+          cfg.toolbarPluginPin !== false,
           cfg.effortSliderStyle === 'off' ? false : cfg.effortSliderStyle === 'claude' ? Boolean(cfg.effortAccent) : true,
         ];
         const on = flags.filter(Boolean).length;
@@ -5405,7 +5411,7 @@
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked =
-              key === 'glassEffect' || key === 'orchestratorSwitch' || key === 'pluginPageTranslate' || key === 'fileLinkContextMenu' || key === 'geminiLoader'
+              key === 'glassEffect' || key === 'orchestratorSwitch' || key === 'pluginPageTranslate' || key === 'fileLinkContextMenu' || key === 'toolbarPluginPin' || key === 'geminiLoader'
                 ? cfg[key] !== false
                 : key === 'mascot'
                 ? cfg[key] === 'crab'

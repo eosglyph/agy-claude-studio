@@ -305,7 +305,7 @@ npm run remove                        # Disconnect and cleanly restore native UI
 <a id="configuration"></a>
 ## Configuration
 
-All settings can be adjusted in real time from the right-side **Claude Studio** sidecar panel (under the **Settings** tab) and persist automatically across restarts (see [config.example.json](config.example.json) for the complete reference schema). Mobile push notification settings and webhook tokens are stored privately on your local machine in `PLUGIN_DATA/notify.json` and are never written to `config.json` or injected into browser pages.
+Everyday preferences can be adjusted in real time from the right-side **Claude Studio → Settings** tab and persist automatically across restarts (see [config.example.json](config.example.json) for the full schema). List-based and low-level options use dedicated controls (`pinnedToolbarPlugins` is managed directly via `📌` in `⋮ → Plugins`, `i18nIgnoreSelectors` via the `studio-translation-protect` skill or `config.json`, and runtime tuning keys via `config.json`). Mobile push notification settings and webhook tokens are stored privately on your local machine in `PLUGIN_DATA/notify.json` and are never written to `config.json` or injected into browser pages.
 
 <details>
 <summary><b>View all configuration keys</b></summary>
@@ -324,15 +324,16 @@ All settings can be adjusted in real time from the right-side **Claude Studio** 
 | Interaction | `effortSliderStyle` / `effortAccent` | `'chatgpt'` \| `'claude'` \| `'off'` / `boolean` | `'chatgpt'` / `true` | 60fps effort slider style (`'off'` keeps native effort control) & color scale |
 | Interaction | `compactPreset` / `compactCustomText` | `'empty'` \| `'clean'` \| `'dev'` \| `'continue'` \| `'custom'` / `string` | `'clean'` / `''` | `/compact` preset & custom prompt text |
 | Interaction | `fileLinkContextMenu` | `boolean` | `true` | Right-click chat file links & mentions to Open File, Reveal in Folder, or Copy Full Path |
+| Interaction | `toolbarPluginPin` | `boolean` | `true` | Titlebar Plugin Pinning: allow pinning UI sidecar plugins to the conversation titlebar from `⋮ → Plugins` |
 | Interaction | `smoothCaret` / `mascot` / `homeRipple` | `boolean` / `'crab'` \| `'off'` / `boolean` | `true` / `'crab'` / `true` | Smooth caret, Clawd mascot & home ripple field |
-| Localization | `pluginPageTranslate` / `i18nIgnoreSelectors` | `boolean` / `string[]` | `true` / `[]` | Marketplace & Skills on-demand translate pills & custom protected CSS selectors |
+| Localization | `pluginPageTranslate` / `i18nIgnoreSelectors` | `boolean` / `string[]` | `true` / `[]` | Marketplace & Skills on-demand translate pills; custom protected CSS selectors managed via `studio-translation-protect` skill or `config.json` |
 | Dock & Toolbar | `pinRightPane` | `'studio'` \| `'off'` | `'studio'` | Pin Claude Studio as an independent persistent far-right 3rd column |
-| Dock & Toolbar | `pinnedToolbarPlugins` | `string[]` | `[]` | UI sidecar plugin IDs pinned to the conversation titlebar via `⋮ → Plugins` `📌` |
+| Dock & Toolbar | `pinnedToolbarPlugins` | `string[]` | `[]` | *(Managed directly via `⋮ → Plugins` `📌`)* UI sidecar plugin IDs pinned to the conversation titlebar (up to 12) |
 | Usage HUD | `usageStatsEnabled` | `boolean` | `true` | Master toggle for built-in HUD (preserves child preferences when turned off) |
 | Usage HUD | `inlineStats` / `ringMode` / `turnBadges` | `boolean` / `'context'` \| `'quota'` / `boolean` | `true` / `'context'` / `true` | *(Requires `usageStatsEnabled`)* Inline stats, context/quota ring & turn `#T` badges |
 | Usage HUD | `hudTopBar` / `hudBottomBar` / `hudRimProgress` | `boolean` | `true` / `false` / `false` | *(Requires `usageStatsEnabled`)* Top HUD bar, bottom bar & rim progress bar |
 | Updates & Runtime | `receivePrerelease` | `boolean` | `false` | Opt in to beta / prerelease update notifications in the Studio header |
-| Updates & Runtime | `autoRelaunchWithCdp` / `exitOnHostClose` / `pollIntervalMs` | `boolean` / `boolean` / `number` | `true` / `false` / `2500` | CDP relaunch behavior, host-exit lifecycle & polling interval (`configSchemaVersion: 2`) |
+| Updates & Runtime | `pollIntervalMs` / `autoRelaunchWithCdp` / `exitOnHostClose` | `number` / `boolean` / `boolean` | `2500` / `true` / `false` | *(Advanced `config.json` keys)* Built-in HUD polling interval; the latter two apply only to standalone CLI watcher mode (`configSchemaVersion: 2`) |
 
 </details>
 
