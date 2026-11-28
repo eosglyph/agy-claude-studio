@@ -223,13 +223,41 @@ function readPackFromFile(filePath, expectedLang) {
   }
 }
 
+function parseVersionParts(ver) {
+  const s = String(ver || '').trim();
+  if (!s) return null;
+  const m = s.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/i);
+  if (!m) return null;
+  return [Number(m[1]) || 0, Number(m[2]) || 0, Number(m[3]) || 0];
+}
+
+function comparePackFreshness(a, b) {
+  if (!a || !b) return 0;
+  const va = parseVersionParts(a.agyVersion);
+  const vb = parseVersionParts(b.agyVersion);
+  if (va && vb) {
+    for (let i = 0; i < 3; i += 1) {
+      if (va[i] !== vb[i]) return va[i] - vb[i];
+    }
+  }
+  const da = String(a.updatedAt || '').trim();
+  const db = String(b.updatedAt || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(da) && /^\d{4}-\d{2}-\d{2}$/.test(db) && da !== db) {
+    return da > db ? 1 : -1;
+  }
+  return 0;
+}
+
 function readLocalePack(lang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR } = {}) {
   const norm = normalizePackLang(lang);
   if (!norm) return null;
 
   const cloudPath = getCloudPackPath(norm, pluginDataDir);
   const cloud = readPackFromFile(cloudPath, norm);
-  if (cloud) {
+  const bundledPath = isBundledLang(norm) ? getBundledPackPath(norm, bundledDir) : '';
+  const bundled = bundledPath ? readPackFromFile(bundledPath, norm) : null;
+
+  if (cloud && (!bundled || comparePackFreshness(bundled.pack, cloud.pack) <= 0)) {
     return {
       pack: cloud.pack,
       hash: cloud.hash,
@@ -245,35 +273,37 @@ function readLocalePack(lang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR 
     };
   }
 
-  if (isBundledLang(norm)) {
-    const bundledPath = getBundledPackPath(norm, bundledDir);
-    const bundled = readPackFromFile(bundledPath, norm);
-    if (bundled) {
-      return {
-        pack: bundled.pack,
-        hash: bundled.hash,
-        sha256: bundled.sha256,
-        hasSourceSha: bundled.hasSourceSha,
-        contentSig: bundled.contentSig,
-        bytes: bundled.bytes,
-        source: 'bundled',
-        path: bundledPath,
-        dictCount: Object.keys(bundled.pack.dict).length,
-        ruleCount: bundled.pack.rules.length,
-        sentenceCount: bundled.pack.sentences.length,
-      };
-    }
+  if (bundled) {
+    return {
+      pack: bundled.pack,
+      hash: bundled.hash,
+      sha256: bundled.sha256,
+      hasSourceSha: bundled.hasSourceSha,
+      contentSig: bundled.contentSig,
+      bytes: bundled.bytes,
+      source: 'bundled',
+      path: bundledPath,
+      dictCount: Object.keys(bundled.pack.dict).length,
+      ruleCount: bundled.pack.rules.length,
+      sentenceCount: bundled.pack.sentences.length,
+    };
   }
 
   return null;
 }
 
-function readCloudLocalePackOverride(lang, pluginDataDir) {
+function readCloudLocalePackOverride(lang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR } = {}) {
   const norm = normalizePackLang(lang);
   if (!norm || !pluginDataDir) return null;
   const cloudPath = getCloudPackPath(norm, pluginDataDir);
   const cloud = readPackFromFile(cloudPath, norm);
   if (!cloud) return null;
+  if (isBundledLang(norm)) {
+    const bundled = readPackFromFile(getBundledPackPath(norm, bundledDir), norm);
+    if (bundled && comparePackFreshness(bundled.pack, cloud.pack) > 0) {
+      return null;
+    }
+  }
   return {
     pack: cloud.pack,
     hash: cloud.hash,
@@ -309,7 +339,18 @@ function listLocalePacksStatus(
       typeof remoteMeta?.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(remoteMeta.sha256)
         ? remoteMeta.sha256.toLowerCase()
         : '';
-    const hasRemoteUpdate = Boolean(installed && remoteSha256 && effectiveSha256 && remoteSha256 !== effectiveSha256);
+    const remoteMetaFreshness = remoteManifest
+      ? {
+          agyVersion: remoteMeta?.agyVersion || remoteManifest.agyVersion || '',
+          updatedAt: remoteMeta?.updatedAt || remoteManifest.updatedAt || '',
+        }
+      : null;
+    const localNewerThanRemote = Boolean(
+      loaded && remoteMetaFreshness && comparePackFreshness(loaded.pack, remoteMetaFreshness) > 0
+    );
+    const hasRemoteUpdate = Boolean(
+      installed && !localNewerThanRemote && remoteSha256 && effectiveSha256 && remoteSha256 !== effectiveSha256
+    );
 
     return {
       lang,

@@ -3,8 +3,8 @@
   "lang": "ja",
   "label": "日本語",
   "bundled": false,
-  "agyVersion": "2.35.2",
-  "updatedAt": "2026-11-26",
+  "agyVersion": "2.36.0",
+  "updatedAt": "2026-11-28",
   "cjkLatinSpacing": false,
   "units": {
     "singleMin": "分",
@@ -2096,7 +2096,31 @@
     "Voice volume": "音声ボリューム",
     "Background color picker": "背景色ピッカー",
     "Foreground color picker": "前景色ピッカー",
-    "Accent color picker": "アクセント色ピッカー"
+    "Accent color picker": "アクセント色ピッカー",
+    "Ask a side question without interrupting the main conversation": "メインの会話を中断せずにサイド質問をする",
+    "Ask a side question without interrupting the main conversation.": "メインの会話を中断せずにサイド質問をします。",
+    "Started from": "開始元",
+    "Started during": "開始時",
+    "Show": "表示",
+    "Hide": "非表示",
+    "Side Question Conversation Log": "サイド質問の会話ログ",
+    "Side Question header": "サイド質問ヘッダー",
+    "New Side Question": "新しいサイド質問",
+    "Close New Side Question": "新しいサイド質問を閉じる",
+    "Search or enter a URL": "検索または URL を入力",
+    "Set up": "設定する",
+    "Announcements and tips": "お知らせとヒント",
+    "Switch to RTL text direction": "右から左のテキスト方向に切り替え",
+    "Switch to LTR text direction": "左から右のテキスト方向に切り替え",
+    "Scrollable table": "スクロール可能なテーブル",
+    "Delete All Data": "すべてのデータを削除",
+    "Permanently delete your remote conversations, projects, scheduled tasks, connected plugins and settings. Data in the desktop app and your Google account are not affected.": "リモートの会話、プロジェクト、スケジュール済みタスク、接続済みプラグイン、設定を完全に削除します。デスクトップアプリ内のデータと Google アカウントには影響しません。",
+    "Loading token usage...": "トークン使用量を読み込み中…",
+    "Loading workspace customizations...": "ワークスペースのカスタマイズを読み込み中…",
+    "Plugin:": "プラグイン：",
+    "Unlock the power of agent swarms.": "エージェントスウォームの力を解き放ちます。",
+    "Error ID:": "エラー ID：",
+    "Individual quota reached. Please upgrade your subscription to increase your limits.": "個人クォータの上限に達しました。上限を引き上げるにはサブスクリプションをアップグレードしてください。"
   },
   "rules": [
     [
@@ -2748,6 +2772,51 @@
       "^read #(\\d+)$",
       "",
       "#$1 読了"
+    ],
+    [
+      "^Side Question:\\s*(.+)$",
+      "",
+      "サイド質問：$1"
+    ],
+    [
+      "^Edit side question title:\\s*(.+)$",
+      "",
+      "サイド質問のタイトルを編集：$1"
+    ],
+    [
+      "^Delete side question:\\s*(.+)$",
+      "",
+      "サイド質問を削除：$1"
+    ],
+    [
+      "^Started (?:from|during) (.+?)\\.\\s*Show in main conversation$",
+      "",
+      "$1 から開始 · メインの会話で表示"
+    ],
+    [
+      "^Started (?:from|during) (.+)$",
+      "",
+      "開始元：$1"
+    ],
+    [
+      "^Where the agent runs, current: (.+)$",
+      "",
+      "エージェントの実行場所（現在: $T1）"
+    ],
+    [
+      "^More actions for (.+)$",
+      "",
+      "$1 のその他の操作"
+    ],
+    [
+      "^Error ID:\\s*(.+)$",
+      "",
+      "エラー ID：$1"
+    ],
+    [
+      "^Individual quota reached\\. Please upgrade your subscription to increase your limits\\. Resets in (.+)\\.$",
+      "",
+      "個人クォータの上限に達しました。上限を引き上げるにはサブスクリプションをアップグレードしてください。$D1後にリセットされます。"
     ]
   ],
   "timeRules": [
