@@ -4831,6 +4831,52 @@ html[data-ag-cs-style][data-ag-cs-glass="on"] .ag-cs-file-menu {
   border-radius: 5px;
   background: color-mix(in srgb, var(--muted, rgba(128, 128, 128, 0.14)) 90%, transparent);
 }
+.ag-cs-script-md-table-wrap {
+  margin: 6px 0 12px;
+  overflow-x: auto;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border, rgba(128, 128, 128, 0.24)) 92%, transparent);
+  background: color-mix(in srgb, var(--card, var(--background, transparent)) 96%, transparent);
+}
+.ag-cs-script-md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.ag-cs-script-md-table th,
+.ag-cs-script-md-table td {
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--border, rgba(128, 128, 128, 0.18)) 85%, transparent);
+}
+.ag-cs-script-md-table thead th {
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  color: var(--muted-foreground, rgba(128, 128, 128, 0.9));
+  background: color-mix(in srgb, var(--muted, rgba(128, 128, 128, 0.12)) 78%, transparent);
+}
+.ag-cs-script-md-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.ag-cs-script-md-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent, rgba(128, 128, 128, 0.08)) 65%, transparent);
+}
+.ag-cs-script-md-table th.is-right,
+.ag-cs-script-md-table td.is-right {
+  text-align: right;
+  white-space: nowrap;
+}
+.ag-cs-script-md-table th.is-center,
+.ag-cs-script-md-table td.is-center {
+  text-align: center;
+}
+.ag-cs-script-md-table td:first-child {
+  word-break: break-word;
+}
 .ag-cs-script-md-stderr {
   margin: 10px 0 0;
   padding: 10px 12px;
