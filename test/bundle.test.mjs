@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const cdp = require('../cdp.js');
+const cdp = require('../src/cdp.js');
 
 test('buildInjectExpression and REMOVE_EXPRESSION compile cleanly as valid JS', () => {
   const injectExpr = cdp.buildInjectExpression();
@@ -338,9 +338,9 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     // Interactive Thinking Effort Slider Popover (Claude Code & ChatGPT Codex Styles — NO inline style switch)
     assert.equal(sandbox.globalThis.__agCsPerfAssets, undefined);
 
-    // Switch to Claude Code effort style explicitly to test Claude slider popover
+    // Switch to Claude Code effort style with explicit dark palette to test dark Claude slider popover
     doc.hidden = true;
-    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude' });
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, palette: 'claude-dark', effortSliderStyle: 'claude' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
 
@@ -354,19 +354,19 @@ test('inject expression mounts and REMOVE_EXPRESSION cleanly tears down on simul
     assert.ok(effortPop.innerHTML.includes('ag-cs-effort-value-slot'));
     assert.equal(effortPop.innerHTML.includes('ag-cs-effort-style-switch'), false);
 
-    // Light theme (even under obsidian/claude palettes) must update popover theme attributes to "light"
-    body.className = 'theme-light';
+    // Explicit light palette (obsidian / claude) must update popover theme attributes to "light" even under dark host
+    body.className = 'theme-dark';
     doc.hidden = true;
     sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSliderStyle: 'claude', palette: 'obsidian' });
     await new Promise((r) => setTimeout(r, 80));
     doc.hidden = false;
     assert.equal(effortPop.getAttribute('data-effort-theme'), 'light');
-    body.className = 'theme-dark';
 
-    // Switch Effort Slider to ChatGPT (Codex) style via settings refresh
+    // Switch Effort Slider to ChatGPT (Codex) style via settings refresh (with host palette under body.theme-dark -> dark)
     doc.hidden = true;
     sandbox.window.__agClaudeStudio.refreshConfig({
       ...cdp.DEFAULT_CONFIG,
+      palette: 'host',
       usageStatsEnabled: true,
       effortSliderStyle: 'chatgpt',
     });
@@ -713,6 +713,14 @@ test('effort popover uses clientWidth (immune to pop-in scale), preserves Extra 
       get childElementCount() { return children.length; },
       appendChild(ch) { ch.parentElement = this; ch.parentNode = this; children.push(ch); return ch; },
       removeChild(ch) { const i = children.indexOf(ch); if (i >= 0) children.splice(i, 1); ch.parentElement = null; ch.parentNode = null; return ch; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') this.id = String(v); if (k === 'class') this.className = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -1014,6 +1022,14 @@ test('bottom-right context ring navigates directly to quotas or breakdown tab ba
       get firstChild() { return children[0] || null; },
       getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -1289,6 +1305,14 @@ test('new conversation renders bottom-right ring and inline tokens info on home 
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -1604,6 +1628,14 @@ test('Q&A takeover card, side-question panel, and running tasks clear Clawd masc
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -1874,6 +1906,14 @@ test('ring and popover stay live despite static trajectorySummaries and non-root
       get firstChild() { return children[0] || null; },
       getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -2206,6 +2246,14 @@ test('syncTurnBadges mounts exactly one #T badge on the final agent-response of 
       get lastElementChild() { return children[children.length - 1] || null; },
       appendChild(ch) { ch.parentElement = this; ch.parentNode = this; children.push(ch); return ch; },
       removeChild(ch) { const i = children.indexOf(ch); if (i >= 0) children.splice(i, 1); ch.parentElement = null; ch.parentNode = null; return ch; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrMap.set(k, String(v)); if (k === 'id') this.id = String(v); if (k === 'class') this.className = String(v); },
       getAttribute(k) { return attrMap.has(k) ? attrMap.get(k) : null; },
@@ -2503,6 +2551,14 @@ test('streaming Turn 2 response does not hijack #T1 badge, observer ignores exte
       get firstChild() { return children[0] || null; },
       getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); if (k === 'class') node.className = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -2792,6 +2848,14 @@ test('virtualized 20-turn chat with thinking Turn 21 never leaks #T11 or #T20 on
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); if (k === 'class') node.className = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -3164,6 +3228,14 @@ test('remote (cloud) conversation populates Token HUD, top bar, turn badges, and
         return c;
       },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); if (k === 'class') node.className = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -3562,6 +3634,14 @@ test('fallback to createAgentStateProviderForConvo when getCascadeTrajectory thr
       appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
       insertBefore(c, ref) { c.parentElement = this; c.parentNode = this; const i = ref ? children.indexOf(ref) : -1; if (i >= 0) children.splice(i, 0, c); else children.push(c); return c; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -3815,6 +3895,14 @@ test('hudBottomBar triggers quota fetch in context mode, low-context triggers /c
       appendChild(ch) { ch.parentElement = ch.parentNode = el; children.push(ch); return ch; },
       insertBefore(ch, ref) { ch.parentElement = ch.parentNode = el; const i = ref ? children.indexOf(ref) : -1; if (i >= 0) children.splice(i, 0, ch); else children.push(ch); return ch; },
       removeChild(ch) { const i = children.indexOf(ch); if (i >= 0) children.splice(i, 1); ch.parentElement = ch.parentNode = null; return ch; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (el.parentElement) el.parentElement.removeChild(el); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -4079,7 +4167,12 @@ test('unmountRipple tolerates zero-size .agy-home (field=null) and copy honestly
     const el = {
       tagName: String(tag || 'div').toUpperCase(),
       id: opts.id || '',
-      style: { setProperty() {}, removeProperty() {} },
+      style: {
+        _props: new Map(),
+        setProperty(k, v) { this._props.set(k, String(v)); },
+        removeProperty(k) { this._props.delete(k); },
+        getPropertyValue(k) { return this._props.get(k) || ''; },
+      },
       dataset: {},
       textContent: opts.text || '',
       _html: '',
@@ -4114,6 +4207,14 @@ test('unmountRipple tolerates zero-size .agy-home (field=null) and copy honestly
       appendChild(ch) { ch.parentElement = ch.parentNode = el; children.push(ch); return ch; },
       insertBefore(ch, ref) { ch.parentElement = ch.parentNode = el; const i = ref ? children.indexOf(ref) : -1; if (i >= 0) children.splice(i, 0, ch); else children.push(ch); return ch; },
       removeChild(ch) { const i = children.indexOf(ch); if (i >= 0) children.splice(i, 1); ch.parentElement = ch.parentNode = null; return ch; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (el.parentElement) el.parentElement.removeChild(el); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -4377,6 +4478,14 @@ test('inject expression enters sidecar-lite mode on plugin://swarm-- iframe with
       append(...nodes) {
         for (const n of nodes) this.appendChild(n);
         return this;
+      },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
       },
       remove() {
         if (!this.parentNode) return;
@@ -4916,6 +5025,14 @@ test('stale async fetchActiveConvo response is discarded when reused composer ca
       get firstChild() { return children[0] || null; },
       getContext() { return null; },
       removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; c.parentNode = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
       remove() { if (this.parentElement) this.parentElement.removeChild(this); },
       setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') node.id = String(v); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
@@ -5074,6 +5191,1308 @@ test('stale async fetchActiveConvo response is discarded when reused composer ca
     assert.ok(statsBtn && !statsBtn.textContent.includes('52.5K'), 'footer stats must not display stale cascadeA tokens');
 
     vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('model selector partitions sparkle+name from effort pill, suppresses native menu when periodicSelector is on, supports bypass, and cleans up', () => {
+  const fs = require('node:fs');
+  const css = fs.readFileSync(require.resolve('../src/style.css'), 'utf8');
+  assert.ok(css.includes('[data-testid="model-selector-trigger"]::before'), 'style.css uses ::before background split for model name');
+  assert.ok(css.includes('--ag-cs-effort-cut'), 'style.css clips ::before via --ag-cs-effort-cut');
+  assert.ok(css.includes('margin-right: -4px !important'), 'style.css offsets 4px flex gap between sparkle and model name');
+  assert.ok(css.includes('border-radius: 6px 0 0 6px !important'), 'style.css overrides host rounded-full pill radius on sparkle trigger');
+  assert.ok(
+    !/:has\([^)]*:has\(/.test(css),
+    'style.css must never nest :has() inside :has() (invalid in CSS Selectors Level 4)'
+  );
+  assert.ok(
+    css.includes('.agy-composer-footer:has([data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover):not(:has([data-testid="model-selector-trigger"] [data-ag-cs-effort]:hover))'),
+    'style.css uses flat non-nested :has():not(:has()) for synchronized sparkle + model name hover'
+  );
+  assert.ok(
+    css.includes('[data-testid="model-selector-trigger"]:not(:disabled):not([aria-disabled="true"]):hover:not(:has([data-ag-cs-effort]:hover))::before'),
+    'style.css excludes effort hover from highlighting model name ::before'
+  );
+
+  const timers = new Set();
+  const docCaptureListeners = new Map();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const matchesSimple = (n, simple) => {
+      if (!n || n.nodeType !== 1) return false;
+      let rest = simple.trim();
+      const attrMatches = [...rest.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)];
+      for (const m of attrMatches) {
+        const [, k, v] = m;
+        if (v === undefined) {
+          if (!n.hasAttribute(k)) return false;
+        } else if (n.getAttribute(k) !== v) return false;
+      }
+      rest = rest.replace(/\[[^\]]+\]/g, '');
+      const idMatch = rest.match(/#([A-Za-z0-9_-]+)/);
+      if (idMatch && n.getAttribute('id') !== idMatch[1]) return false;
+      rest = rest.replace(/#[A-Za-z0-9_-]+/g, '');
+      const clsMatches = [...rest.matchAll(/\.([A-Za-z0-9_-]+)/g)];
+      for (const m of clsMatches) if (!n.classes.has(m[1])) return false;
+      rest = rest.replace(/\.[A-Za-z0-9_-]+/g, '');
+      if (rest && n.tagName !== rest.toUpperCase()) return false;
+      return true;
+    };
+    const matchesSel = (n, sel) => {
+      const parts = sel.trim().split(/\s+/);
+      let cur = n;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (i === parts.length - 1) {
+          if (!matchesSimple(cur, parts[i])) return false;
+        } else {
+          cur = cur.parentElement;
+          while (cur && !matchesSimple(cur, parts[i])) cur = cur.parentElement;
+          if (!cur) return false;
+        }
+      }
+      return true;
+    };
+    const el = {
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      parentElement: null,
+      children,
+      classes,
+      style: {
+        _props: new Map(),
+        setProperty(k, v) { this._props.set(k, String(v)); },
+        removeProperty(k) { this._props.delete(k); },
+        getPropertyValue(k) { return this._props.get(k) || ''; },
+      },
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        contains: (c) => classes.has(c),
+        toggle: (c, force) => {
+          const on = force === undefined ? !classes.has(c) : Boolean(force);
+          if (on) classes.add(c); else classes.delete(c);
+          return on;
+        },
+      },
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
+      get className() { return [...classes].join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((x) => classes.add(x)); },
+      get isConnected() { let p = this; while (p) { if (p === html) return true; p = p.parentElement; } return false; },
+      get childElementCount() { return children.length; },
+      get nextSibling() {
+        if (!this.parentElement) return null;
+        const idx = this.parentElement.children.indexOf(this);
+        return idx >= 0 && idx + 1 < this.parentElement.children.length ? this.parentElement.children[idx + 1] : null;
+      },
+      get textContent() {
+        return children.length ? children.map((c) => c.textContent).join('') : (el._text || '');
+      },
+      set textContent(v) { children.length = 0; el._text = String(v ?? ''); },
+      _text: opts.text || '',
+      set innerHTML(v) { children.length = 0; el._html = String(v || ''); },
+      get innerHTML() { return el._html || ''; },
+      appendChild(c) { if (c.parentElement) c.parentElement.removeChild(c); children.push(c); c.parentElement = el; return c; },
+      insertBefore(c, ref) {
+        if (c.parentElement) c.parentElement.removeChild(c);
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c); else children.push(c);
+        c.parentElement = el;
+        return c;
+      },
+      removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
+      remove() { if (el.parentElement) el.parentElement.removeChild(el); },
+      contains(other) { let c = other; while (c) { if (c === el) return true; c = c.parentElement; } return false; },
+      getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      removeAttribute: (k) => attrs.delete(k),
+      hasAttribute: (k) => attrs.has(k),
+      closest(s) {
+        const list = s.split(',').map((x) => x.trim());
+        let c = el;
+        while (c) {
+          if (list.some((x) => matchesSel(c, x))) return c;
+          c = c.parentElement;
+        }
+        return null;
+      },
+      querySelectorAll(s) {
+        const list = s.split(',').map((x) => x.trim());
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (list.some((x) => matchesSel(c, x))) out.push(c);
+            walk(c);
+          }
+        };
+        walk(el);
+        return out;
+      },
+      querySelector(s) { return el.querySelectorAll(s)[0] || null; },
+      getBoundingClientRect: () => opts.rect || { left: 20, top: 200, width: 120, height: 26, right: 140, bottom: 226 },
+      addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
+      removeEventListener(type, fn) { const arr = listeners.get(type) || []; const i = arr.indexOf(fn); if (i >= 0) arr.splice(i, 1); },
+      dispatchEvent(ev) {
+        ev.target = ev.target || el;
+        ev.preventDefault = ev.preventDefault || (() => { ev.defaultPrevented = true; });
+        ev.stopPropagation = ev.stopPropagation || (() => { ev._stopped = true; });
+        ev.stopImmediatePropagation = ev.stopImmediatePropagation || (() => { ev._stopped = true; ev._immStopped = true; });
+        for (const fn of [...(docCaptureListeners.get(ev.type) || [])]) {
+          fn(ev);
+          if (ev._immStopped) break;
+        }
+        if (ev._stopped) return !ev.defaultPrevented;
+        let cur = el;
+        while (cur && !ev._stopped) {
+          for (const fn of [...(cur._listeners?.get(ev.type) || [])]) {
+            fn(ev);
+            if (ev._immStopped) break;
+          }
+          cur = cur.parentElement;
+        }
+        return !ev.defaultPrevented;
+      },
+      _listeners: listeners,
+    };
+    return el;
+  };
+
+  const html = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body');
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const inputBox = makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } });
+  const card = makeEl('div', { className: 'surface-composer-card' });
+  const footer = makeEl('div', { className: 'agy-composer-footer' });
+  const modelBtn = makeEl('button', {
+    attrs: { 'data-testid': 'model-selector-trigger' },
+    rect: { left: 40, top: 200, width: 140, height: 26, right: 180, bottom: 226 },
+  });
+  const labelWrap = makeEl('span', { className: 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap', text: 'Gemini 4 Neon' });
+  const effortSpan = makeEl('span', {
+    className: 'opacity-70',
+    text: ' High',
+    rect: { left: 146, top: 204, width: 32, height: 18, right: 178, bottom: 222 },
+  });
+  labelWrap.appendChild(effortSpan);
+  modelBtn.appendChild(labelWrap);
+
+  const options = [
+    { label: 'Gemini 4 Neon (Low)', value: 1531, disabled: false, modelId: 'gemini-4-neon-low' },
+    { label: 'Gemini 4 Neon (High)', value: 1532, disabled: false, modelId: 'gemini-4-neon-high' },
+    { label: 'Gemini 3.8 Flash', value: 1500, disabled: false, modelId: 'gemini-3-8-flash' },
+  ];
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      selectedModel: options[1],
+      modelOptions: options,
+      setSelectedModel() {},
+    },
+    return: null,
+  };
+
+  let nativeMenuOpens = 0;
+  for (const type of ['pointerdown', 'mousedown', 'click']) {
+    modelBtn.addEventListener(type, () => { nativeMenuOpens += 1; });
+  }
+
+  footer.appendChild(modelBtn);
+  card.appendChild(footer);
+  inputBox.appendChild(card);
+  body.appendChild(inputBox);
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    createElement: (tag) => makeEl(tag),
+    getElementById: (id) => html.querySelector(`#${id}`),
+    querySelector: (sel) => html.querySelector(sel),
+    querySelectorAll: (sel) => html.querySelectorAll(sel),
+    addEventListener(type, fn, capture) {
+      if (!capture) return;
+      if (!docCaptureListeners.has(type)) docCaptureListeners.set(type, []);
+      docCaptureListeners.get(type).push(fn);
+    },
+    removeEventListener(type, fn, capture) {
+      if (!capture) return;
+      const arr = docCaptureListeners.get(type) || [];
+      const i = arr.indexOf(fn);
+      if (i >= 0) arr.splice(i, 1);
+    },
+  };
+
+  const sandbox = {
+    window: null,
+    globalThis: null,
+    document: doc,
+    navigator: { language: 'zh-CN' },
+    location: { pathname: '/' },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => setTimeout(() => fn(Date.now()), 5),
+    cancelAnimationFrame: (id) => clearTimeout(id),
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    const res = vm.runInNewContext(cdp.buildInjectExpression(cdp.DEFAULT_CONFIG), sandbox);
+    assert.equal(res.status, 'ok', JSON.stringify(res));
+
+    // 1. Real Antigravity DOM (bare TextNode + child effort span) sets data-ag-cs-has-effort & --ag-cs-effort-cut
+    assert.equal(modelBtn.getAttribute('data-ag-cs-has-effort'), '1');
+    assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '38px');
+    assert.equal(effortSpan.classList.contains('ag-cs-effort-badge'), true);
+    assert.equal(effortSpan.getAttribute('data-ag-cs-effort'), 'high');
+
+    // 2. Clicking model label wrapper suppresses native menu and opens Periodic Table
+    for (const type of ['pointerdown', 'mousedown', 'click']) {
+      labelWrap.dispatchEvent({ type, button: 0 });
+    }
+    assert.equal(nativeMenuOpens, 0, 'native model menu must not open when periodicSelector is enabled');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'clicking model name opens periodic selector');
+
+    // Close drawer via Escape
+    for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
+      fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    }
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+
+    // ArrowUp / ArrowDown on modelBtn also opens Periodic Table and blocks native menu
+    modelBtn.dispatchEvent({ type: 'keydown', key: 'ArrowUp' });
+    assert.equal(nativeMenuOpens, 0);
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'ArrowUp opens periodic selector');
+    for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
+      fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    }
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+
+    // 3. Clicking effort badge opens ONLY effort popover (no native menu, no periodic selector)
+    for (const type of ['pointerdown', 'mousedown', 'click']) {
+      effortSpan.dispatchEvent({ type, button: 0 });
+    }
+    assert.equal(nativeMenuOpens, 0, 'clicking effort badge must not open native model menu');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false, 'clicking effort badge must not open periodic selector');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true, 'clicking effort badge opens effort popover');
+
+    // 3b. When effortSlider: false and periodicSelector: true, model trigger (including effort span) passes through to native menu, while sparkle button opens periodic selector
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSlider: false, periodicSelector: true });
+    effortSpan.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(nativeMenuOpens, 1, 'effortSlider: false must pass model trigger click through to native menu');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false, 'effortSlider: false must not open periodic selector from native model trigger');
+    const sparkleAfterOff = footer.querySelector('.ag-cs-periodic-trigger');
+    assert.ok(sparkleAfterOff, 'sparkle trigger remains available when periodicSelector is true');
+    sparkleAfterOff.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'sparkle trigger still opens periodic selector when effortSlider is false');
+    for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
+      fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    }
+
+    // 4. Programmatic bypass reaches native model menu without opening periodic selector
+    sandbox.window.__agClaudeStudio.withNativeModelMenuBypass(modelBtn, () => {
+      modelBtn.dispatchEvent({ type: 'click', button: 0 });
+    });
+    assert.equal(nativeMenuOpens, 2, 'programmatic bypass reaches native model button click handler');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+
+    // 5. Disabling periodicSelector removes sparkle trigger and restores native menu, while keeping effort badge independent
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, effortSlider: true, periodicSelector: false });
+    assert.equal(footer.querySelector('.ag-cs-periodic-trigger'), null, 'sparkle trigger removed when periodicSelector is false');
+    labelWrap.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(nativeMenuOpens, 3, 'native model menu works normally when periodicSelector is false');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+
+    effortSpan.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(nativeMenuOpens, 3, 'effort badge remains independent when periodicSelector is false');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true);
+
+    // 6. Model without effort badge clears data-ag-cs-has-effort and --ag-cs-effort-cut
+    effortSpan.remove();
+    labelWrap.textContent = 'Gemini 3.8 Flash';
+    sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, periodicSelector: true });
+    assert.equal(modelBtn.hasAttribute('data-ag-cs-has-effort'), false);
+    assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '');
+    assert.equal(modelBtn.querySelector('.ag-cs-effort-badge'), null);
+
+    // 7. Cleanup removes all new attributes/classes/vars and listeners
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(modelBtn.hasAttribute('data-ag-cs-has-effort'), false);
+    assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '');
+    assert.equal(footer.querySelector('.ag-cs-periodic-trigger'), null);
+    assert.equal(docCaptureListeners.get('click')?.length || 0, 0);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('inline model trigger tags data-ag-cs-inline-model-wrap without *:has(), opens periodic on ArrowDown/ArrowUp, and passes through modifiers/IME', () => {
+  const fs = require('node:fs');
+  const css = fs.readFileSync(require.resolve('../src/style.css'), 'utf8');
+  assert.equal(/\*:has\(>\s*\.no-focus-agent-input/.test(css), false, 'style.css must not use *:has(> .no-focus-agent-input ...)');
+  assert.ok(
+    css.includes('[data-ag-cs-inline-model-wrap="1"]:has(> .no-focus-agent-input'),
+    'style.css scopes inline hover selector to [data-ag-cs-inline-model-wrap="1"]'
+  );
+
+  const timers = new Set();
+  const docCaptureListeners = new Map();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const listeners = new Map();
+    const matchesSimple = (n, simple) => {
+      if (!n || n.nodeType !== 1) return false;
+      let rest = simple.trim();
+      for (const m of rest.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)) {
+        const [, k, v] = m;
+        if (v === undefined) {
+          if (!n.hasAttribute(k)) return false;
+        } else if (n.getAttribute(k) !== v) return false;
+      }
+      rest = rest.replace(/\[[^\]]+\]/g, '');
+      for (const m of rest.matchAll(/\.([A-Za-z0-9_-]+)/g)) if (!n.classes.has(m[1])) return false;
+      rest = rest.replace(/\.[A-Za-z0-9_-]+/g, '');
+      if (rest && n.tagName !== rest.toUpperCase()) return false;
+      return true;
+    };
+    const matchesSel = (n, sel) => {
+      const parts = sel.trim().split(/\s+/);
+      let cur = n;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (i === parts.length - 1) {
+          if (!matchesSimple(cur, parts[i])) return false;
+        } else {
+          cur = cur.parentElement;
+          while (cur && !matchesSimple(cur, parts[i])) cur = cur.parentElement;
+          if (!cur) return false;
+        }
+      }
+      return true;
+    };
+    const el = {
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      classes,
+      children,
+      childNodes: children,
+      parentElement: null,
+      parentNode: null,
+      isConnected: true,
+      _text: opts.text || '',
+      style: { _props: {}, setProperty(k, v) { this._props[k] = String(v); }, getPropertyValue(k) { return this._props[k] || ''; }, removeProperty(k) { delete this._props[k]; } },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, f) { if (f === undefined ? !classes.has(c) : f) classes.add(c); else classes.delete(c); },
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get textContent() { return children.length ? children.map((c) => c.textContent).join('') : this._text; },
+      set textContent(v) { this._text = String(v ?? ''); children.length = 0; },
+      get childElementCount() { return children.length; },
+      get nextSibling() {
+        if (!this.parentElement) return null;
+        const idx = this.parentElement.children.indexOf(this);
+        return idx >= 0 ? this.parentElement.children[idx + 1] || null : null;
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      appendChild(c) { c.parentElement = this; c.parentNode = this; children.push(c); return c; },
+      append(...nodes) { for (const n of nodes) this.appendChild(n); },
+      insertBefore(c, ref) {
+        if (c.parentElement) {
+          const old = c.parentElement.children.indexOf(c);
+          if (old >= 0) c.parentElement.children.splice(old, 1);
+        }
+        c.parentElement = this;
+        c.parentNode = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) children.splice(i, 1);
+        c.parentElement = null;
+        c.parentNode = null;
+        c.isConnected = false;
+        return c;
+      },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
+      remove() {
+        if (this.parentElement) {
+          this.parentElement.removeChild(this);
+        }
+        this.isConnected = false;
+      },
+      addEventListener(type, fn) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(fn);
+      },
+      removeEventListener(type, fn) {
+        const list = listeners.get(type);
+        if (!list) return;
+        const i = list.indexOf(fn);
+        if (i >= 0) list.splice(i, 1);
+      },
+      dispatchEvent(ev) {
+        ev.target = ev.target || this;
+        let stopped = false;
+        let defaultPrevented = false;
+        ev.stopPropagation = () => { stopped = true; };
+        ev.stopImmediatePropagation = () => { stopped = true; };
+        ev.preventDefault = () => { defaultPrevented = true; };
+        Object.defineProperty(ev, 'defaultPrevented', { get: () => defaultPrevented });
+        for (const fn of [...(docCaptureListeners.get(ev.type) || [])]) {
+          fn(ev);
+          if (stopped) return !defaultPrevented;
+        }
+        for (const fn of [...(listeners.get(ev.type) || [])]) fn(ev);
+        return !defaultPrevented;
+      },
+      closest(sel) {
+        const sels = sel.split(',').map((s) => s.trim());
+        let cur = this;
+        while (cur) {
+          if (sels.some((s) => matchesSel(cur, s))) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const sels = sel.split(',').map((s) => s.trim());
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (sels.some((s) => matchesSel(c, s))) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+      getBoundingClientRect: () => ({ left: 100, top: 200, width: 120, height: 26, right: 220, bottom: 226 }),
+      animate: () => ({ cancel() {}, finished: Promise.resolve() }),
+    };
+    return el;
+  };
+
+  const head = makeEl('head');
+  const body = makeEl('body', { className: 'theme-dark' });
+  const html = makeEl('html');
+  html.appendChild(head);
+  html.appendChild(body);
+  const inputBox = body.appendChild(makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } }));
+  const card = inputBox.appendChild(makeEl('div', { className: 'surface-composer-card' }));
+  // Inline mode (no .agy-composer-footer)
+  const inlineParent = card.appendChild(makeEl('div', { className: 'inline-row' }));
+  const wrap = inlineParent.appendChild(makeEl('div', { className: 'no-focus-agent-input' }));
+  const modelBtn = wrap.appendChild(makeEl('button', { attrs: { 'data-testid': 'model-selector-trigger' }, text: 'Claude Sonnet 4.6' }));
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    hidden: false,
+    createElement: (tag) => makeEl(tag),
+    getElementById: (id) => html.querySelectorAll('*').find((e) => e.getAttribute('id') === id) || null,
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener(type, fn, capture) {
+      if (!capture) return;
+      if (!docCaptureListeners.has(type)) docCaptureListeners.set(type, []);
+      docCaptureListeners.get(type).push(fn);
+    },
+    removeEventListener(type, fn, capture) {
+      if (!capture) return;
+      const list = docCaptureListeners.get(type);
+      if (!list) return;
+      const i = list.indexOf(fn);
+      if (i >= 0) list.splice(i, 1);
+    },
+  };
+  const sandbox = {
+    document: doc,
+    location: { href: 'https://127.0.0.1:2015/', protocol: 'https:', hostname: '127.0.0.1', pathname: '/' },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    const injectRes = vm.runInNewContext(cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, periodicSelector: true }), sandbox);
+    assert.equal(injectRes.status, 'ok', JSON.stringify(injectRes));
+    assert.equal(inlineParent.getAttribute('data-ag-cs-inline-model-wrap'), '1', 'inline parent is tagged for scoped :has() hover');
+
+    // ArrowDown and ArrowUp open periodic selector idempotently, and repeat: true never toggles it closed
+    for (const key of ['ArrowDown', 'ArrowUp']) {
+      const notPrevented = modelBtn.dispatchEvent({ type: 'keydown', key });
+      assert.equal(notPrevented, false, `${key} should be prevented when opening periodic selector`);
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, `${key} must open periodic selector`);
+
+      const repeatNotPrevented = modelBtn.dispatchEvent({ type: 'keydown', key, repeat: true });
+      assert.equal(repeatNotPrevented, false, `held ${key} (repeat: true) should still prevent native menu`);
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, `held ${key} (repeat: true) must not close periodic selector`);
+
+      const idempotentNotPrevented = modelBtn.dispatchEvent({ type: 'keydown', key });
+      assert.equal(idempotentNotPrevented, false, `second ${key} should be prevented`);
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, `second ${key} must keep periodic selector open`);
+
+      const enterRepeatNotPrevented = modelBtn.dispatchEvent({ type: 'keydown', key: 'Enter', repeat: true });
+      assert.equal(enterRepeatNotPrevented, false, 'held Enter (repeat: true) should still prevent native menu');
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'held Enter (repeat: true) must not toggle periodic selector');
+
+      for (const fn of [...(docCaptureListeners.get('keydown') || [])]) {
+        fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+      }
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+    }
+
+    // Modifier keys and IME composition pass through without opening periodic selector
+    for (const mod of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { isComposing: true }]) {
+      const notPrevented = modelBtn.dispatchEvent({ type: 'keydown', key: 'Enter', ...mod });
+      assert.equal(notPrevented, true, `Enter with ${JSON.stringify(mod)} must not be intercepted`);
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false);
+    }
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(inlineParent.hasAttribute('data-ag-cs-inline-model-wrap'), false, 'REMOVE_EXPRESSION cleans inline wrap attr');
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('composerRestyle=false and effortSliderStyle=off preserve native footer, glass exclusion, and native model/effort interaction', () => {
+  const fs = require('node:fs');
+  const css = fs.readFileSync(require.resolve('../src/style.css'), 'utf8');
+
+  assert.equal(cdp.sanitizeConfig({ effortSliderStyle: 'off' }).effortSliderStyle, 'off');
+
+  // Native footer flex rules are strictly gated on mounted inline stats / context ring and allow shrinking
+  assert.ok(
+    css.includes('html[data-ag-cs-composer="off"] .agy-composer-footer:has(> .ag-cs-inline-stats, > .ag-cs-context-ring) > div:nth-child(1)'),
+    'composer="off" footer div:nth-child(1) rule must only apply when stats or ring are mounted'
+  );
+  assert.ok(
+    css.includes('html[data-ag-cs-composer="off"] .agy-composer-footer:has(> .ag-cs-inline-stats, > .ag-cs-context-ring) > div:nth-child(2)'),
+    'composer="off" footer div:nth-child(2) rule must only apply when stats or ring are mounted'
+  );
+  assert.equal(
+    css.includes('html[data-ag-cs-composer="off"] .agy-composer-footer > div:nth-child(1)'),
+    false,
+    'Unconditional composer="off" footer flex override must be removed'
+  );
+  assert.equal(
+    css.includes('flex: 1 0 auto;'),
+    false,
+    'Footer flex must not lock flex-shrink: 0'
+  );
+
+  // Glass rules must not repaint native composer card or send button when composerRestyle is off
+  assert.equal(
+    css.includes('html[data-ag-cs-style][data-ag-cs-glass="on"] .surface-composer-card'),
+    false,
+    'Glass composer surface rules must be scoped to [data-ag-cs-composer="on"]'
+  );
+  assert.equal(
+    css.includes('[data-ag-cs-composer="off"] [data-testid="send-button"]'),
+    false,
+    'Glass rules must not style native send button when composerRestyle is off'
+  );
+  assert.ok(
+    css.includes('html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"]) [data-testid="model-selector-trigger"]'),
+    'Model selector trigger override must be scoped to active composer/effort features (not periodic-only)'
+  );
+  assert.equal(
+    css.includes('html[data-ag-cs-style]:is([data-ag-cs-composer="on"], [data-ag-cs-effort-slider="on"], [data-ag-cs-periodic="on"]) [data-testid="model-selector-trigger"]'),
+    false,
+    'Model selector trigger override must not apply when composerRestyle=false and effortSliderStyle=off'
+  );
+  assert.ok(
+    css.includes('html[data-ag-cs-style][data-ag-cs-effort-slider="on"] [data-ag-cs-effort]'),
+    'Effort badge styles must be scoped to [data-ag-cs-effort-slider="on"]'
+  );
+
+  // Runtime behavior: switching effortSliderStyle -> off strips tags, closes popover, and passes clicks through
+  const timers = new Set();
+  const docCaptureListeners = new Map();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const props = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      parentElement: null,
+      children,
+      childNodes: children,
+      get childElementCount() { return children.length; },
+      textContent: opts.text || '',
+      style: {
+        setProperty(k, v) { props.set(k, String(v)); },
+        getPropertyValue(k) { return props.get(k) || ''; },
+        removeProperty(k) { props.delete(k); },
+      },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+      },
+      get className() { return [...classes].join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get isConnected() {
+        let p = el;
+        while (p) { if (p === html) return true; p = p.parentElement; }
+        return false;
+      },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      getBoundingClientRect: opts.rect || (() => ({ left: 40, top: 200, right: 200, bottom: 226, width: 160, height: 26 })),
+      appendChild(c) { c.parentElement = el; children.push(c); return c; },
+      removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentElement = null; return c; },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
+      remove() { if (el.parentElement) el.parentElement.removeChild(el); },
+      animate() { return { cancel() {}, finished: Promise.resolve(), onfinish: null }; },
+      addEventListener() {},
+      removeEventListener() {},
+      contains(target) {
+        if (target === el) return true;
+        return children.some((c) => c.contains && c.contains(target));
+      },
+      matches(sel) {
+        return sel.split(',').map((s) => s.trim()).filter(Boolean).some((part) => {
+          const tokens = part.replace(/\s*>\s*/g, ' > ').split(/\s+/).filter(Boolean);
+          const matchSingle = (node, simple) => {
+            if (!node || node.nodeType !== 1) return false;
+            if (simple === '*') return true;
+            let rest = simple;
+            for (const m of rest.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)) {
+              const [, k, v] = m;
+              if (v === undefined ? !node.hasAttribute(k) : node.getAttribute(k) !== v) return false;
+            }
+            rest = rest.replace(/\[[^\]]+\]/g, '');
+            const idM = rest.match(/#([A-Za-z0-9_-]+)/);
+            if (idM && node.getAttribute('id') !== idM[1]) return false;
+            rest = rest.replace(/#[A-Za-z0-9_-]+/g, '');
+            const tagM = rest.match(/^[a-zA-Z]+/);
+            if (tagM && node.tagName !== tagM[0].toUpperCase()) return false;
+            for (const m of rest.matchAll(/\.([A-Za-z0-9_-]+)/g)) {
+              if (!node.classList.contains(m[1])) return false;
+            }
+            return true;
+          };
+          let idx = tokens.length - 1;
+          if (!matchSingle(el, tokens[idx])) return false;
+          let cur = el.parentElement;
+          for (idx -= 1; idx >= 0; idx--) {
+            if (tokens[idx] === '>') {
+              idx -= 1;
+              if (!cur || !matchSingle(cur, tokens[idx])) return false;
+              cur = cur.parentElement;
+            } else {
+              while (cur && !matchSingle(cur, tokens[idx])) cur = cur.parentElement;
+              if (!cur) return false;
+              cur = cur.parentElement;
+            }
+          }
+          return true;
+        });
+      },
+      closest(sel) {
+        for (let cur = el; cur; cur = cur.parentElement) {
+          if (cur.matches && cur.matches(sel)) return cur;
+        }
+        return null;
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children || []) {
+            if (c.matches && c.matches(sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(el);
+        return out;
+      },
+      querySelector(sel) { return el.querySelectorAll(sel)[0] || null; },
+    };
+    return el;
+  };
+
+  const html = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body', { className: 'theme-light' });
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const inputBox = makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } });
+  const card = makeEl('div', { className: 'surface-composer-card' });
+  const footer = makeEl('div', { className: 'agy-composer-footer' });
+  const modelBtn = makeEl('button', { attrs: { 'data-testid': 'model-selector-trigger' } });
+  const labelWrap = makeEl('span');
+  const modelNameSpan = makeEl('span', { text: 'Gemini 4 Neon' });
+  const effortSpan = makeEl('span', {
+    text: ' High',
+    rect: () => ({ left: 150, top: 200, right: 196, bottom: 226, width: 46, height: 26 }),
+  });
+  labelWrap.appendChild(modelNameSpan);
+  labelWrap.appendChild(effortSpan);
+  modelBtn.appendChild(labelWrap);
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      selectedModel: { model: 'gemini-4-neon-high', label: 'Gemini 4 Neon (High)' },
+      modelOptions: [
+        { model: 'gemini-4-neon-low', label: 'Gemini 4 Neon (Low)' },
+        { model: 'gemini-4-neon-medium', label: 'Gemini 4 Neon (Medium)' },
+        { model: 'gemini-4-neon-high', label: 'Gemini 4 Neon (High)' },
+      ],
+      setSelectedModel() {},
+    },
+    return: null,
+  };
+  footer.appendChild(modelBtn);
+  card.appendChild(footer);
+  inputBox.appendChild(card);
+  body.appendChild(inputBox);
+
+  const document = {
+    documentElement: html,
+    head,
+    body,
+    createElement: (t) => makeEl(t),
+    getElementById: () => null,
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener(type, fn, cap) {
+      if (cap) {
+        if (!docCaptureListeners.has(type)) docCaptureListeners.set(type, new Set());
+        docCaptureListeners.get(type).add(fn);
+      }
+    },
+    removeEventListener(type, fn, cap) {
+      if (cap) docCaptureListeners.get(type)?.delete(fn);
+    },
+  };
+
+  const sandbox = {
+    document,
+    innerWidth: 1200,
+    innerHeight: 800,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    addEventListener() {},
+    removeEventListener() {},
+    location: { href: 'https://127.0.0.1:2015/', protocol: 'https:', hostname: '127.0.0.1', pathname: '/' },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
+    cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl, RegExp,
+    console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  try {
+    vm.runInNewContext(
+      cdp.buildInjectExpression({
+        ...cdp.DEFAULT_CONFIG,
+        composerRestyle: false,
+        periodicSelector: false,
+        effortSliderStyle: 'chatgpt',
+      }),
+      sandbox
+    );
+    assert.equal(html.getAttribute('data-ag-cs-effort-slider'), 'on');
+    assert.equal(html.getAttribute('data-ag-cs-periodic'), 'off');
+    assert.equal(effortSpan.getAttribute('data-ag-cs-effort'), 'high');
+    assert.equal(modelBtn.getAttribute('data-ag-cs-has-effort'), '1');
+
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
+    assert.ok(body.querySelector('.ag-cs-effort-popover'), 'Effort popover opens when effortSliderStyle is chatgpt');
+
+    // Switch effortSliderStyle to 'off': must close popover, strip all effort attrs/classes/vars, and never intercept clicks
+    sandbox.window.__agClaudeStudio.refreshConfig({
+      ...cdp.DEFAULT_CONFIG,
+      composerRestyle: false,
+      periodicSelector: false,
+      effortSliderStyle: 'off',
+    });
+    assert.equal(html.getAttribute('data-ag-cs-effort-slider'), 'off');
+    assert.equal(body.querySelector('.ag-cs-effort-popover'), null, 'Switching effortSliderStyle to off closes open popover');
+    assert.equal(effortSpan.hasAttribute('data-ag-cs-effort'), false, 'Strips data-ag-cs-effort when off');
+    assert.equal(effortSpan.classList.contains('ag-cs-effort-badge'), false, 'Strips ag-cs-effort-badge when off');
+    assert.equal(modelBtn.hasAttribute('data-ag-cs-has-effort'), false, 'Strips data-ag-cs-has-effort when off');
+    assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '', 'Removes --ag-cs-effort-cut when off');
+
+    let prevented = false;
+    let stopped = false;
+    const clickEv = {
+      target: effortSpan,
+      button: 0,
+      preventDefault() { prevented = true; },
+      stopPropagation() { stopped = true; },
+      stopImmediatePropagation() { stopped = true; },
+    };
+    for (const fn of [...(docCaptureListeners.get('pointerdown') || [])]) fn(clickEv);
+    for (const fn of [...(docCaptureListeners.get('click') || [])]) fn(clickEv);
+    assert.equal(prevented, false, 'Native effort click must pass through when effortSliderStyle is off');
+    assert.equal(stopped, false, 'Native effort click must not stop propagation when off');
+    assert.equal(body.querySelector('.ag-cs-effort-popover'), null, 'Effort popover stays closed on click when off');
+
+    sandbox.window.__agClaudeStudio.openEffortPopover(effortSpan, modelBtn);
+    assert.equal(body.querySelector('.ag-cs-effort-popover'), null, 'Direct openEffortPopover is no-op when off');
+
+    vm.runInNewContext(cdp.REMOVE_EXPRESSION, sandbox);
+    assert.equal(html.hasAttribute('data-ag-cs-effort-slider'), false);
+    assert.equal(html.hasAttribute('data-ag-cs-periodic'), false);
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
+});
+
+test('effort hot-switch to off cancels pending rAF and leaves zero fake text/ARIA residue; periodic+off passes native trigger through', async () => {
+  const timers = new Set();
+  const rafQueue = [];
+  const docCaptureListeners = new Map();
+  const makeEl = (tag, opts = {}) => {
+    const attrs = new Map(Object.entries(opts.attrs || {}));
+    const classes = new Set((opts.className || '').split(/\s+/).filter(Boolean));
+    const children = [];
+    const props = new Map();
+    const listeners = new Map();
+    const el = {
+      tagName: tag.toUpperCase(),
+      nodeType: 1,
+      children,
+      parentElement: null,
+      isConnected: true,
+      disabled: false,
+      get textContent() { return this._text || children.map((c) => c.textContent).join(''); },
+      set textContent(v) { this._text = String(v || ''); children.length = 0; },
+      _html: '',
+      get innerHTML() { return this._html; },
+      set innerHTML(html) {
+        this._html = String(html || '');
+        children.length = 0;
+        const stack = [this];
+        const tagRe = /<(\/?)(div|button|span|svg|path)\b([^>]*)>/gi;
+        let m;
+        while ((m = tagRe.exec(this._html)) !== null) {
+          const isClose = m[1] === '/';
+          const tagName = m[2].toLowerCase();
+          const attrStr = m[3] || '';
+          const selfClose = /\/\s*$/.test(attrStr) || tagName === 'path';
+          if (isClose) {
+            if (stack.length > 1) stack.pop();
+            continue;
+          }
+          const parsedAttrs = {};
+          let parsedClass = '';
+          const attrRe = /([a-zA-Z0-9_-]+)="([^"]*)"/g;
+          let am;
+          while ((am = attrRe.exec(attrStr)) !== null) {
+            if (am[1] === 'class') parsedClass = am[2];
+            else parsedAttrs[am[1]] = am[2];
+          }
+          const child = makeEl(tagName, { className: parsedClass, attrs: parsedAttrs });
+          stack[stack.length - 1].appendChild(child);
+          if (!selfClose) stack.push(child);
+        }
+      },
+      _rect: { left: 100, top: 600, right: 260, bottom: 626, width: 160, height: 26 },
+      style: {
+        setProperty(k, v) { props.set(k, String(v)); },
+        getPropertyValue(k) { return props.get(k) || ''; },
+        removeProperty(k) { props.delete(k); },
+      },
+      classList: {
+        add(...cs) { cs.forEach((c) => classes.add(c)); },
+        remove(...cs) { cs.forEach((c) => classes.delete(c)); },
+        contains(c) { return classes.has(c); },
+        toggle(c, force) {
+          if (force === undefined) {
+            if (classes.has(c)) { classes.delete(c); return false; }
+            classes.add(c); return true;
+          }
+          if (force) classes.add(c); else classes.delete(c);
+          return Boolean(force);
+        },
+      },
+      get className() { return Array.from(classes).join(' '); },
+      set className(v) { classes.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => classes.add(c)); },
+      get childElementCount() { return children.length; },
+      appendChild(c) {
+        if (c.parentElement) {
+          const i = c.parentElement.children.indexOf(c);
+          if (i >= 0) c.parentElement.children.splice(i, 1);
+        }
+        c.parentElement = this;
+        children.push(c);
+        return c;
+      },
+      insertBefore(c, ref) {
+        if (c.parentElement) {
+          const i = c.parentElement.children.indexOf(c);
+          if (i >= 0) c.parentElement.children.splice(i, 1);
+        }
+        c.parentElement = this;
+        const idx = ref ? children.indexOf(ref) : -1;
+        if (idx >= 0) children.splice(idx, 0, c);
+        else children.push(c);
+        return c;
+      },
+      removeChild(c) {
+        const i = children.indexOf(c);
+        if (i >= 0) {
+          children.splice(i, 1);
+          c.parentElement = null;
+        }
+        return c;
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+          this.parentElement = null;
+        }
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      hasAttribute(k) { return attrs.has(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      removeEventListener(ev, fn) {
+        const a = listeners.get(ev);
+        if (a) { const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); }
+      },
+      dispatchEvent(ev) {
+        const e = {
+          target: this,
+          button: 0,
+          key: '',
+          defaultPrevented: false,
+          propagationStopped: false,
+          preventDefault() { this.defaultPrevented = true; },
+          stopPropagation() { this.propagationStopped = true; },
+          stopImmediatePropagation() { this.propagationStopped = true; },
+          ...ev,
+        };
+        const cap = docCaptureListeners.get(e.type) || [];
+        for (const fn of [...cap]) {
+          fn(e);
+          if (e.propagationStopped) break;
+        }
+        if (!e.propagationStopped) {
+          for (const fn of [...(listeners.get(e.type) || [])]) fn(e);
+        }
+        return !e.defaultPrevented;
+      },
+      getBoundingClientRect() { return this._rect; },
+      animate() { return { cancel() {}, finished: Promise.resolve() }; },
+      matches(sel) {
+        return sel.split(',').map((s) => s.trim()).some((s) => {
+          if (s === '*') return true;
+          if (s === 'span') return el.tagName === 'SPAN';
+          if (s === 'button') return el.tagName === 'BUTTON';
+          if (s === '[data-testid="agent-input-box"] .surface-composer-card') return classes.has('surface-composer-card') && Boolean(this.closest('[data-testid="agent-input-box"]'));
+          if (s === '.ag-cs-effort-popover') return classes.has('ag-cs-effort-popover');
+          if (s === '.ag-cs-codex-track') return classes.has('ag-cs-codex-track');
+          if (s === '.ag-cs-codex-seg') return classes.has('ag-cs-codex-seg');
+          if (s === '.ag-cs-effort-track') return classes.has('ag-cs-effort-track');
+          if (s === '.ag-cs-effort-tick') return classes.has('ag-cs-effort-tick');
+          if (s === '.ag-cs-effort-step') return classes.has('ag-cs-effort-step');
+          if (s === '[data-step-idx="2"]') return attrs.get('data-step-idx') === '2';
+          if (s === '[data-step-idx="0"]') return attrs.get('data-step-idx') === '0';
+          if (s === '[data-testid="model-selector-trigger"]') return attrs.get('data-testid') === 'model-selector-trigger';
+          if (s === '[data-testid="model-selector-trigger"] .ag-cs-effort-badge') return classes.has('ag-cs-effort-badge') && Boolean(this.parentElement?.closest('[data-testid="model-selector-trigger"]'));
+          if (s === '[data-testid="model-selector-trigger"] [data-ag-cs-effort]') return attrs.has('data-ag-cs-effort') && Boolean(this.parentElement?.closest('[data-testid="model-selector-trigger"]'));
+          if (s === '.ag-cs-effort-badge') return classes.has('ag-cs-effort-badge');
+          if (s === '[data-ag-cs-effort]') return attrs.has('data-ag-cs-effort');
+          if (s === '.ag-cs-periodic-trigger') return classes.has('ag-cs-periodic-trigger');
+          if (s === '.surface-composer-card') return classes.has('surface-composer-card');
+          if (s === '[data-testid="agent-input-box"]') return attrs.get('data-testid') === 'agent-input-box';
+          if (s === '.no-focus-agent-input') return classes.has('no-focus-agent-input');
+          return false;
+        });
+      },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children) {
+            if (c.matches(sel)) out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+    };
+    return el;
+  };
+
+  const html = makeEl('html');
+  const head = makeEl('head');
+  const body = makeEl('body', { className: 'theme-dark' });
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const inputBox = makeEl('div', { attrs: { 'data-testid': 'agent-input-box' } });
+  const card = makeEl('div', { className: 'surface-composer-card' });
+  const footer = makeEl('div', { className: 'agy-composer-footer' });
+  const modelWrap = makeEl('div', { className: 'no-focus-agent-input' });
+  const modelBtn = makeEl('button', {
+    attrs: { 'data-testid': 'model-selector-trigger', 'aria-label': 'GPT-5.3-Codex Medium' },
+  });
+  const labelSpan = makeEl('span');
+  labelSpan.textContent = 'GPT-5.3-Codex';
+  const effortSpan = makeEl('span');
+  effortSpan.textContent = ' Medium';
+  modelBtn.appendChild(labelSpan);
+  modelBtn.appendChild(effortSpan);
+  modelWrap.appendChild(modelBtn);
+  footer.appendChild(modelWrap);
+  card.appendChild(footer);
+  inputBox.appendChild(card);
+  body.appendChild(inputBox);
+
+  let nativeMenuClicks = 0;
+  let nativeKeydowns = 0;
+  modelBtn.addEventListener('click', () => { nativeMenuClicks += 1; });
+  modelBtn.addEventListener('keydown', () => { nativeKeydowns += 1; });
+
+  const setModelCalls = [];
+  const options = [
+    { label: 'GPT-5.3-Codex Low', value: 'codex-low' },
+    { label: 'GPT-5.3-Codex Medium', value: 'codex-med' },
+    { label: 'GPT-5.3-Codex High', value: 'codex-high' },
+    { label: 'GPT-5.3-Codex Extra High', value: 'codex-xhigh' },
+  ];
+  modelBtn.__reactFiber$test = {
+    memoizedProps: {
+      selectedModel: options[1],
+      modelOptions: options,
+      setSelectedModel(opt) {
+        setModelCalls.push(opt.value);
+        this.selectedModel = opt;
+        effortSpan.textContent = ' ' + opt.label.replace(/^GPT-5\.3-Codex\s+/, '');
+      },
+    },
+    return: null,
+  };
+
+  const doc = {
+    documentElement: html,
+    head,
+    body,
+    hidden: false,
+    readyState: 'complete',
+    createElement: (t) => makeEl(t),
+    getElementById: () => null,
+    querySelector: (s) => html.querySelector(s),
+    querySelectorAll: (s) => html.querySelectorAll(s),
+    addEventListener(ev, fn, cap) {
+      if (cap) {
+        if (!docCaptureListeners.has(ev)) docCaptureListeners.set(ev, []);
+        docCaptureListeners.get(ev).push(fn);
+      }
+    },
+    removeEventListener(ev, fn, cap) {
+      if (cap && docCaptureListeners.has(ev)) {
+        const a = docCaptureListeners.get(ev);
+        const i = a.indexOf(fn);
+        if (i >= 0) a.splice(i, 1);
+      }
+    },
+  };
+
+  const sandbox = {
+    window: null,
+    globalThis: null,
+    document: doc,
+    navigator: { language: 'en-US' },
+    location: { pathname: '/' },
+    localStorage: { _m: {}, getItem(k) { return this._m[k] || null; }, setItem(k, v) { this._m[k] = String(v); } },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (fn) => {
+      const id = rafQueue.length + 1;
+      rafQueue.push({ id, fn, cancelled: false });
+      return id;
+    },
+    cancelAnimationFrame: (id) => {
+      const item = rafQueue.find((r) => r.id === id);
+      if (item) item.cancelled = true;
+    },
+    setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
+    clearTimeout: (id) => { timers.delete(id); clearTimeout(id); },
+    setInterval: () => 1,
+    clearInterval: () => {},
+    performance: { now: () => Date.now() },
+    Math, Date, JSON, Map, Set, Array, Object, String, Number, Boolean, Promise, Uint8Array, Float32Array, Intl,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  const flushRaf = () => {
+    const batch = rafQueue.splice(0, rafQueue.length);
+    for (const item of batch) {
+      if (!item.cancelled) item.fn(Date.now());
+    }
+  };
+
+  try {
+    // 1. periodicSelector: true + effortSliderStyle: 'chatgpt' keeps partitioned behavior
+    const mountRes = vm.runInNewContext(
+      cdp.buildInjectExpression({ ...cdp.DEFAULT_CONFIG, periodicSelector: true, effortSliderStyle: 'chatgpt', mascot: false }),
+      sandbox
+    );
+    assert.equal(mountRes.status, 'ok');
+    labelSpan.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'model name opens periodic selector when effortSliderStyle is chatgpt');
+    assert.equal(nativeMenuClicks, 0);
+    docCaptureListeners.get('keydown').forEach((fn) => fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} }));
+
+    // 2. Without setSelectedModel, interacting with an effort step must NOT fake host span text or aria-label
+    const savedSetter = modelBtn.__reactFiber$test.memoizedProps.setSelectedModel;
+    delete modelBtn.__reactFiber$test.memoizedProps.setSelectedModel;
+    effortSpan.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true, 'popover opens without setter');
+    const noSetterTrack = body.querySelector('.ag-cs-codex-track');
+    assert.ok(noSetterTrack, 'codex track renders in popover');
+    noSetterTrack.dispatchEvent({ type: 'keydown', key: 'ArrowRight' });
+    assert.equal(setModelCalls.length, 0, 'no setter means 0 model setter calls');
+    assert.equal(effortSpan.textContent, ' Medium', 'must not fake host effort span text when setSelectedModel is absent');
+    assert.equal(modelBtn.getAttribute('aria-label'), 'GPT-5.3-Codex Medium', 'must not fake modelBtn aria-label when setSelectedModel is absent');
+    modelBtn.__reactFiber$test.memoizedProps.setSelectedModel = savedSetter;
+    docCaptureListeners.get('keydown').forEach((fn) => fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} }));
+
+    // 3. Select step in both claude and chatgpt styles, verify setter & rAF cancellation, force-run stale callbacks, and verify zero residue
+    for (const styleMode of ['claude', 'chatgpt']) {
+      setModelCalls.length = 0;
+      rafQueue.length = 0;
+      sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, periodicSelector: true, effortSliderStyle: styleMode, mascot: false });
+      effortSpan.dispatchEvent({ type: 'click', button: 0 });
+      assert.equal(sandbox.window.__agClaudeStudio.getState().hasEffortPopover, true, `${styleMode} popover opens`);
+      const pop = body.querySelector('.ag-cs-effort-popover');
+      assert.ok(pop, `${styleMode} popover exists`);
+      if (styleMode === 'chatgpt') {
+        const track = pop.querySelector('.ag-cs-codex-track');
+        assert.ok(track, 'chatgpt track exists');
+        track.dispatchEvent({ type: 'keydown', key: 'ArrowRight' });
+      } else {
+        const tick = pop.querySelectorAll('.ag-cs-effort-tick')[2];
+        assert.ok(tick, 'claude tick exists');
+        tick.dispatchEvent({ type: 'click', button: 0 });
+      }
+      assert.equal(setModelCalls.length, 1, `${styleMode} step interaction invokes setSelectedModel once`);
+      assert.ok(rafQueue.length >= 1, `${styleMode} commitSelection queues badge rAF`);
+      const capturedRafs = [...rafQueue];
+      sandbox.window.__agClaudeStudio.refreshConfig({ ...cdp.DEFAULT_CONFIG, periodicSelector: true, effortSliderStyle: 'off', mascot: false });
+      assert.ok(capturedRafs.some((r) => r.cancelled), `${styleMode} -> off cancels pending badge rAF`);
+      // Force-invoke stale rAF callbacks to verify generation + off guard
+      for (const item of capturedRafs) item.fn(Date.now());
+      assert.equal(effortSpan.hasAttribute('data-ag-cs-effort'), false, `${styleMode} -> off strips data-ag-cs-effort even after stale rAF`);
+      assert.equal(effortSpan.classList.contains('ag-cs-effort-badge'), false, `${styleMode} -> off strips badge class even after stale rAF`);
+      assert.equal(modelBtn.hasAttribute('data-ag-cs-has-effort'), false, `${styleMode} -> off strips data-ag-cs-has-effort even after stale rAF`);
+      assert.equal(modelBtn.style.getPropertyValue('--ag-cs-effort-cut'), '', `${styleMode} -> off strips --ag-cs-effort-cut even after stale rAF`);
+      assert.equal(modelBtn.getAttribute('aria-label'), 'GPT-5.3-Codex Medium', `${styleMode} -> off keeps native aria-label untouched`);
+    }
+
+    // 4. periodicSelector: true + effortSliderStyle: 'off' passes mouse & keyboard on native trigger through, while sparkle opens periodic
+    const prevClicks = nativeMenuClicks;
+    const prevKeys = nativeKeydowns;
+    modelBtn.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(nativeMenuClicks, prevClicks + 1, 'native model trigger click passes through when effortSliderStyle is off');
+    for (const key of ['Enter', ' ', 'ArrowDown', 'ArrowUp']) {
+      modelBtn.dispatchEvent({ type: 'keydown', key });
+    }
+    assert.equal(nativeKeydowns, prevKeys + 4, 'native model trigger keyboard events pass through when effortSliderStyle is off');
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, false, 'native trigger must not open periodic selector when effortSliderStyle is off');
+
+    const sparkle = footer.querySelector('.ag-cs-periodic-trigger');
+    assert.ok(sparkle, 'sparkle trigger exists');
+    sparkle.dispatchEvent({ type: 'click', button: 0 });
+    assert.equal(sandbox.window.__agClaudeStudio.getState().hasPeriodicSelector, true, 'sparkle trigger opens periodic selector when effortSliderStyle is off');
   } finally {
     for (const id of timers) clearTimeout(id);
   }

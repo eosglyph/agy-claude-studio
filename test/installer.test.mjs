@@ -87,7 +87,7 @@ const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
-const cdp = require(path.join(ROOT_DIR, 'cdp.js'));
+const cdp = require(path.join(ROOT_DIR, 'src', 'cdp.js'));
 
 function createMockCdpServer() {
   const receivedCalls = [];
@@ -325,7 +325,12 @@ test('unified artifact naming, native plugin payload, and version parity stay co
 
   assert.equal(cdp.PLUGIN_VERSION, pkg.version);
   assert.equal(csClient.match(/GetString\(raw, "version", "([^"]+)"\)/)?.[1], pkg.version);
-  assert.equal(csSetup.match(/SetValue\("DisplayVersion", version \?\? "([^"]+)"/)?.[1], pkg.version);
+  const csSetupFallback = csSetup.match(/const string FallbackVersion = "([^"]+)"/)?.[1];
+  assert.equal(csSetupFallback, pkg.version);
+  assert.match(csSetup, /SetValue\("DisplayVersion", version \?\? FallbackVersion/);
+  assert.match(csSetup, /return InstallerCore\.FallbackVersion;/);
+  const csSetupExtraVers = [...csSetup.matchAll(/"(\d+\.\d+\.\d+)"/g)].map((m) => m[1]).filter((v) => v !== pkg.version);
+  assert.deepEqual(csSetupExtraVers, []);
   assert.equal(swiftClient.match(/raw\["version"\]\?\.stringValue \?\? "([^"]+)"/)?.[1], pkg.version);
 
   assert.equal(normalizeVersion('v2.1.0'), '2.1.0');
@@ -353,10 +358,14 @@ test('unified artifact naming, native plugin payload, and version parity stay co
   assert.ok(names.has('skills/studio-translation-protect/SKILL.md'));
   assert.ok(names.has('scripts/notify-stop.mjs'));
   assert.ok(names.has('scripts/fetch-agy-changelog.mjs'));
-  assert.ok(names.has('i18n-sync.js'));
+  assert.ok(names.has('src/cdp.js'));
+  assert.ok(names.has('src/ui-runtime.js'));
+  assert.ok(names.has('src/style.css'));
+  assert.ok(names.has('src/i18n-sync.js'));
+  assert.equal(names.has('launch.bat'), false, 'Retired flat launch scripts must not be bundled');
   assert.ok(names.has('locales/manifest.json'));
   assert.ok(names.has('locales/zh-CN.json'));
-  assert.ok(names.has('locales/zh-TW.json'));
+  assert.equal(names.has('locales/zh-TW.json'), false, 'On-demand zh-TW pack must not be bundled into plugin release');
   assert.equal(names.has('locales/yue.json'), false, 'On-demand yue pack must not be bundled into plugin release');
   assert.equal(names.has('locales/ja.json'), false, 'On-demand ja pack must not be bundled into plugin release');
   assert.ok(names.has('assets/agy-gemini-clawd.ico'));
@@ -470,8 +479,14 @@ test(
     fs.writeFileSync(userNotifyPath, JSON.stringify({ serverchan: { sendKey: 'KEEP_ME_SECRET' } }), 'utf8');
     const customOpsScript = path.join(pluginDir, 'scripts', 'ops', 'custom-user-script.mjs');
     fs.writeFileSync(customOpsScript, 'export const keep = true;\n', 'utf8');
-    const existingBundledOps = path.join(pluginDir, 'scripts', 'ops', 'check-agy-update.mjs');
+    const existingBundledOps = path.join(pluginDir, 'scripts', 'ops', 'check-repo-metrics.mjs');
     fs.writeFileSync(existingBundledOps, '// user-customized-ops-file\n', 'utf8');
+
+    const oldScript = path.join(pluginDir, 'inject.sh');
+    const original = '#!/usr/bin/env bash\n# Inject Claude Studio (agy-claude-studio) into Antigravity windows once.\ncd "$(dirname "$0")"\necho "Injecting Claude Studio (agy-claude-studio)..."\nnode inject.js\n';
+    fs.writeFileSync(oldScript, original.replace(/\n/g, '\r\n'));
+    const userScript = path.join(pluginDir, 'launch.bat');
+    fs.writeFileSync(userScript, '@echo keep my launcher');
 
     // Existing host config with another plugin + legacy agy-claude-style
     fs.writeFileSync(
@@ -550,6 +565,9 @@ test(
       assert.equal(fs.readFileSync(customOpsScript, 'utf8'), 'export const keep = true;\n');
       assert.equal(fs.readFileSync(existingBundledOps, 'utf8'), '// user-customized-ops-file\n');
 
+      assert.equal(fs.existsSync(oldScript), false);
+      assert.equal(fs.readFileSync(userScript, 'utf8'), '@echo keep my launcher');
+
       // Safeguard 2: Complete native plugin deployed & enabled in host config (without touching unrelated keys)
       assert.ok(fs.existsSync(path.join(pluginDir, 'plugin.json')));
       assert.ok(fs.existsSync(path.join(pluginDir, 'hooks.json')));
@@ -571,7 +589,7 @@ test(
       assert.ok(fs.existsSync(startMenuLnk));
       assert.ok(fs.existsSync(desktopLnk));
 
-      const expectedIcon = `${path.join(pluginDir, 'assets', 'agy-gemini-clawd.ico')},0`;
+      const expectedIcon = `${path.join(localAppData, 'agy-claude-studio-setup', 'agy-gemini-clawd.ico')},0`;
       for (const lnk of [startMenuLnk, desktopLnk]) {
         const meta = readLnkMetadata(lnk);
         assert.equal(meta.targetPath.toLowerCase(), mockAgExe.toLowerCase());
@@ -580,6 +598,8 @@ test(
         assert.equal(meta.iconLocation.toLowerCase(), expectedIcon.toLowerCase());
       }
 
+      fs.writeFileSync(oldScript, original);
+      fs.writeFileSync(path.join(pluginDir, '.git'), 'gitdir: elsewhere');
       // 3) Re-install / upgrade preserves existing plugin_data/config.json
       fs.writeFileSync(path.join(pluginDataDir, 'config.json'), JSON.stringify({ palette: 'claude', language: 'ja' }), 'utf8');
       await runExe(
@@ -590,6 +610,7 @@ test(
       );
       const res2 = JSON.parse(fs.readFileSync(outUpgrade, 'utf8'));
       assert.equal(res2.ok, true);
+      assert.equal(fs.readFileSync(oldScript, 'utf8'), original);
       assert.equal(res2.preservedExistingConfig, true);
       assert.equal(JSON.parse(fs.readFileSync(path.join(pluginDataDir, 'config.json'), 'utf8')).language, 'ja');
 
@@ -632,12 +653,12 @@ test(
     const mockCdp = createMockCdpServer();
 
     try {
-      fs.mkdirSync(watcherDir, { recursive: true });
+      fs.mkdirSync(path.join(watcherDir, 'src'), { recursive: true });
       fs.writeFileSync(path.join(watcherDir, 'manifest.json'), JSON.stringify(createManifest(cdp.PLUGIN_VERSION), null, 2), 'utf8');
-      fs.writeFileSync(path.join(watcherDir, 'style.css'), fs.readFileSync(path.join(ROOT_DIR, 'style.css')));
+      fs.writeFileSync(path.join(watcherDir, 'src', 'style.css'), fs.readFileSync(path.join(ROOT_DIR, 'src', 'style.css')));
       fs.writeFileSync(path.join(watcherDir, 'config.json'), fs.readFileSync(path.join(ROOT_DIR, 'config.example.json')));
       for (const part of cdp.RUNTIME_PARTS) {
-        fs.writeFileSync(path.join(watcherDir, part), fs.readFileSync(path.join(ROOT_DIR, part)));
+        fs.writeFileSync(path.join(watcherDir, 'src', part), fs.readFileSync(path.join(ROOT_DIR, 'src', part)));
       }
 
       const csc = findCsc();

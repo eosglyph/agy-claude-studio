@@ -30,6 +30,9 @@ const PLUGIN_ROOT_FILES = [
   'CHANGELOG.md',
   'config.example.json',
   'i18n-compat.json',
+];
+
+const PLUGIN_SRC_FILES = [
   'style.css',
   'cdp.js',
   'inject.js',
@@ -40,17 +43,6 @@ const PLUGIN_ROOT_FILES = [
   'scripts-core.js',
   'periodic-sync.js',
   'i18n-sync.js',
-  'launch.bat',
-  'launch.sh',
-  'inject.bat',
-  'inject.sh',
-  'remove.bat',
-  'remove.sh',
-  'watch.bat',
-  'watch.sh',
-  'watch-hidden.vbs',
-  'autostart-on.bat',
-  'autostart-off.bat',
 ];
 
 const PLUGIN_RUNTIME_SUBDIRS = [
@@ -59,19 +51,17 @@ const PLUGIN_RUNTIME_SUBDIRS = [
   'skills',
 ];
 
-// Built-in offline baseline packs only (zh-CN + zh-TW + manifest).
-// Additional languages (yue, ja, etc.) are downloaded on demand from GitHub in Studio Settings.
+// Built-in offline baseline packs only (zh-CN + manifest).
+// Additional languages (zh-TW, yue, ja, etc.) are downloaded on demand from GitHub in Studio Settings.
 const PLUGIN_BUNDLED_LOCALE_FILES = [
   'locales/manifest.json',
   'locales/zh-CN.json',
-  'locales/zh-TW.json',
 ];
 
 const PLUGIN_RUNTIME_SCRIPTS = [
   'scripts/WindowsFileAction.cs',
   'scripts/fetch-agy-changelog.mjs',
   'scripts/notify-stop.mjs',
-  'scripts/ops/check-agy-update.mjs',
   'scripts/ops/check-repo-metrics.mjs',
   'scripts/ops/sync-periodic-elements.mjs',
 ];
@@ -143,10 +133,13 @@ function collectPluginPayloadFiles(version = cdp.PLUGIN_VERSION) {
   };
 
   for (const f of PLUGIN_ROOT_FILES) {
-    addFile(f, f.endsWith('.bat') || f.endsWith('.sh') || f.endsWith('.vbs'));
+    addFile(f, false);
+  }
+  for (const f of PLUGIN_SRC_FILES) {
+    addFile(`src/${f}`, false);
   }
   for (const part of cdp.RUNTIME_PARTS) {
-    addFile(part);
+    addFile(`src/${part}`, false);
   }
   for (const relDir of PLUGIN_RUNTIME_SUBDIRS) {
     collectFilesRecursive(relDir, entries, seen);

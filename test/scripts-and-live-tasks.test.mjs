@@ -7,9 +7,9 @@ import test from 'node:test';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const scriptsCore = require('../scripts-core.js');
-const i18nCore = require('../i18n-core.js');
-const i18nLocales = require('../i18n-locales.js');
+const scriptsCore = require('../src/scripts-core.js');
+const i18nCore = require('../src/i18n-core.js');
+const i18nLocales = require('../src/i18n-locales.js');
 const studioMain = await import('../sidecars/studio/main.mjs');
 
 test('scripts-core parses args, CRUDs entries in scripts.json, and executes scripts with shell:false', async () => {
@@ -269,6 +269,105 @@ test('getLiveTasksApi queries ConversationService and tail GetCascadeTrajectoryS
   assert.equal(unavailable.available, false);
 });
 
+test('getLiveTasksApi prioritizes active conversationId in recent/running and enriches its subagents even when another chat updated more recently', async () => {
+  const studioMain = await import('../sidecars/studio/main.mjs');
+  const enrichedParents = [];
+
+  const mockFetch = async (url, init) => {
+    const u = String(url);
+    const body = init?.body ? JSON.parse(init.body) : {};
+    if (u.includes('GetAllCascadeTrajectories')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          trajectorySummaries: {
+            'other-newer': { summary: 'build', status: 'CASCADE_RUN_STATUS_IDLE', stepCount: 7739 },
+            'active-chat': { summary: 'GitHub Issue UI Enhancements', status: 'CASCADE_RUN_STATUS_IDLE', stepCount: 342 },
+            'older-chat': {
+              annotations: { title: 'Older Archived Page Chat' },
+              status: 'CASCADE_RUN_STATUS_IDLE',
+              stepCount: 48,
+              lastModifiedTime: '2026-11-20T08:00:00Z',
+            },
+            'sub-blank-1': { status: 'CASCADE_RUN_STATUS_IDLE', stepCount: 2 },
+          },
+        }),
+      };
+    }
+    if (u.includes('ListConversations') && body.parentConversationId) {
+      enrichedParents.push(body.parentConversationId);
+      if (body.parentConversationId === 'active-chat' || body.parentConversationId === 'older-chat') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            conversations: [
+              {
+                id: 'sub-blank-1',
+                annotations: { title: 'Blank Test Subagent' },
+                state: { runState: 'RUN_STATE_IDLE' },
+                metadata: { createTime: '2026-11-27T09:42:48Z' },
+              },
+            ],
+          }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ conversations: [] }) };
+    }
+    if (u.includes('ListConversations')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          conversations: [
+            {
+              id: 'other-newer',
+              annotations: { title: 'build' },
+              state: { runState: 'RUN_STATE_IDLE', updateTime: '2026-11-27T09:44:20Z' },
+            },
+            {
+              id: 'active-chat',
+              annotations: { title: 'GitHub Issue UI Enhancements' },
+              state: { runState: 'RUN_STATE_IDLE', updateTime: '2026-11-27T09:43:05Z' },
+            },
+          ],
+        }),
+      };
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+
+  // 1. Active conversation is second in ListConversations -> must be pinned to recent[0] and enriched
+  const res = await studioMain.getLiveTasksApi({
+    env: { ANTIGRAVITY_LS_ADDRESS: '127.0.0.1:9999', ANTIGRAVITY_CSRF_TOKEN: 'tok-test' },
+    fetchFn: mockFetch,
+    allowCdpFallback: false,
+    conversationId: 'active-chat',
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.running.length, 0);
+  assert.equal(res.recent[0].id, 'active-chat', 'Active conversation must be first in recent when idle');
+  assert.equal(res.recent[0].stepCount, 342);
+  assert.equal(res.recent[0].subagentCount, 1);
+  assert.equal(res.recent[0].subagents[0].title, 'Blank Test Subagent');
+  assert.deepEqual(enrichedParents, ['active-chat'], 'Must enrich subagents for active-chat, not other-newer');
+
+  // 2. Older conversation absent from ListConversations top page -> recovered from trajectorySummaries
+  enrichedParents.length = 0;
+  const olderRes = await studioMain.getLiveTasksApi({
+    env: { ANTIGRAVITY_LS_ADDRESS: '127.0.0.1:9999', ANTIGRAVITY_CSRF_TOKEN: 'tok-test' },
+    fetchFn: mockFetch,
+    allowCdpFallback: false,
+    conversationId: 'older-chat',
+  });
+  assert.equal(olderRes.recent[0].id, 'older-chat');
+  assert.equal(olderRes.recent[0].title, 'Older Archived Page Chat');
+  assert.equal(olderRes.recent[0].stepCount, 48);
+  assert.equal(olderRes.recent[0].subagentCount, 1);
+  assert.deepEqual(enrichedParents, ['older-chat']);
+});
+
 test('i18n-core translates split React text nodes like ["No ", "automations", " yet"] and reverts losslessly', () => {
   const prevNodeFilter = globalThis.NodeFilter;
   globalThis.NodeFilter = { SHOW_ELEMENT: 1, SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 };
@@ -477,7 +576,7 @@ test('getConversationInspectorApi returns real environment, context breakdown, c
 
 test('performStudioSelfUpdate supports non-git release archive auto-upgrade while preserving PLUGIN_DATA', async () => {
   const { execFileSync } = await import('node:child_process');
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-arch-'));
+  const tmpDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-arch-')));
   try {
     const pluginDir = path.join(tmpDir, 'installed-plugin');
     const pluginDataDir = path.join(pluginDir, 'sidecars', 'custom-data');
@@ -522,6 +621,9 @@ test('performStudioSelfUpdate supports non-git release archive auto-upgrade whil
     assert.equal(updRes.ok, true);
     assert.equal(updRes.mode, 'archive');
     assert.equal(updRes.version, '2.2.0');
+    assert.equal(updRes.filesUpdated, true);
+    assert.equal(updRes.reinjectOk, true);
+    assert.equal(updRes.needsRestart, false);
     assert.equal(reinjected, true);
     assert.equal(fs.readFileSync(path.join(pluginDir, 'marker.txt'), 'utf8'), 'new-v2.2.0');
     assert.equal(fs.readFileSync(path.join(pluginDir, 'sidecars', 'marker.txt'), 'utf8'), 'updated sibling');

@@ -25,7 +25,8 @@ const RELAUNCH = process.argv.includes('--relaunch');
 const REPLACE_EXISTING = process.argv.includes('--replace');
 const SKIP_IF_RUNNING = process.argv.includes('--skip-if-running');
 const EXIT_ON_HOST_CLOSE_FLAG = MANAGED || process.argv.includes('--exit-on-host-close');
-const LOG_FILE = path.join(__dirname, 'watch.log');
+const ROOT_DIR = path.resolve(__dirname, '..');
+const LOG_FILE = path.join(ROOT_DIR, 'watch.log');
 
 function parseIntArg(flag, envName) {
   const prefix = `${flag}=`;
@@ -156,7 +157,7 @@ async function launchWithCdp({ autoRelaunchFromConfig = false } = {}) {
   if (res.action === 'running-without-cdp') {
     throw new Error(
       `Antigravity 正在运行但未开启 CDP 端口（PID: ${res.pids.join(', ')}）。` +
-        `请先完全退出 Antigravity，或运行 node inject.js --launch --relaunch 自动重启。`
+        `请先完全退出 Antigravity，或运行 node src/inject.js --launch --relaunch 自动重启。`
     );
   }
   if (res.action === 'relaunch-failed') {
@@ -189,7 +190,7 @@ function sleepSync(ms) {
 
 function acquireLock(opts = {}) {
   const pidFile = opts.pidFile || PID_FILE;
-  const targetDir = opts.targetDir || __dirname;
+  const targetDir = opts.targetDir || ROOT_DIR;
   const replaceExisting = opts.replaceExisting !== undefined ? opts.replaceExisting : REPLACE_EXISTING;
   const allowGracefulDuplicateExit = Boolean(opts.allowGracefulDuplicateExit);
   const duplicateWaitMs = Number.isInteger(opts.duplicateWaitMs) && opts.duplicateWaitMs >= 0 ? opts.duplicateWaitMs : 1500;
@@ -257,7 +258,7 @@ function acquireLock(opts = {}) {
         return { acquired: false, duplicate: true, pid: reDecision.pid };
       }
     } else {
-      console.error(`[!] 守护进程已在运行 (PID ${pid})。如需重启请先运行 remove.sh / remove.bat 或附加 --replace`);
+      console.error(`[!] 守护进程已在运行 (PID ${pid})。如需重启请先运行 node src/remove.js 或附加 --replace`);
       return exitFn(1, { blocked: true, reason: 'already-running', pid });
     }
   }

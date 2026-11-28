@@ -1,24 +1,24 @@
 'use strict';
 // Cloud on-demand i18n locale pack loader, schema validator, and GitHub syncer (zero external deps, MIT).
-// Built-in offline baseline: zh-CN, zh-TW (plus native en).
-// On-demand cloud downloadable: yue, ja (downloaded manually from GitHub into PLUGIN_DATA/i18n-packs/).
+// Built-in offline baseline: zh-CN (plus native en).
+// On-demand cloud downloadable: zh-TW, yue, ja (downloaded manually from GitHub into PLUGIN_DATA/i18n-packs/).
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const BUNDLED_PACK_LANGS = Object.freeze(['zh-CN', 'zh-TW']);
-const ON_DEMAND_PACK_LANGS = Object.freeze(['yue', 'ja']);
+const BUNDLED_PACK_LANGS = Object.freeze(['zh-CN']);
+const ON_DEMAND_PACK_LANGS = Object.freeze(['zh-TW', 'yue', 'ja']);
 const SUPPORTED_PACK_LANGS = Object.freeze([...BUNDLED_PACK_LANGS, ...ON_DEMAND_PACK_LANGS]);
 const LANGUAGE_CATALOG = Object.freeze([
   Object.freeze({ lang: 'zh-CN', label: '简体中文', bundled: true }),
-  Object.freeze({ lang: 'zh-TW', label: '繁體中文', bundled: true }),
+  Object.freeze({ lang: 'zh-TW', label: '繁體中文', bundled: false }),
   Object.freeze({ lang: 'yue', label: '粵語', bundled: false }),
   Object.freeze({ lang: 'ja', label: '日本語', bundled: false }),
 ]);
 
 const REMOTE_LOCALES_BASE_URL =
   'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/locales';
-const BUNDLED_LOCALES_DIR = path.join(__dirname, 'locales');
+const BUNDLED_LOCALES_DIR = path.join(__dirname, '..', 'locales');
 const PACKS_SUBDIR = 'i18n-packs';
 const MAX_PACK_BYTES = 1536 * 1024;
 const ALLOWED_REGEX_FLAGS = /^[ims]*$/;
@@ -170,7 +170,7 @@ function validateLocalePack(raw, expectedLang = null) {
   const sentences = validateSentences(raw.sentences || []);
   const units = validateUnits(raw.units);
   if (!dict || !rules || !timeRules || !sentences || !units) return null;
-  return {
+  const out = {
     schemaVersion: Number(raw.schemaVersion) || 1,
     lang,
     agyVersion: String(raw.agyVersion || '').trim().slice(0, 32),
@@ -182,6 +182,26 @@ function validateLocalePack(raw, expectedLang = null) {
     timeRules,
     sentences,
   };
+  if (typeof raw.sourceSha256 === 'string' && /^[a-f0-9]{64}$/i.test(raw.sourceSha256.trim())) {
+    out.sourceSha256 = raw.sourceSha256.trim().toLowerCase();
+  }
+  return out;
+}
+
+function computePackContentSignature(pack) {
+  if (!pack || typeof pack !== 'object') return '';
+  const semantic = {
+    lang: pack.lang,
+    agyVersion: pack.agyVersion,
+    updatedAt: pack.updatedAt,
+    cjkLatinSpacing: pack.cjkLatinSpacing,
+    units: pack.units,
+    dict: pack.dict,
+    rules: pack.rules,
+    timeRules: pack.timeRules,
+    sentences: pack.sentences,
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(semantic), 'utf8').digest('hex');
 }
 
 function readPackFromFile(filePath, expectedLang) {
@@ -192,11 +212,40 @@ function readPackFromFile(filePath, expectedLang) {
     const rawText = fs.readFileSync(filePath, 'utf8');
     const parsed = validateLocalePack(JSON.parse(rawText), expectedLang);
     if (!parsed) return null;
+    const normalizedText = rawText.replace(/\r\n/g, '\n');
+    const fileSha256 = crypto.createHash('sha256').update(normalizedText, 'utf8').digest('hex').toLowerCase();
     const hash = crypto.createHash('sha256').update(rawText, 'utf8').digest('hex').slice(0, 16);
-    return { pack: parsed, hash, bytes: stat.size };
+    const sha256 = parsed.sourceSha256 || fileSha256;
+    const contentSig = computePackContentSignature(parsed);
+    return { pack: parsed, hash, sha256, hasSourceSha: Boolean(parsed.sourceSha256), contentSig, bytes: stat.size };
   } catch {
     return null;
   }
+}
+
+function parseVersionParts(ver) {
+  const s = String(ver || '').trim();
+  if (!s) return null;
+  const m = s.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/i);
+  if (!m) return null;
+  return [Number(m[1]) || 0, Number(m[2]) || 0, Number(m[3]) || 0];
+}
+
+function comparePackFreshness(a, b) {
+  if (!a || !b) return 0;
+  const va = parseVersionParts(a.agyVersion);
+  const vb = parseVersionParts(b.agyVersion);
+  if (va && vb) {
+    for (let i = 0; i < 3; i += 1) {
+      if (va[i] !== vb[i]) return va[i] - vb[i];
+    }
+  }
+  const da = String(a.updatedAt || '').trim();
+  const db = String(b.updatedAt || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(da) && /^\d{4}-\d{2}-\d{2}$/.test(db) && da !== db) {
+    return da > db ? 1 : -1;
+  }
+  return 0;
 }
 
 function readLocalePack(lang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR } = {}) {
@@ -205,10 +254,16 @@ function readLocalePack(lang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR 
 
   const cloudPath = getCloudPackPath(norm, pluginDataDir);
   const cloud = readPackFromFile(cloudPath, norm);
-  if (cloud) {
+  const bundledPath = isBundledLang(norm) ? getBundledPackPath(norm, bundledDir) : '';
+  const bundled = bundledPath ? readPackFromFile(bundledPath, norm) : null;
+
+  if (cloud && (!bundled || comparePackFreshness(bundled.pack, cloud.pack) <= 0)) {
     return {
       pack: cloud.pack,
       hash: cloud.hash,
+      sha256: cloud.sha256,
+      hasSourceSha: cloud.hasSourceSha,
+      contentSig: cloud.contentSig,
       bytes: cloud.bytes,
       source: 'cloud',
       path: cloudPath,
@@ -218,32 +273,37 @@ function readLocalePack(lang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR 
     };
   }
 
-  if (isBundledLang(norm)) {
-    const bundledPath = getBundledPackPath(norm, bundledDir);
-    const bundled = readPackFromFile(bundledPath, norm);
-    if (bundled) {
-      return {
-        pack: bundled.pack,
-        hash: bundled.hash,
-        bytes: bundled.bytes,
-        source: 'bundled',
-        path: bundledPath,
-        dictCount: Object.keys(bundled.pack.dict).length,
-        ruleCount: bundled.pack.rules.length,
-        sentenceCount: bundled.pack.sentences.length,
-      };
-    }
+  if (bundled) {
+    return {
+      pack: bundled.pack,
+      hash: bundled.hash,
+      sha256: bundled.sha256,
+      hasSourceSha: bundled.hasSourceSha,
+      contentSig: bundled.contentSig,
+      bytes: bundled.bytes,
+      source: 'bundled',
+      path: bundledPath,
+      dictCount: Object.keys(bundled.pack.dict).length,
+      ruleCount: bundled.pack.rules.length,
+      sentenceCount: bundled.pack.sentences.length,
+    };
   }
 
   return null;
 }
 
-function readCloudLocalePackOverride(lang, pluginDataDir) {
+function readCloudLocalePackOverride(lang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR } = {}) {
   const norm = normalizePackLang(lang);
   if (!norm || !pluginDataDir) return null;
   const cloudPath = getCloudPackPath(norm, pluginDataDir);
   const cloud = readPackFromFile(cloudPath, norm);
   if (!cloud) return null;
+  if (isBundledLang(norm)) {
+    const bundled = readPackFromFile(getBundledPackPath(norm, bundledDir), norm);
+    if (bundled && comparePackFreshness(bundled.pack, cloud.pack) > 0) {
+      return null;
+    }
+  }
   return {
     pack: cloud.pack,
     hash: cloud.hash,
@@ -251,37 +311,76 @@ function readCloudLocalePackOverride(lang, pluginDataDir) {
   };
 }
 
-function listLocalePacksStatus(activeLang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR } = {}) {
+function listLocalePacksStatus(
+  activeLang,
+  pluginDataDir,
+  { bundledDir = BUNDLED_LOCALES_DIR, remoteManifest = null } = {}
+) {
   const manifest = readBundledManifest(bundledDir);
   const activeNorm = normalizePackLang(activeLang);
   return LANGUAGE_CATALOG.map((entry) => {
     const { lang, label, bundled } = entry;
     const loaded = readLocalePack(lang, pluginDataDir, { bundledDir });
     const meta = manifest && manifest.locales && manifest.locales[lang] ? manifest.locales[lang] : null;
+    const remoteMeta =
+      remoteManifest && remoteManifest.locales && remoteManifest.locales[lang] ? remoteManifest.locales[lang] : null;
     const installed = Boolean(loaded);
     const hasCloudOverride = Boolean(loaded && loaded.source === 'cloud');
     const source = loaded ? loaded.source : 'not_installed';
+
+    let effectiveSha256 = loaded?.sha256 || '';
+    if (hasCloudOverride && !loaded.hasSourceSha && bundled) {
+      const bundledPack = readPackFromFile(getBundledPackPath(lang, bundledDir), lang);
+      if (bundledPack && bundledPack.contentSig === loaded.contentSig) {
+        effectiveSha256 = bundledPack.sha256;
+      }
+    }
+    const remoteSha256 =
+      typeof remoteMeta?.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(remoteMeta.sha256)
+        ? remoteMeta.sha256.toLowerCase()
+        : '';
+    const remoteMetaFreshness = remoteManifest
+      ? {
+          agyVersion: remoteMeta?.agyVersion || remoteManifest.agyVersion || '',
+          updatedAt: remoteMeta?.updatedAt || remoteManifest.updatedAt || '',
+        }
+      : null;
+    const localNewerThanRemote = Boolean(
+      loaded && remoteMetaFreshness && comparePackFreshness(loaded.pack, remoteMetaFreshness) > 0
+    );
+    const hasRemoteUpdate = Boolean(
+      installed && !localNewerThanRemote && remoteSha256 && effectiveSha256 && remoteSha256 !== effectiveSha256
+    );
+
     return {
       lang,
       label,
       bundled,
       installed,
       hasCloudOverride,
+      hasRemoteUpdate,
       source,
-      agyVersion: loaded?.pack?.agyVersion || manifest?.agyVersion || '',
-      updatedAt: loaded?.pack?.updatedAt || manifest?.updatedAt || '',
-      dictCount: loaded ? loaded.dictCount : Number(meta?.dictCount || 0),
-      ruleCount: loaded ? loaded.ruleCount : Number(meta?.ruleCount || 0),
-      sentenceCount: loaded ? loaded.sentenceCount : Number(meta?.sentenceCount || 0),
-      bytes: loaded ? loaded.bytes : Number(meta?.bytes || 0),
+      agyVersion: loaded?.pack?.agyVersion || remoteManifest?.agyVersion || manifest?.agyVersion || '',
+      updatedAt: loaded?.pack?.updatedAt || remoteManifest?.updatedAt || manifest?.updatedAt || '',
+      dictCount: loaded ? loaded.dictCount : Number(remoteMeta?.dictCount || meta?.dictCount || 0),
+      ruleCount: loaded ? loaded.ruleCount : Number(remoteMeta?.ruleCount || meta?.ruleCount || 0),
+      sentenceCount: loaded ? loaded.sentenceCount : Number(remoteMeta?.sentenceCount || meta?.sentenceCount || 0),
+      bytes: loaded ? loaded.bytes : Number(remoteMeta?.bytes || meta?.bytes || 0),
+      remoteDictCount: Number(remoteMeta?.dictCount || 0),
+      remoteAgyVersion: String(remoteManifest?.agyVersion || ''),
+      remoteUpdatedAt: String(remoteManifest?.updatedAt || ''),
       isActive: activeNorm === lang,
     };
   });
 }
 
-function getLocalePackStatus(lang, pluginDataDir, { bundledDir = BUNDLED_LOCALES_DIR } = {}) {
+function getLocalePackStatus(
+  lang,
+  pluginDataDir,
+  { bundledDir = BUNDLED_LOCALES_DIR, remoteManifest = null } = {}
+) {
   const norm = normalizePackLang(lang);
-  const packs = listLocalePacksStatus(lang, pluginDataDir, { bundledDir });
+  const packs = listLocalePacksStatus(lang, pluginDataDir, { bundledDir, remoteManifest });
   const cachedLangs = packs.filter((p) => p.hasCloudOverride).map((p) => p.lang);
   const installedLangs = ['en', ...packs.filter((p) => p.installed).map((p) => p.lang)];
   if (!norm) {
@@ -344,6 +443,30 @@ async function fetchJsonWithTimeout(url, fetchFn, timeoutMs, userAgent) {
   }
 }
 
+async function fetchRemoteLocaleManifest({
+  baseUrl = REMOTE_LOCALES_BASE_URL,
+  fetchFn = typeof fetch === 'function' ? fetch : null,
+  timeoutMs = 5000,
+  userAgent = 'agy-claude-studio',
+} = {}) {
+  if (!fetchFn) return null;
+  const cleanBase = String(baseUrl || REMOTE_LOCALES_BASE_URL).replace(/\/+$/, '');
+  try {
+    const { json } = await fetchJsonWithTimeout(
+      `${cleanBase}/manifest.json`,
+      fetchFn,
+      timeoutMs,
+      userAgent
+    );
+    if (!json || typeof json !== 'object' || !json.locales || typeof json.locales !== 'object') {
+      return null;
+    }
+    return json;
+  } catch {
+    return null;
+  }
+}
+
 async function syncLocalePack({
   lang,
   pluginDataDir,
@@ -365,6 +488,7 @@ async function syncLocalePack({
 
   const cleanBase = String(baseUrl || REMOTE_LOCALES_BASE_URL).replace(/\/+$/, '');
   let expectedSha = '';
+  let remoteManifest = null;
   try {
     const { json: manifest } = await fetchJsonWithTimeout(
       `${cleanBase}/manifest.json`,
@@ -372,7 +496,8 @@ async function syncLocalePack({
       Math.min(timeoutMs, 6000),
       userAgent
     );
-    const entry = manifest && manifest.locales && manifest.locales[norm];
+    remoteManifest = manifest && typeof manifest === 'object' && manifest.locales ? manifest : null;
+    const entry = remoteManifest && remoteManifest.locales[norm];
     if (entry && typeof entry.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(entry.sha256)) {
       expectedSha = entry.sha256.toLowerCase();
     }
@@ -382,9 +507,10 @@ async function syncLocalePack({
 
   const packUrl = `${cleanBase}/${encodeURIComponent(norm)}.json`;
   const { text, json } = await fetchJsonWithTimeout(packUrl, fetchFn, timeoutMs, userAgent);
+  const actualSha = crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n'), 'utf8').digest('hex').toLowerCase();
   if (expectedSha) {
-    const actualSha = crypto.createHash('sha256').update(text, 'utf8').digest('hex').toLowerCase();
-    if (actualSha !== expectedSha) {
+    const rawSha = crypto.createHash('sha256').update(text, 'utf8').digest('hex').toLowerCase();
+    if (rawSha !== expectedSha && actualSha !== expectedSha) {
       throw new Error(`Checksum mismatch for ${norm}.json`);
     }
   }
@@ -393,6 +519,7 @@ async function syncLocalePack({
   if (!validated) {
     throw new Error(`Invalid locale pack payload for ${norm}`);
   }
+  validated.sourceSha256 = expectedSha || actualSha;
 
   const targetPath = getCloudPackPath(norm, pluginDataDir);
   atomicWriteJson(targetPath, validated);
@@ -402,6 +529,8 @@ async function syncLocalePack({
     lang: norm,
     bundled: isBundledLang(norm),
     source: 'cloud',
+    sha256: validated.sourceSha256,
+    remoteManifest,
     agyVersion: validated.agyVersion,
     updatedAt: validated.updatedAt,
     dictCount: Object.keys(validated.dict).length,
@@ -457,6 +586,7 @@ module.exports = {
   readCloudLocalePackOverride,
   listLocalePacksStatus,
   getLocalePackStatus,
+  fetchRemoteLocaleManifest,
   syncLocalePack,
   resetLocalePack,
 };

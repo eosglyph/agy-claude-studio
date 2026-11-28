@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PLUGIN_ROOT_DIR = resolve(__dirname, '..');
-const notifyCore = require(join(PLUGIN_ROOT_DIR, 'notify-core.js'));
+const notifyCore = require(join(PLUGIN_ROOT_DIR, 'src', 'notify-core.js'));
 
 function readStdinWithTimeout(timeoutMs = 1500) {
   return new Promise((resolvePromise) => {

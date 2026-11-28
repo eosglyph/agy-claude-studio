@@ -5,7 +5,7 @@
 //   and host shutdown (LS /healthz unreachable or parent exit -> immediate clean exit with zero orphans).
 const fs = require('fs');
 const path = require('path');
-const { STATE_DIR: CDP_STATE_DIR, createWatcherEnabledReader, resolveHostPluginConfigPath } = require('../cdp');
+const { STATE_DIR: CDP_STATE_DIR, isAntigravityCliHost, createWatcherEnabledReader, resolveHostPluginConfigPath } = require('../src/cdp');
 const {
   isBrokenPipeError,
   isPidAlive,
@@ -17,10 +17,9 @@ const {
   readAntigravityPluginEnabledState,
   ensureIdeRemoteDebuggingArgv,
   ensureDesktopRemoteDebuggingLaunchers,
+  cleanupLegacyFlatRootFiles,
   exitProcessCleanly,
-} = require('../lifecycle');
-const { updateConfigSetting } = require('../inject');
-const { startWatchController, removeInjectedUiFromReachablePages } = require('../watcher-core');
+} = require('../src/lifecycle');
 
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
 const PLUGIN_MANIFEST_PATH = path.join(PLUGIN_ROOT, 'plugin.json');
@@ -186,8 +185,9 @@ async function shouldRemoveUiOnShutdown({
   return await isHostStillAlive(reason, healthzUrl);
 }
 
-function startMcpPluginHost() {
-  const serverVersion = readPluginVersion();
+function startDesktopLifecycle() {
+  const { updateConfigSetting } = require('../src/inject');
+  const { startWatchController, removeInjectedUiFromReachablePages } = require('../src/watcher-core');
   const pluginName = readPluginName();
   const healthzUrl = normalizeLsHealthzUrl(process.env.ANTIGRAVITY_LS_ADDRESS);
   const customStateDir = process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR;
@@ -211,8 +211,6 @@ function startMcpPluginHost() {
 
   let shuttingDown = false;
   let shutdownTookControl = false;
-  let framingMode = 'line';
-  let rawBuffer = Buffer.alloc(0);
 
   function appendSafeLog(msg) {
     try {
@@ -223,6 +221,14 @@ function startMcpPluginHost() {
 
   try {
     fs.mkdirSync(stateDir, { recursive: true });
+  } catch {}
+  try {
+    const cleanupRes = cleanupLegacyFlatRootFiles(PLUGIN_ROOT);
+    if (!cleanupRes.skipped && (cleanupRes.removed.length > 0 || cleanupRes.preserved.length > 0 || cleanupRes.errors.length > 0)) {
+      appendSafeLog(
+        `Legacy root cleanup: removed=${cleanupRes.removed.length} preserved=${cleanupRes.preserved.length} errors=${cleanupRes.errors.length}`
+      );
+    }
   } catch {}
   const hostLease = registerMcpHost({
     stateDir,
@@ -238,7 +244,6 @@ function startMcpPluginHost() {
   let standbyTimer = null;
   let stateDirWatcher = null;
   let configWatcher = null;
-  let watchdog = null;
 
   async function runReconcileStep() {
     if (shuttingDown) return;
@@ -424,13 +429,8 @@ function startMcpPluginHost() {
     standbyTimer.unref();
   }
 
-  async function shutdownHost(reason = 'shutdown') {
-    if (shuttingDown) return;
+  return async function stopDesktop(reason) {
     shuttingDown = true;
-    if (watchdog) {
-      watchdog.stop();
-      watchdog = null;
-    }
     if (standbyTimer) {
       clearInterval(standbyTimer);
       standbyTimer = null;
@@ -491,6 +491,24 @@ function startMcpPluginHost() {
       // Ignore shutdown errors
     } finally {
       clearTimeout(forceTimer);
+    }
+  };
+}
+
+function startMcpPluginHost() {
+  const cliHost = isAntigravityCliHost(process.env);
+  const stopDesktop = cliHost ? null : startDesktopLifecycle();
+  const serverVersion = readPluginVersion();
+  let shuttingDown = false;
+  let rawBuffer = Buffer.alloc(0);
+
+  async function shutdownHost(reason) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    watchdog.stop();
+    try {
+      if (stopDesktop) await stopDesktop(reason);
+    } finally {
       exitProcessCleanly(0, 50);
     }
   }
@@ -503,7 +521,7 @@ function startMcpPluginHost() {
   process.stdout?.on('error', onPipeError);
   process.stderr?.on('error', onPipeError);
 
-  watchdog = startHostWatchdog({
+  const watchdog = startHostWatchdog({
     lsAddress: process.env.ANTIGRAVITY_LS_ADDRESS,
     watchStdin: true,
     checkIntervalMs: 3000,
@@ -548,7 +566,6 @@ function startMcpPluginHost() {
     while (rawBuffer.length > 0) {
       const preview = rawBuffer.subarray(0, Math.min(rawBuffer.length, 64)).toString('utf8');
       if (/^Content-Length:/i.test(preview.trimStart())) {
-        framingMode = 'lsp';
         const sepIdx = rawBuffer.indexOf('\r\n\r\n');
         const lfSepIdx = sepIdx < 0 ? rawBuffer.indexOf('\n\n') : -1;
         const headerEnd = sepIdx >= 0 ? sepIdx : lfSepIdx;
@@ -579,7 +596,7 @@ function startMcpPluginHost() {
       rawBuffer = rawBuffer.subarray(nlIdx + 1);
       if (!lineStr) continue;
       try {
-        dispatchParsedPayload(JSON.parse(lineStr), framingMode);
+        dispatchParsedPayload(JSON.parse(lineStr), 'line');
       } catch {}
     }
   }

@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
 
-const lifecycle = require(path.join(ROOT_DIR, 'lifecycle.js'));
+const lifecycle = require(path.join(ROOT_DIR, 'src', 'lifecycle.js'));
 const MOCK_WIN_EXE = 'C:\\Mock\\Antigravity\\Antigravity.exe';
 const MOCK_STALE_PORT_FILE = 'C:\\Temp\\DevToolsActivePort';
 const MOCK_SYS_PATH = 'C:\\Windows\\System32';

@@ -2,6 +2,45 @@
 
 All notable changes to **Claude Studio (`agy-claude-studio`)** and its upstream base **AGY Claude Style (`0DNANCY/agy-claude-style`)** are documented in this file.
 
+## [v2.3.0] - 2026-11-28
+
+`v2.3.0` 推出独立常驻三栏 Claude Studio 侧栏与对话顶栏插件快捷钉住，升级 5 套对称显式浅/深配色，新增 Claude 风格环境分支菜单与完整 `/btw` 旁支提问工作流，同步完成 Antigravity `v2.36.0` 本地化、技能说明按需翻译胶囊、暖白 Windows 安装器改版，以及 CLI 宿主隔离、旧文件自清理与 Windows 代理环境变量透传加固。
+
+### 独立常驻三栏侧栏与对话顶栏插件钉住
+- **独立三栏常驻 Dock**：支持将 Claude Studio 固定在最右侧作为独立第三栏（`pinRightPane: 'studio' | 'off'`），与浏览器、文件预览、终端等辅助面板标签页共存不遮挡，并支持单栏独立常驻、SVG 侧栏徽标与防抖动保护。
+- **全屏看图零帧让位与顶栏 `✦` 折叠**：辅助面板最大化（如全屏看图）时常驻侧栏与 iframe 零帧隐藏让位、恢复后自动归位；折叠常驻侧栏后收成 `0px`，改为在对话顶栏 `⋮` 左侧展示单枚陶土红 `✦` 展开按钮。
+- **对话顶栏插件快捷钉住**：在 `⋮ → 插件` 子菜单每行右侧新增 `📌` 胶囊一键钉住/取消任意 UI 侧栏插件（不误触打开、不关菜单），在对话顶栏 `⋮` 左侧展示原版图标并支持三态点击（打开 / 切换 / 关闭收起），与常驻 Studio 折叠 `✦` 自动去重，可在「设置 → 进阶交互 → 顶栏插件钉选」随时开关，同时修复多会话桥接串扰与辅助栏关闭按钮误判。
+
+### 5 套对称显式浅色与深色配色
+- **跨宿主明暗的 5 项对称配色**：提供 `claude`、`claude-dark`、`obsidian`、`obsidian-dark` 与 `host` 五项选择，5 语种下拉清晰标明「浅色 / 深色 / 跟随宿主」。
+- **端到端主题覆盖**：显式浅色与显式深色不再受 Antigravity 宿主明暗模式制约，完整覆盖界面变量、代码块语法高亮、图表色板、思考强度滑块、毛玻璃浮层与控制室 Sidecar；同步将 Gemini 娘加载动效升级为 12 刻度光环。
+
+### Claude 风格环境菜单、`/btw` 旁支提问与输入区打磨
+- **Claude 风格环境菜单**：新增环境分支与 Git Worktree 切换菜单，支持 `.repo + worktree/` 容器仓库识别与暗色分支悬浮提示。
+- **`/btw` 旁支提问与 `/compact` 继续压缩**：控制室「对话」页完整追踪 `/btw` 旁支提问，统一平静卡片样式、隔离多会话串扰，并将旁支运行徽章精简标为 `旁`（`Side` / `副`）；`/compact` 新增 `continue`（「继续压缩」）预设，Lexical 输入框支持 `/compact` ↔ `/btw` 无感替换同时保留普通草稿与 IME 输入法组合状态。
+- **模型胶囊分组与原生控件隔离**：`✦` 与模型名合并为统一悬浮/展开胶囊并拦截原生模型弹窗，思考强度独立为等高胶囊；新增 `effortSliderStyle: 'off'` 保留原生思考控件（周期表收敛为仅由 `✦` 进入），并在 `composerRestyle: false` 时隔离原生输入框布局与毛玻璃。
+
+### Antigravity v2.36.0 本地化、技能翻译胶囊与按需语言包
+- **Antigravity `v2.36.0` 全量词条补齐**：补全旁支提问、新建标签页与设置页新增文案的 4 语种离线词库与规则，并新增过期云端词库防回退保护，避免旧远端包覆盖内置新词条。
+- **技能翻译胶囊与精简按需包**：为「设置 → 技能」与 `/customizations` 新增按需「翻译说明」胶囊；将繁体中文（`zh-TW`）改为按需下载（基础包仅内置简体中文与英文），修复词库同步/重置请求体并区分「云端」与「云端已更新」状态及绿色更新按钮。
+
+### 暖白 Windows 安装器、测试版通道、自清理与可靠性加固
+- **暖白安装包与更新日志自动汉化**：Windows 安装器升级为 Claude 暖白界面并持久化快捷方式图标；`scripts/fetch-agy-changelog.mjs` 新增官方更新日志自动中文翻译（同时退役重复的 `check-agy-update.mjs`）。
+- **测试版通道与控制室精修**：设置页新增「接受测试版本推送（`receivePrerelease`）」开关、紧凑单开手风琴与去灰框词库列表；「对话」页支持活跃任务置顶；`configSchemaVersion: 2` 升级自动启用常驻侧栏。
+- **`src/` 整理与旧文件自清理**：核心运行代码收拢至 `src/` 并移除 11 个旧版平铺脚本；新增基于 SHA-256 白名单的 `v2.2.4` 前根目录遗留文件自清理（保留用户自定义修改）及在线更新后子进程热重注。
+- **CLI 隔离、安全与 Windows 代理透传**：隔离 `antigravity-cli` 宿主与桌面端 CDP 注入及数据写入；加固侧栏子进程环境隔离、清理边界与发布 CI 6 处版本号硬门禁；Windows 重启 Antigravity 时安全透传进程级代理环境变量（`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`、`NODE_USE_ENV_PROXY`）并自动清理临时脚本（PR #4，感谢 `@fexpopopoi`）。
+
+### Summary (English)
+- **Independent Persistent Studio Dock & Titlebar Plugin Pinning**: Adds a persistent far-right 3-column Studio dock (`pinRightPane: 'studio' | 'off'`) with solo dock mode, zero-frame auto-yield when the Aux Pane is maximized, `0px` collapse into a titlebar `✦` button, and per-row `📌` pinning in `⋮ → Plugins` to dock any UI sidecar plugin in the conversation titlebar with 3-state toggling and multi-conversation bridge fixes.
+- **5 Explicit Light & Dark Palettes**: Upgrades palette selection to 5 explicit modes (`claude`, `claude-dark`, `obsidian`, `obsidian-dark`, `host`) that render consistently across host light/dark modes, covering syntax highlighting, charts, effort sliders, glassmorphism overlays, and the Studio sidecar.
+- **Claude-Style Environment Menus, `/btw` Workflow & Composer Polish**: Adds branch/worktree Environment menus with `.repo + worktree/` container detection, full `/btw` side-question tracking with concise `Side` (`旁` / `副`) badges, a `continue` preset for `/compact`, seamless Lexical `/compact` ↔ `/btw` token swaps preserving drafts and IME composition, a grouped `✦` + model pill with separate equal-height effort pill, `effortSliderStyle: 'off'`, and clean native composer isolation when `composerRestyle: false`.
+- **Antigravity v2.36.0 Localization & On-Demand Packs**: Completes `v2.36.0` string coverage across all 4 locale packs with stale cloud pack protection, adds an on-demand "Translate Descriptions" pill for Skills settings and `/customizations`, moves `zh-TW` to on-demand download, and clarifies `Cloud` vs. `Cloud Updated` status badges.
+- **Warm Ivory Installer, Beta Channel, Self-Cleanup & Hardening**: Refreshes the Windows installer in warm ivory with persistent shortcut icons and auto-translated Antigravity changelogs; adds the opt-in `receivePrerelease` beta channel toggle, compact accordion Settings, active task pinning, and `configSchemaVersion: 2` migration; organizes runtime code into `src/` with SHA-256 allowlisted pre-v2.2.4 legacy cleanup and subprocess re-injection; isolates `antigravity-cli` hosts; and preserves Windows process proxy env vars across relaunches (PR #4, thanks `@fexpopopoi`).
+
+**Full Changelog**: https://github.com/eosglyph/agy-claude-studio/compare/v2.2.3...v2.3.0
+
+---
+
 ## [v2.2.3] - 2026-11-26
 
 `v2.2.3` 全面收敛为 Antigravity 原生插件架构：推出全新 Windows 一键原生插件安装器，补齐 Antigravity `v2.35.2` 全量中文本地化并支持粤语、日语按需云端下载，新增 Gemini 娘加载动效与聊天区内嵌宽屏脚本输出卡片，并针对输入框同步、光标测量与侧边栏轮询做了一轮实测驱动的性能优化。

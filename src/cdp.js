@@ -7,7 +7,7 @@ const { execFileSync, spawn } = require('child_process');
 
 const STYLE_ID = 'ag-claude-studio-css';
 const LEGACY_STYLE_ID = 'ag-claude-style-css';
-const PLUGIN_VERSION = '2.2.3';
+const PLUGIN_VERSION = '2.3.0';
 const SETTING_BINDING = '__agClaudeStudioSetting';
 const STARTUP_GRACE_SECONDS = 90;
 const IS_MAC = process.platform === 'darwin';
@@ -48,24 +48,54 @@ const CONFIG_FILE_ENV = (process.env.AGY_CLAUDE_STUDIO_CONFIG || process.env.AGY
   ? path.resolve(process.env.AGY_CLAUDE_STUDIO_CONFIG || process.env.AGY_CLAUDE_STYLE_CONFIG)
   : '';
 
-function resolvePluginDataDir(env = process.env) {
-  const pluginData = String(env?.AGY_CLAUDE_STUDIO_PLUGIN_DATA || env?.AGY_CLAUDE_STYLE_PLUGIN_DATA || '').trim();
-  if (pluginData && !pluginData.includes('${')) {
-    return path.resolve(pluginData);
+function expandedPath(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  return raw.includes('${') ? '' : raw;
+}
+
+function explicitPluginData(env) {
+  return expandedPath(env?.AGY_CLAUDE_STUDIO_PLUGIN_DATA) || expandedPath(env?.AGY_CLAUDE_STYLE_PLUGIN_DATA);
+}
+
+function executableDataDir(env) {
+  if (String(env?.ANTIGRAVITY_LS_ADDRESS || '').trim() === 'test.invalid') return '';
+  return expandedPath(env?.ANTIGRAVITY_EXECUTABLE_DATA_DIR);
+}
+
+function isCliPluginDataPath(rawPath) {
+  // win32.normalize accepts both separators and resolves dot segments on every platform.
+  const normalized = path.win32.normalize(expandedPath(rawPath));
+  return /(?:^|\\)antigravity-cli\\(?:plugin_data|sidecar_data)(?:\\|$)/i.test(normalized);
+}
+
+function isAntigravityCliHost(env = process.env) {
+  // Identify the host before redirecting data reads to its desktop sibling.
+  return isCliPluginDataPath(explicitPluginData(env) || expandedPath(env?.PLUGIN_DATA) || executableDataDir(env));
+}
+
+function normalizeCliPluginDataDir(resolvedDir, { existsSync = fs.existsSync } = {}) {
+  const resolved = path.resolve(resolvedDir);
+  const dataRoot = path.dirname(resolved);
+  const hostRoot = path.dirname(dataRoot);
+  if (path.basename(dataRoot).toLowerCase() === 'plugin_data' && path.basename(hostRoot).toLowerCase() === 'antigravity-cli') {
+    const desktop = path.join(path.dirname(hostRoot), 'antigravity', 'plugin_data', path.basename(resolved));
+    if (existsSync(desktop)) return desktop;
   }
-  const sidecarData = String(env?.ANTIGRAVITY_EXECUTABLE_DATA_DIR || '').trim();
-  const lsAddr = String(env?.ANTIGRAVITY_LS_ADDRESS || '').trim();
-  if (sidecarData && lsAddr !== 'test.invalid') {
+  return resolved;
+}
+
+function resolvePluginDataDir(env = process.env) {
+  const pluginData = explicitPluginData(env);
+  if (pluginData) return normalizeCliPluginDataDir(pluginData);
+  const sidecarData = executableDataDir(env);
+  if (sidecarData) {
     const resolvedSidecar = path.resolve(sidecarData);
     let cur = resolvedSidecar;
     let prevChild = '';
     for (let depth = 0; depth < 8 && cur && path.dirname(cur) !== cur; depth += 1) {
       const base = path.basename(cur);
-      const isSidecarData = process.platform === 'win32'
-        ? base.toLowerCase() === 'sidecar_data'
-        : base === 'sidecar_data';
-      if (isSidecarData && prevChild) {
-        return path.join(path.dirname(cur), 'plugin_data', prevChild);
+      if (base.toLowerCase() === 'sidecar_data' && prevChild) {
+        return normalizeCliPluginDataDir(path.join(path.dirname(cur), 'plugin_data', prevChild));
       }
       prevChild = base;
       cur = path.dirname(cur);
@@ -76,11 +106,12 @@ function resolvePluginDataDir(env = process.env) {
 }
 
 const PLUGIN_DATA_DIR = resolvePluginDataDir(process.env);
+const ROOT_DIR = path.resolve(__dirname, '..');
 const PORT_FILE = path.join(APP_DATA, 'Antigravity', 'DevToolsActivePort');
-const STATE_DIR = STATE_DIR_ENV || PLUGIN_DATA_DIR || __dirname;
+const STATE_DIR = STATE_DIR_ENV || PLUGIN_DATA_DIR || ROOT_DIR;
 const PID_FILE = path.join(STATE_DIR, '.watch.pid');
 const LOCK_FILE = path.join(STATE_DIR, '.watch.lock.json');
-const LEGACY_CONFIG_FILE = path.join(__dirname, 'config.json');
+const LEGACY_CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
 const CONFIG_FILE =
   CONFIG_FILE_ENV ||
   (PLUGIN_DATA_DIR ? path.join(PLUGIN_DATA_DIR, 'config.json') : LEGACY_CONFIG_FILE);
@@ -100,7 +131,10 @@ function atomicWriteFileSync(filePath, content) {
   }
 }
 
+const CURRENT_CONFIG_SCHEMA_VERSION = 2;
+
 const DEFAULT_CONFIG = {
+  configSchemaVersion: CURRENT_CONFIG_SCHEMA_VERSION,
   language: 'zh-CN',
   palette: 'claude',
   glassEffect: true,
@@ -129,8 +163,11 @@ const DEFAULT_CONFIG = {
   orchestratorSwitch: true,
   pluginPageTranslate: true,
   fileLinkContextMenu: true,
+  toolbarPluginPin: true,
   geminiLoader: true,
+  receivePrerelease: false,
   i18nIgnoreSelectors: [],
+  pinnedToolbarPlugins: [],
   autoRelaunchWithCdp: true,
   exitOnHostClose: false,
   pollIntervalMs: 2500,
@@ -139,14 +176,14 @@ const DEFAULT_CONFIG = {
 // Shared declarative schema consumed by inject.js and installer build manifests.
 const CONFIG_VALIDATORS = {
   language: ['zh-CN', 'zh-TW', 'yue', 'en', 'ja'],
-  palette: ['obsidian', 'claude', 'host'],
+  palette: ['obsidian', 'obsidian-dark', 'claude', 'claude-dark', 'host'],
   glassEffect: 'boolean',
   homeLayout: ['studio', 'classic', 'off'],
   homeRipple: 'boolean',
   composerRestyle: 'boolean',
   mascot: ['crab', 'off'],
   logoInk: ['accent', 'foreground'],
-  pinRightPane: ['off', 'usage-monitor', 'studio'],
+  pinRightPane: ['off', 'studio'],
   usageStatsEnabled: 'boolean',
   inlineStats: 'boolean',
   ringMode: ['context', 'quota'],
@@ -154,23 +191,25 @@ const CONFIG_VALIDATORS = {
   hudTopBar: 'boolean',
   hudBottomBar: 'boolean',
   hudRimProgress: 'boolean',
-  effortSliderStyle: ['claude', 'chatgpt'],
+  effortSliderStyle: ['claude', 'chatgpt', 'off'],
   effortAccent: 'boolean',
   smoothCaret: 'boolean',
   sidebarRestyle: 'boolean',
   sidebarCompact: 'boolean',
   placeholderStyle: ['studio', 'host'],
-  compactPreset: ['empty', 'clean', 'dev', 'custom'],
+  compactPreset: ['empty', 'clean', 'dev', 'continue', 'custom'],
   periodicSelector: 'boolean',
   orchestratorSwitch: 'boolean',
   pluginPageTranslate: 'boolean',
   fileLinkContextMenu: 'boolean',
+  toolbarPluginPin: 'boolean',
   geminiLoader: 'boolean',
+  receivePrerelease: 'boolean',
   autoRelaunchWithCdp: 'boolean',
   exitOnHostClose: 'boolean',
 };
 
-const I18N_COMPAT_FILE = path.join(__dirname, 'i18n-compat.json');
+const I18N_COMPAT_FILE = path.join(ROOT_DIR, 'i18n-compat.json');
 const REMOTE_I18N_COMPAT_URL =
   'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/i18n-compat.json';
 
@@ -192,6 +231,28 @@ function sanitizeSelectorList(raw) {
   return out;
 }
 
+const PINNED_TOOLBAR_SIDECAR_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._/-]+$/;
+
+function isValidPinnedToolbarSidecarId(raw) {
+  const s = typeof raw === 'string' ? raw.trim().replace(/\/+$/, '') : '';
+  if (!s || s.length > 120 || !PINNED_TOOLBAR_SIDECAR_RE.test(s)) return false;
+  return !s.split('/').some((seg) => !seg || seg === '.' || seg === '..');
+}
+
+function sanitizePinnedToolbarPlugins(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    const s = typeof item === 'string' ? item.trim().replace(/\/+$/, '') : '';
+    if (!isValidPinnedToolbarSidecarId(s) || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 function validateConfigSetting(key, value) {
   if (key === 'pollIntervalMs') {
     return Number.isInteger(value) && value >= 250 && value <= 60000;
@@ -199,6 +260,10 @@ function validateConfigSetting(key, value) {
   if (key === 'i18nIgnoreSelectors') {
     if (!Array.isArray(value) || value.length > 50) return false;
     return value.every((s) => typeof s === 'string' && s.trim().length > 0 && s.trim().length <= 160 && !/[\r\n\0<>{};]/.test(s));
+  }
+  if (key === 'pinnedToolbarPlugins') {
+    if (!Array.isArray(value) || value.length > 12) return false;
+    return value.every((s) => isValidPinnedToolbarSidecarId(s));
   }
   if (key === 'compactCustomText') {
     return typeof value === 'string' && value.length <= 600 && !/\0/.test(value);
@@ -234,7 +299,10 @@ function sanitizeConfig(raw) {
     }
   }
   if (raw.pinRightPane === undefined && typeof raw.pinUsageMonitorPane === 'boolean') {
-    out.pinRightPane = raw.pinUsageMonitorPane ? 'usage-monitor' : 'off';
+    out.pinRightPane = 'off';
+  }
+  if (out.pinRightPane === 'usage-monitor') {
+    out.pinRightPane = 'off';
   }
   if (!CONFIG_VALIDATORS.pinRightPane.includes(out.pinRightPane)) {
     out.pinRightPane = DEFAULT_CONFIG.pinRightPane;
@@ -242,18 +310,43 @@ function sanitizeConfig(raw) {
   if (raw.usageStatsEnabled === undefined && typeof raw.usageMonitorCompat === 'boolean') {
     out.usageStatsEnabled = !raw.usageMonitorCompat;
   }
-  if (raw.paletteEnabled === false && raw.palette !== 'obsidian' && raw.palette !== 'claude') {
+  if (
+    raw.paletteEnabled === false &&
+    (!CONFIG_VALIDATORS.palette.includes(raw.palette) || raw.palette === 'host')
+  ) {
     out.palette = 'host';
-  } else if (out.palette !== 'obsidian' && out.palette !== 'claude' && out.palette !== 'host') {
+  } else if (!CONFIG_VALIDATORS.palette.includes(out.palette)) {
     out.palette = 'obsidian';
   }
   out.i18nIgnoreSelectors = sanitizeSelectorList(out.i18nIgnoreSelectors);
+  out.pinnedToolbarPlugins = sanitizePinnedToolbarPlugins(out.pinnedToolbarPlugins);
   if (!CONFIG_VALIDATORS.compactPreset.includes(out.compactPreset)) {
     out.compactPreset = DEFAULT_CONFIG.compactPreset;
   }
   out.compactCustomText =
     typeof out.compactCustomText === 'string' ? out.compactCustomText.replace(/\0/g, '').slice(0, 600) : '';
+  out.configSchemaVersion =
+    Number.isInteger(out.configSchemaVersion) && out.configSchemaVersion >= 1
+      ? out.configSchemaVersion
+      : CURRENT_CONFIG_SCHEMA_VERSION;
   return out;
+}
+
+function upgradePersistedConfig(raw) {
+  const prevSchema =
+    raw && typeof raw === 'object' && Number.isInteger(raw.configSchemaVersion)
+      ? raw.configSchemaVersion
+      : 1;
+  const config = sanitizeConfig(raw);
+  let migrated = false;
+  if (prevSchema < CURRENT_CONFIG_SCHEMA_VERSION) {
+    // Schema v2: independent 3-column Claude Studio dock no longer blocks browser/files/terminal,
+    // so enable pinRightPane ('studio') once when upgrading from v1 configs.
+    config.pinRightPane = 'studio';
+    config.configSchemaVersion = CURRENT_CONFIG_SCHEMA_VERSION;
+    migrated = true;
+  }
+  return { config, migrated };
 }
 
 function parseI18nCompatJson(raw) {
@@ -414,8 +507,8 @@ function ensureMigratedPluginConfig({
     try {
       if (!fs.existsSync(cand)) continue;
       const raw = fs.readFileSync(cand, 'utf8');
-      const sanitized = sanitizeConfig(JSON.parse(raw));
-      atomicWriteFileSync(configFile, JSON.stringify(sanitized, null, 2) + '\n');
+      const { config: upgraded } = upgradePersistedConfig(JSON.parse(raw));
+      atomicWriteFileSync(configFile, JSON.stringify(upgraded, null, 2) + '\n');
       return true;
     } catch {
       // try next candidate
@@ -429,7 +522,16 @@ function readConfig(configPath = CONFIG_FILE) {
     ensureMigratedPluginConfig();
   }
   try {
-    return sanitizeConfig(JSON.parse(fs.readFileSync(configPath, 'utf8')));
+    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { config, migrated } = upgradePersistedConfig(raw);
+    if (migrated) {
+      try {
+        atomicWriteFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+      } catch {
+        // Best-effort persistence when configPath is read-only
+      }
+    }
+    return config;
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -710,6 +812,87 @@ function computeHash(str) {
   return (h >>> 0).toString(36);
 }
 
+const PLUGIN_ICON_MIMES = Object.freeze({
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+});
+
+function readPluginLogoDataUri(pluginName, { pluginRoots } = {}) {
+  const safeName = typeof pluginName === 'string' ? pluginName.trim() : '';
+  if (!safeName || !/^[a-zA-Z0-9._-]+$/.test(safeName) || safeName === '.' || safeName === '..') {
+    return '';
+  }
+  const roots = Array.isArray(pluginRoots) && pluginRoots.length
+    ? pluginRoots
+    : [
+        path.join(os.homedir(), '.gemini', 'config', 'plugins'),
+        path.join(os.homedir(), '.gemini', 'antigravity', 'builtin', 'plugins'),
+      ];
+  for (const rootDir of roots) {
+    if (!rootDir) continue;
+    const pluginDir = path.join(rootDir, safeName);
+    let realPluginDir = '';
+    try {
+      const st = fs.statSync(pluginDir);
+      if (!st.isDirectory()) continue;
+      realPluginDir = fs.realpathSync(pluginDir);
+    } catch {
+      continue;
+    }
+    let logoRel = 'assets/logo.svg';
+    try {
+      const manifestPath = path.join(realPluginDir, 'plugin.json');
+      if (fs.existsSync(manifestPath)) {
+        const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        if (typeof parsed?.logo === 'string' && parsed.logo.trim()) {
+          logoRel = parsed.logo.trim();
+        }
+      }
+    } catch {}
+    if (/^https?:\/\//i.test(logoRel)) {
+      return logoRel;
+    }
+    if (/^data:image\//i.test(logoRel) && logoRel.length <= 96 * 1024) {
+      return logoRel;
+    }
+    try {
+      const candidate = path.resolve(realPluginDir, logoRel);
+      const realFile = fs.realpathSync(candidate);
+      const relCheck = path.relative(realPluginDir, realFile);
+      if (!relCheck || relCheck.startsWith('..') || path.isAbsolute(relCheck)) continue;
+      const ext = path.extname(realFile).toLowerCase();
+      const mime = PLUGIN_ICON_MIMES[ext];
+      if (!mime) continue;
+      const fst = fs.statSync(realFile);
+      if (!fst.isFile() || fst.size <= 0 || fst.size > 64 * 1024) continue;
+      if (ext === '.svg') {
+        const svgText = fs.readFileSync(realFile, 'utf8');
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+      }
+      const buf = fs.readFileSync(realFile);
+      return `data:${mime};base64,${buf.toString('base64')}`;
+    } catch {}
+  }
+  return '';
+}
+
+function readPinnedPluginIcons(pinnedSidecarIds, opts = {}) {
+  const list = sanitizePinnedToolbarPlugins(pinnedSidecarIds);
+  const out = {};
+  for (const sidecarId of list) {
+    const slash = sidecarId.indexOf('/');
+    const pluginName = slash > 0 ? sidecarId.slice(0, slash) : sidecarId;
+    const uri = readPluginLogoDataUri(pluginName, opts);
+    if (uri) out[sidecarId] = uri;
+  }
+  return out;
+}
+
 function buildInjectExpression(customConfig) {
   const config = customConfig || readConfig();
   const css = readCss();
@@ -798,9 +981,11 @@ function buildInjectExpression(customConfig) {
               const extraOptOut = resolveExtraI18nOptOutSelectors(config);
               const periodicOverride = readPeriodicOverride();
               const cloudPack = readCloudLocalePackOverride(config.language);
+              const pinnedPluginIcons = readPinnedPluginIcons(config.pinnedToolbarPlugins);
               const out = { ...config, binding: SETTING_BINDING, codeHash };
               if (extraOptOut.length) out.i18nOptOutSelectors = extraOptOut;
               if (periodicOverride) out.periodicOverride = periodicOverride;
+              if (Object.keys(pinnedPluginIcons).length) out.pinnedPluginIcons = pinnedPluginIcons;
               if (cloudPack && cloudPack.pack) {
                 out.i18nPackOverride = cloudPack.pack;
                 out.i18nPackHash = cloudPack.hash || '';
@@ -852,9 +1037,11 @@ function buildConfigScriptExpression(customConfig, expectedCodeHash) {
   const extraOptOut = resolveExtraI18nOptOutSelectors(config);
   const periodicOverride = readPeriodicOverride();
   const cloudPack = readCloudLocalePackOverride(config.language);
+  const pinnedPluginIcons = readPinnedPluginIcons(config.pinnedToolbarPlugins);
   const payload = { ...config, binding: SETTING_BINDING, codeHash: expectedHash };
   if (extraOptOut.length) payload.i18nOptOutSelectors = extraOptOut;
   if (periodicOverride) payload.periodicOverride = periodicOverride;
+  if (Object.keys(pinnedPluginIcons).length) payload.pinnedPluginIcons = pinnedPluginIcons;
   if (cloudPack && cloudPack.pack) {
     payload.i18nPackOverride = cloudPack.pack;
     payload.i18nPackHash = cloudPack.hash || '';
@@ -927,7 +1114,9 @@ const REMOVE_EXPRESSION = `(() => {
   delete globalThis.__agCsLocales;
   const root = document.documentElement;
   if (root) {
+    root.removeAttribute('data-ag-cs-effort-slider');
     root.removeAttribute('data-ag-cs-effort-accent');
+    root.removeAttribute('data-ag-cs-periodic');
     root.removeAttribute('data-ag-cs-glass');
     root.removeAttribute('data-ag-cs-fx-glass');
     root.removeAttribute('data-ag-cs-fx-scrollbar');
@@ -939,13 +1128,43 @@ const REMOVE_EXPRESSION = `(() => {
     root.removeAttribute('data-ag-cs-cjk');
     root.removeAttribute('data-ag-custom-theme');
     root.removeAttribute('data-aux-pane-maximized');
+    root.removeAttribute('data-ag-cs-dock-dragging');
     if (root.style && typeof root.style.removeProperty === 'function') {
       root.style.removeProperty('--antigravity-active-theme-id');
     }
     if (root.getAttribute('data-ag-cjk') === '1') root.removeAttribute('data-ag-cjk');
   }
+  document.querySelectorAll('[data-ag-cs-effort], .ag-cs-effort-badge').forEach((el) => {
+    el.removeAttribute('data-ag-cs-effort');
+    el.classList.remove('ag-cs-effort-badge');
+  });
+  document.querySelectorAll('[data-ag-cs-has-effort]').forEach((el) => {
+    el.removeAttribute('data-ag-cs-has-effort');
+    el.style?.removeProperty?.('--ag-cs-effort-cut');
+  });
+  document.querySelectorAll('[data-ag-cs-inline-model-wrap]').forEach((el) => {
+    el.removeAttribute('data-ag-cs-inline-model-wrap');
+  });
+  document.querySelectorAll('[data-ag-cs-dock-open], [data-ag-cs-dock-solo], [data-ag-cs-dock-aux-max]').forEach((el) => {
+    el.removeAttribute('data-ag-cs-dock-open');
+    el.removeAttribute('data-ag-cs-dock-solo');
+    el.removeAttribute('data-ag-cs-dock-aux-max');
+    el.style?.removeProperty?.('--ag-cs-dock-w');
+    el.style?.removeProperty?.('--ag-cs-dock-solo-pr');
+  });
+  document.querySelectorAll('[data-ag-cs-docked-slot], [data-ag-cs-dock-hidden]').forEach((slot) => {
+    slot.removeAttribute('data-ag-cs-docked-slot');
+    slot.removeAttribute('data-ag-cs-dock-hidden');
+    const ov = slot.parentElement;
+    if (ov?.style?.removeProperty) {
+      ov.style.removeProperty('--ag-cs-dock-slot-left');
+      ov.style.removeProperty('--ag-cs-dock-slot-top');
+      ov.style.removeProperty('--ag-cs-dock-slot-width');
+      ov.style.removeProperty('--ag-cs-dock-slot-height');
+    }
+  });
   const nodes = document.querySelectorAll(
-    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
+    'style#${STYLE_ID}, style#${LEGACY_STYLE_ID}, style#ag-cs-aurora-theme-css, style#ag-token-hud-style, .ag-cs-pinned-dock, .ag-cs-dock-toolbar-btn, .ag-cs-toolbar-pin-group, .ag-cs-toolbar-pin-btn, .ag-cs-menu-pin-btn, .ag-cs-home-panel-seat, .ag-cs-ripple-host, .ag-cs-ripple-canvas, .ag-cs-crab, .ag-cs-inline-stats, .ag-cs-periodic-trigger, .ag-cs-orch-switch, .ag-cs-ps-backdrop, .ag-cs-ps-drawer, .ag-cs-context-ring, .ag-cs-um-ctx-proxy, .ag-cs-ctx-popover, .ag-cs-effort-popover, .ag-cs-smooth-caret, .ag-cs-compact-hint, .ag-cs-turn-bar, .ag-cs-hud-top-bar, .ag-cs-hud-bottom-bar, .ag-cs-hud-rim-progress, .ag-cs-hud-footer-chip, #ag-cs-settings-sec, #ag-cs-theme-selector, #ag-cs-theme-dropdown, .ag-th-top-bar, .ag-th-bottom-bar, .ag-th-rim-progress, .ag-th-footer-chip, .ag-th-popover, .ag-th-turn-bar, .ag-th-reopen-pill'
   );
   nodes.forEach((n) => n.remove());
   try {
@@ -1351,7 +1570,7 @@ function isNodeBinaryName(binPathOrToken, targetPlatform = process.platform) {
   return /^(?:node(?:\.exe)?|nodejs|electron(?:\.exe)?|electron helper.*|antigravity(?:\.exe)?)$/.test(base);
 }
 
-function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform = process.platform) {
+function evaluateWatcherOwnership(rawInfo, targetDir = ROOT_DIR, targetPlatform = process.platform) {
   if (!rawInfo || !targetDir) return 'unknown';
   const info =
     typeof rawInfo === 'string'
@@ -1409,7 +1628,10 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
 
   // 2. Node inject.js --watch / --managed check: verify executable AND exact first script argument (no ambiguous CLI flag skipping).
   if (!hasFlag('--watch') && !hasFlag('--managed')) return 'foreign';
-  const expectedScript = normalizePathForCompare(pathMod.join(normTargetDir, 'inject.js'), targetPlatform);
+  const expectedScripts = [
+    normalizePathForCompare(pathMod.join(normTargetDir, 'src', 'inject.js'), targetPlatform),
+    normalizePathForCompare(pathMod.join(normTargetDir, 'inject.js'), targetPlatform),
+  ];
 
   if (args && args.length >= 2) {
     if (!isNodeBinaryName(info.exePath || args[0], targetPlatform)) return 'foreign';
@@ -1423,7 +1645,7 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
     }
     const resolvedEntry = resolveCandidatePath(entryScript, info.cwd, targetPlatform);
     if (resolvedEntry) {
-      return resolvedEntry === expectedScript ? 'owned' : 'foreign';
+      return expectedScripts.includes(resolvedEntry) ? 'owned' : 'foreign';
     }
     return 'unknown';
   }
@@ -1467,10 +1689,12 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
     targetPlatform === 'darwin'
       ? rawUnquotedRest.replace(/^\/private(?=\/(?:var|tmp|etc)(?:\/|\s|"|'|$))/, '')
       : rawUnquotedRest;
-  if (unquotedRest.startsWith(expectedScript)) {
-    const nextChar = unquotedRest[expectedScript.length];
-    if (!nextChar || /[\s"']/.test(nextChar)) {
-      return 'owned';
+  for (const expectedScript of expectedScripts) {
+    if (unquotedRest.startsWith(expectedScript)) {
+      const nextChar = unquotedRest[expectedScript.length];
+      if (!nextChar || /[\s"']/.test(nextChar)) {
+        return 'owned';
+      }
     }
   }
 
@@ -1482,16 +1706,16 @@ function evaluateWatcherOwnership(rawInfo, targetDir = __dirname, targetPlatform
   }
   const resolvedRel = resolveCandidatePath(firstArg, info.cwd, targetPlatform);
   if (resolvedRel) {
-    return resolvedRel === expectedScript ? 'owned' : 'foreign';
+    return expectedScripts.includes(resolvedRel) ? 'owned' : 'foreign';
   }
   return 'unknown';
 }
 
-function matchesWatcherForDir(rawInfo, targetDir = __dirname, targetPlatform = process.platform) {
+function matchesWatcherForDir(rawInfo, targetDir = ROOT_DIR, targetPlatform = process.platform) {
   return evaluateWatcherOwnership(rawInfo, targetDir, targetPlatform) === 'owned';
 }
 
-function classifyWatcherPid(pid, targetDir = __dirname, opts = {}) {
+function classifyWatcherPid(pid, targetDir = ROOT_DIR, opts = {}) {
   const killFn = typeof opts.killFn === 'function' ? opts.killFn : (p, sig) => process.kill(p, sig);
   const inspectFn = typeof opts.inspectFn === 'function' ? opts.inspectFn : inspectProcessInfo;
   const platform = opts.platform || process.platform;
@@ -1531,11 +1755,11 @@ function classifyWatcherPid(pid, targetDir = __dirname, opts = {}) {
   return { status: 'foreign', pid, info };
 }
 
-function isLikelyWatcherProcess(pid, targetDir = __dirname, opts = {}) {
+function isLikelyWatcherProcess(pid, targetDir = ROOT_DIR, opts = {}) {
   return classifyWatcherPid(pid, targetDir, opts).status === 'owned';
 }
 
-function resolveExistingWatchPidAction(pidFile = PID_FILE, targetDir = __dirname, opts = {}) {
+function resolveExistingWatchPidAction(pidFile = PID_FILE, targetDir = ROOT_DIR, opts = {}) {
   const selfPid = Number.isInteger(opts.selfPid) ? opts.selfPid : process.pid;
   let pid;
   try {
@@ -1751,10 +1975,10 @@ async function relaunchAntigravityWithCdp(opts = {}) {
 
 function formatCdpUnavailableMessage({ running, port }) {
   const launchHint = IS_MAC
-    ? 'open -a Antigravity --args --remote-debugging-port=0（或运行 ./launch.sh）'
+    ? 'open -a Antigravity --args --remote-debugging-port=0（或运行 npm run launch）'
     : IS_WIN
-    ? 'Antigravity.exe --remote-debugging-port=0（或双击 launch.bat）'
-    : 'antigravity --remote-debugging-port=0（或运行 ./launch.sh）';
+    ? 'Antigravity.exe --remote-debugging-port=0（或运行 npm run launch）'
+    : 'antigravity --remote-debugging-port=0（或运行 npm run launch）';
   if (running) {
     return (
       `检测到 Antigravity 正在运行，但未开启远程调试端口（Antigravity 2.33.0+ 默认关闭 CDP` +
@@ -1798,7 +2022,7 @@ function prepareLocalFileAction({ mode, target, platform = process.platform, fsA
     // helper checks drive type and each component before querying the target.
     const command = 'try { Add-Type -LiteralPath $env:AGY_FILE_HELPER -ErrorAction Stop; if ([AgyClaudeStudio.WindowsFileAction]::Run($env:AGY_FILE_URI,$env:AGY_FILE_MODE)) { exit 0 } } catch {}; exit 1';
     const bin = path.win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    return { ok: true, mode, bin, args: ['-NoProfile', '-NonInteractive', '-STA', '-Command', command], options: { windowsHide: true, stdio: 'ignore', env: { ...process.env, AGY_FILE_HELPER: path.join(__dirname, 'scripts', 'WindowsFileAction.cs'), AGY_FILE_URI: target, AGY_FILE_MODE: mode } } };
+    return { ok: true, mode, bin, args: ['-NoProfile', '-NonInteractive', '-STA', '-Command', command], options: { windowsHide: true, stdio: 'ignore', env: { ...process.env, AGY_FILE_HELPER: path.join(ROOT_DIR, 'scripts', 'WindowsFileAction.cs'), AGY_FILE_URI: target, AGY_FILE_MODE: mode } } };
   }
   let stat;
   try {
@@ -1845,7 +2069,7 @@ function findWindowsCscExe() {
 }
 
 function getWindowsFileActionCacheInfo(cacheDir = path.join(STATE_DIR, 'cache')) {
-  const helperSrcPath = path.join(__dirname, 'scripts', 'WindowsFileAction.cs');
+  const helperSrcPath = path.join(ROOT_DIR, 'scripts', 'WindowsFileAction.cs');
   if (!fs.existsSync(helperSrcPath)) return null;
   const src = fs.readFileSync(helperSrcPath, 'utf8');
   const hash = computeHash(src + '\n' + WINDOWS_FILE_ACTION_MAIN_CS);
@@ -2068,6 +2292,7 @@ module.exports = {
   LOCK_FILE,
   LEGACY_CONFIG_FILE,
   CONFIG_FILE,
+  CURRENT_CONFIG_SCHEMA_VERSION,
   DEFAULT_CONFIG,
   CONFIG_VALIDATORS,
   I18N_COMPAT_FILE,
@@ -2079,9 +2304,13 @@ module.exports = {
   syncRemoteI18nCompat,
   validateConfigSetting,
   writeFileAtomic,
+  isCliPluginDataPath,
+  isAntigravityCliHost,
+  normalizeCliPluginDataDir,
   resolvePluginDataDir,
   atomicWriteFileSync,
   sanitizeConfig,
+  upgradePersistedConfig,
   ensureMigratedPluginConfig,
   readConfig,
   updateConfigSetting,
@@ -2121,6 +2350,9 @@ module.exports = {
   readCss,
   readRuntimeBundle,
   computeHash,
+  sanitizePinnedToolbarPlugins,
+  readPluginLogoDataUri,
+  readPinnedPluginIcons,
   buildInjectExpression,
   buildConfigScriptExpression,
   buildRefreshExpression,

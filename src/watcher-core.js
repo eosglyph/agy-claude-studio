@@ -26,9 +26,10 @@ const {
   acquireWatcherLock,
 } = require('./lifecycle');
 
+const ROOT_DIR = path.resolve(__dirname, '..');
 const STATE_DIR = (process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR)
   ? path.resolve(process.env.AGY_CLAUDE_STUDIO_STATE_DIR || process.env.AGY_CLAUDE_STYLE_STATE_DIR)
-  : CDP_STATE_DIR || __dirname;
+  : CDP_STATE_DIR || ROOT_DIR;
 const LOG_FILE = path.join(STATE_DIR, 'watch.log');
 
 function shortTitle(page) {
@@ -125,7 +126,7 @@ async function startWatchController(options = {}) {
   });
 
   if (!lock.acquired) {
-    const err = new Error(`守护进程已在运行 (PID ${lock.existingPid})。如需重启请先运行 remove.bat`);
+    const err = new Error(`守护进程已在运行 (PID ${lock.existingPid})。如需重启请先运行 node src/remove.js 或 npm run remove`);
     err.code = 'WATCHER_LOCKED';
     err.existingPid = lock.existingPid;
     err.existingMode = lock.existingMode || null;

@@ -32,19 +32,33 @@
       'Optional: guide compaction (e.g. keep open plans, drop finished details) · Enter for default',
       '任意：圧縮の指示を入力（例：未完の計画を残し完了分を省略）・Enter で標準圧縮',
     ],
+    btwGuideHint: [
+      '旁支提问：可在不影响当前会话进度的情况下随时提问，输入问题后回车即可',
+      '旁支提問：可在不影響目前對話進度的情況下隨時提問，輸入問題後按 Enter 即可',
+      '旁支提問：可以喺唔影響而家對話進度嘅情況下隨時發問，打完問題按 Enter 就得',
+      'Side question: ask anything without interrupting the current chat · type and press Enter',
+      'サイド質問：現在の会話の進行を妨げずに質問できます・入力して Enter',
+    ],
     compactPresetClean: [
-      '丢弃已完成任务的琐碎过程与历史噪音，保留核心业务逻辑框架、已确定的关键约束，以及当前进行中任务的全部细节和待办计划。',
-      '略過已完成任務的瑣碎過程與歷史雜訊，保留核心業務邏輯框架、已確定的關鍵約束，以及目前進行中任務的全部細節與待辦計畫。',
-      '丟走已完成任務嘅瑣碎過程同歷史雜訊，保留核心業務邏輯框架、已確定嘅關鍵約束，同埋而家做緊嘅任務全部細節同待辦計畫。',
-      'Drop finished-task noise and verbose logs; keep the core architecture, key constraints, full details of work in progress, and open TODOs.',
-      '完了済みタスクの冗長な経緯やログを省き、中核の業務ロジック構造、確定した制約、進行中タスクの詳細と未完了のTODOを保持してください。',
+      '丢弃冗长的工具调用输入输出、完整日志、已完成任务的试错过程，以及已处理完的图片/视频等大体积附件细节（仅留结论；若属当前未完任务，先提炼关键视觉与内容要点）；保留核心业务逻辑与架构框架、已敲定方案及用户偏好/否决项、关键约束，以及进行中任务的完整上下文与待办计划。',
+      '略過冗長的工具呼叫輸入輸出、完整日誌、已完成任務的試錯過程，以及已處理完的圖片/影片等大體積附件細節（僅留結論；若屬目前未完任務，先提煉關鍵視覺與內容要點）；保留核心業務邏輯與架構框架、已敲定方案及使用者偏好/否決項、關鍵約束，以及進行中任務的完整上下文與待辦計畫。',
+      '丟走冗長嘅工具呼叫輸入輸出、完整日誌、已完成任務嘅試錯過程，同埋已處理完嘅圖片/影片等大體積附件細節（只留結論；如果屬於而家未完任務，先提煉關鍵視覺同內容要點）；保留核心業務邏輯同架構框架、已拍板方案同用戶偏好/否決項、關鍵約束，同埋進行中任務嘅完整上下文同待辦計畫。',
+      'Drop verbose tool I/O, full logs, finished-task trial-and-error, and processed image/video details (keep conclusions only; for active unfinished tasks, extract key visual/content points first). Keep core business logic and architecture, finalized decisions, user preferences and rejected options, key constraints, full context of work in progress, and open TODOs.',
+      '冗長なツール入出力、完全なログ、完了済みタスクの試行錯誤、および処理済みの画像・動画など大容量添付の詳細を省き（結論のみ保持；進行中の未完タスクに関するものは重要な視覚・内容の要点を先に抽出）、中核の業務ロジックとアーキテクチャ、確定方針・ユーザー好み・却下案、重要な制約、進行中タスクの完全な文脈と未完了TODOを保持してください。',
     ],
     compactPresetDev: [
-      '压缩已完成任务的历史过程与冗余输出；完整保留当前进行中任务的实现细节、未完成待办、核心业务架构，以及关键文件路径与已踩过的坑。',
-      '壓縮已完成任務的歷史過程與冗餘輸出；完整保留目前進行中任務的實作細節、未完成待辦、核心業務架構，以及關鍵檔案路徑與踩過的坑。',
-      '壓縮已完成任務嘅歷史過程同冗餘輸出；完整保留而家做緊嘅任務實作細節、未完成待辦、核心業務架構，同埋關鍵檔案路徑同踩過嘅坑。',
-      'Compress finished-task history and redundant output; keep full details of work in progress, open TODOs, core architecture, key file paths, and known pitfalls.',
-      '完了済みタスクの経緯と冗長な出力を圧縮し、進行中タスクの実装詳細、未完了TODO、中核アーキテクチャ、主要ファイルパスと既知の落とし穴を完全に残してください。',
+      '丢弃冗长的工具输入输出、大段源码原文、完整 diff 与命令/测试日志、已完成任务的试错过程，以及已处理完的截图/视频细节（仅留结论；若属当前未完任务，先提炼关键视觉问题与定位）；完整保留核心业务与技术架构、关键文件路径与接口/符号契约、当前分支及未提交改动与验证状态、报错根因、已踩过的坑与硬约束/否决项、进行中任务的实现细节及剩余待办。',
+      '略過冗長的工具輸入輸出、大段原始碼全文、完整 diff 與指令/測試日誌、已完成任務的試錯過程，以及已處理完的截圖/影片細節（僅留結論；若屬目前未完任務，先提煉關鍵視覺問題與定位）；完整保留核心業務與技術架構、關鍵檔案路徑與介面/符號契約、目前分支及未提交改動與驗證狀態、報錯根因、已踩過的坑與硬約束/否決項、進行中任務的實作細節及剩餘待辦。',
+      '丟走冗長嘅工具輸入輸出、大段源碼原文、完整 diff 同指令/測試日誌、已完成任務嘅試錯過程，同埋已處理完嘅截圖/影片細節（只留結論；如果屬於而家未完任務，先提煉關鍵視覺問題同定位）；完整保留核心業務同技術架構、關鍵檔案路徑同介面/符號契約、目前分支同未提交改動與驗證狀態、報錯根因、踩過嘅坑同硬約束/否決項、進行中任務嘅實作細節同剩餘待辦。',
+      'Drop verbose tool I/O, raw file dumps, full diffs/logs, finished-task trial-and-error, and processed screenshot/video details (keep conclusions only; for active unfinished tasks, extract visual defects and locations first). Preserve core architecture, key file paths and symbol/API contracts, current branch, uncommitted changes and verification status, error root causes, known pitfalls, hard constraints and rejected options, active task details, and open TODOs.',
+      '冗長なツール入出力、長大なソース全文、完全な diff やコマンド・テストログ、完了済みタスクの試行錯誤、処理済みのスクショ・動画の詳細を省き（結論のみ保持；進行中の未完タスクは重要な視覚課題と箇所を先に抽出）、中核の業務・技術アーキテクチャ、主要ファイルパスとシンボル/API契約、現在のブランチ・未コミット変更と検証状況、エラー根本原因、既知の落とし穴・厳守制約・却下案、進行中タスクの実装詳細と残りTODOを完全に残してください。',
+    ],
+    compactPresetContinue: [
+      '丢弃冗长的工具输入输出与日志、已完成任务的试错过程，以及已处理完的图片/视频等大附件细节（仅留结论；若属当前未完任务，先提炼关键要点）；完整保留核心架构、硬约束与用户偏好/否决项，以及被打断任务的完整断点现场（已完成与进行中进度、关键文件路径、未提交改动、未决报错与下一步动作）和剩余待办。压缩完成后无需复述确认，直接衔接断点继续执行未完成的工作（除非存在必须由用户拍板的阻塞项）。',
+      '略過冗長的工具輸入輸出與日誌、已完成任務的試錯過程，以及已處理完的圖片/影片等大附件細節（僅留結論；若屬目前未完任務，先提煉關鍵要點）；完整保留核心架構、硬約束與使用者偏好/否決項，以及被打斷任務的完整斷點現場（已完成與進行中進度、關鍵檔案路徑、未提交改動、未決報錯與下一步動作）與剩餘待辦。壓縮完成後無需複述確認，直接銜接斷點繼續執行未完成的工作（除非存在必須由使用者拍板的阻塞項）。',
+      '丟走冗長嘅工具輸入輸出同日誌、已完成任務嘅試錯過程，同埋已處理完嘅圖片/影片等大附件細節（只留結論；如果屬於而家未完任務，先提煉關鍵要點）；完整保留核心架構、硬約束同用戶偏好/否決項，同埋被打斷任務嘅完整斷點現場（已完成同進行中進度、關鍵檔案路徑、未提交改動、未決報錯同下一步動作）同剩餘待辦。壓縮完成後唔使重複確認，直接駁返斷點繼續做未完成嘅工作（除非有一定要由用戶拍板嘅阻塞項）。',
+      'Drop verbose tool I/O/logs, finished-task trial-and-error, and processed image/video details (keep conclusions only; for active unfinished tasks, extract key points first). Preserve core architecture, hard constraints, user preferences/rejected options, the interrupted task checkpoint (progress, key paths, uncommitted changes, open errors, next action), and remaining TODOs. After compaction, resume immediately without recapping unless a user decision is required.',
+      '冗長なツール入出力とログ、完了済みタスクの試行錯誤、処理済みの画像・動画など大容量添付の詳細を省き（結論のみ保持；進行中の未完タスクは要点を先に抽出）、中核アーキテクチャ、厳守制約とユーザー好み・却下案、中断中タスクの完全な再開コンテキスト（完了・進行状況、主要ファイルパス、未コミット変更、未解決エラーと次の手）および残りTODOを完全に保持してください。圧縮完了後は復唱や確認で止まらず、ユーザー判断が必須なブロッカーがない限り、中断地点から直ちに作業を再開してください。',
     ],
     tabOverview: ['概览', '概覽', '概覽', 'Overview', '概要'],
     tabModels: ['模型', '模型', '模型', 'Models', 'モデル'],
@@ -163,13 +177,16 @@
     ],
     setPaletteTitle: ['配色方案', '配色方案', '配色方案', 'Color Palette', 'カラーパレット'],
     setPaletteDesc: [
-      '选择黑曜石、Claude 暖纸/炭黑，或保持 Antigravity 宿主原生配色。',
-      '選擇黑曜石、Claude 暖紙/炭黑，或保持 Antigravity 宿主原生配色。',
-      '揀選黑曜石、Claude 暖紙/炭黑，或者保持 Antigravity 宿主原生配色。',
-      'Choose Obsidian, Claude warm paper/charcoal, or keep Antigravity native colors.',
-      'オブシディアン、Claude、または Antigravity 標準配色を選択します。',
+      '直接选用黑曜石或 Claude 浅/深色主题（跨宿主明暗生效），或选跟随宿主保留原生外观。',
+      '直接選用黑曜石或 Claude 淺/深色主題（跨宿主明暗生效），或選跟隨宿主保留原生外觀。',
+      '直接揀黑曜石或者 Claude 淺/深色主題（跨宿主明暗生效），或者揀跟隨宿主保留原生外觀。',
+      'Pick an explicit Obsidian or Claude light/dark palette regardless of host appearance, or follow Host Native.',
+      'ホストの明暗に関係なく Obsidian・Claude のライト／ダーク配色を直接指定、またはホスト標準を維持します。',
     ],
-    optObsidian: ['黑曜石', '黑曜石', '黑曜石', 'Obsidian', 'オブシディアン'],
+    optObsidian: ['黑曜石（浅色）', '黑曜石（淺色）', '黑曜石（淺色）', 'Obsidian (Light)', 'オブシディアン（ライト）'],
+    optObsidianDark: ['黑曜石（深色）', '黑曜石（深色）', '黑曜石（深色）', 'Obsidian (Dark)', 'オブシディアン（ダーク）'],
+    optClaude: ['Claude 暖灰（浅色）', 'Claude 暖灰（淺色）', 'Claude 暖灰（淺色）', 'Claude (Light)', 'Claude（ライト）'],
+    optClaudeDark: ['Claude 暖灰（深色）', 'Claude 暖灰（深色）', 'Claude 暖灰（深色）', 'Claude (Dark)', 'Claude（ダーク）'],
     optHost: ['跟随宿主', '跟隨宿主', '跟隨宿主', 'Host', 'ホスト連動'],
     setLogoInkTitle: ['Antigravity Logo 着色', 'Antigravity Logo 著色', 'Antigravity Logo 顏色', 'Logo Color', 'ロゴカラー'],
     setLogoInkDesc: [
@@ -2686,6 +2703,55 @@
     ['Background color picker', '背景色选择器', '背景色選擇器', '背景色選擇器', '背景色ピッカー'],
     ['Foreground color picker', '前景色选择器', '前景色選擇器', '前景色選擇器', '前景色ピッカー'],
     ['Accent color picker', '强调色选择器', '強調色選擇器', '強調色選擇器', 'アクセント色ピッカー'],
+    // ── AGY 2.36.0 Sweep (Side Question /btw, New Tab, Settings, Quota & Accessibility) ──
+    [
+      'Ask a side question without interrupting the main conversation',
+      '发起旁支提问，不打断主对话',
+      '發起旁支提問，不打斷主對話',
+      '順便問句嘢，唔會打斷主對話',
+      'メインの会話を中断せずにサイド質問をする',
+    ],
+    [
+      'Ask a side question without interrupting the main conversation.',
+      '发起旁支提问，不打断主对话。',
+      '發起旁支提問，不打斷主對話。',
+      '順便問句嘢，唔會打斷主對話。',
+      'メインの会話を中断せずにサイド質問をします。',
+    ],
+    ['Started from', '发起自', '發起自', '開自', '開始元'],
+    ['Started during', '发起于', '發起於', '開於', '開始時'],
+    ['Show', '显示', '顯示', '顯示', '表示'],
+    ['Hide', '隐藏', '隱藏', '收埋', '非表示'],
+    ['Side Question Conversation Log', '旁支提问对话记录', '旁支提問對話紀錄', '旁支提問對話紀錄', 'サイド質問の会話ログ'],
+    ['Side Question header', '旁支提问标题栏', '旁支提問標題列', '旁支提問標題欄', 'サイド質問ヘッダー'],
+    ['New Side Question', '新建旁支提问', '新增旁支提問', '新旁支提問', '新しいサイド質問'],
+    ['Close New Side Question', '关闭新建旁支提问', '關閉新增旁支提問', '閂咗新旁支提問', '新しいサイド質問を閉じる'],
+    ['Search or enter a URL', '搜索或输入网址', '搜尋或輸入網址', '搜尋或者輸入網址', '検索または URL を入力'],
+    ['Set up', '去配置', '前往設定', '去設定', '設定する'],
+    ['Announcements and tips', '公告与使用技巧', '公告與使用技巧', '公告同使用貼士', 'お知らせとヒント'],
+    ['Switch to RTL text direction', '切换为从右到左文本方向', '切換為由右至左文字方向', '轉做由右至左文字方向', '右から左のテキスト方向に切り替え'],
+    ['Switch to LTR text direction', '切换为从左到右文本方向', '切換為由左至右文字方向', '轉做由左至右文字方向', '左から右のテキスト方向に切り替え'],
+    ['Scrollable table', '可滚动表格', '可捲動表格', '可碌表格', 'スクロール可能なテーブル'],
+    ['Delete All Data', '删除所有数据', '刪除所有資料', '刪除全部資料', 'すべてのデータを削除'],
+    [
+      'Permanently delete your remote conversations, projects, scheduled tasks, connected plugins and settings. Data in the desktop app and your Google account are not affected.',
+      '永久删除你的云端对话、项目、定时任务、已连接插件和设置。桌面应用本地数据与你的 Google 账号不受影响。',
+      '永久刪除您的遠端對話、專案、排程任務、已連線外掛與設定。桌面應用程式本機資料與您的 Google 帳戶不受影響。',
+      '永久刪除你嘅雲端對話、專案、定時任務、已連接插件同設定。桌面應用本機資料同你嘅 Google 帳戶唔會受影響。',
+      'リモートの会話、プロジェクト、スケジュール済みタスク、接続済みプラグイン、設定を完全に削除します。デスクトップアプリ内のデータと Google アカウントには影響しません。',
+    ],
+    ['Loading token usage...', '正在加载 Token 用量…', '正在載入 Token 用量…', '載入緊 Token 用量…', 'トークン使用量を読み込み中…'],
+    ['Loading workspace customizations...', '正在加载工作区自定义配置…', '正在載入工作區自訂設定…', '載入緊工作區自訂配置…', 'ワークスペースのカスタマイズを読み込み中…'],
+    ['Plugin:', '插件：', '外掛：', '插件：', 'プラグイン：'],
+    ['Unlock the power of agent swarms.', '释放智能体蜂群协作的强大能力。', '釋放代理蜂群協作的強大能力。', '釋放代理蜂群協作嘅強大威力。', 'エージェントスウォームの力を解き放ちます。'],
+    ['Error ID:', '错误 ID：', '錯誤 ID：', '錯誤 ID：', 'エラー ID：'],
+    [
+      'Individual quota reached. Please upgrade your subscription to increase your limits.',
+      '个人配额已用尽，请升级订阅以提升额度上限。',
+      '個人配額已用盡，請升級訂閱以提升額度上限。',
+      '個人配額用晒，請升級訂閱提高額度上限。',
+      '個人クォータの上限に達しました。上限を引き上げるにはサブスクリプションをアップグレードしてください。',
+    ],
   );
 
   // ── Part 4: Sentences, Duration Units, Dynamic Rules & Bundle Resolver ─
@@ -2936,6 +3002,23 @@
     ['^(\\d+) posts? since the view was updated$', '', '自上次更新视图以来新增 $1 条帖子', '自上次更新檢視以來新增 $1 則貼文', '自上次更新畫面後多咗 $1 條帖文', 'ビュー更新以降に $1 件の投稿'],
     ['^read #(\\d+) · updated (.+) ago$', '', '已读 #$1 · $D2前更新', '已讀 #$1 · $D2前更新', '睇到 #$1 · $D2前更新', '#$1 読了 · $D2前に更新'],
     ['^read #(\\d+)$', '', '已读 #$1', '已讀 #$1', '睇到 #$1', '#$1 読了'],
+    // ── AGY 2.36.0 Dynamic Rules (Side Question, Environment, Actions & Quota) ──
+    ['^Side Question:\\s*(.+)$', '', '旁支提问：$1', '旁支提問：$1', '旁支提問：$1', 'サイド質問：$1'],
+    ['^Edit side question title:\\s*(.+)$', '', '编辑旁支提问标题：$1', '編輯旁支提問標題：$1', '改旁支提問標題：$1', 'サイド質問のタイトルを編集：$1'],
+    ['^Delete side question:\\s*(.+)$', '', '删除旁支提问：$1', '刪除旁支提問：$1', '刪走旁支提問：$1', 'サイド質問を削除：$1'],
+    ['^Started (?:from|during) (.+?)\\.\\s*Show in main conversation$', '', '发起自 $1 · 在主对话中查看', '發起自 $1 · 在主對話中檢視', '開自 $1 · 喺主對話睇返', '$1 から開始 · メインの会話で表示'],
+    ['^Started (?:from|during) (.+)$', '', '发起自 $1', '發起自 $1', '開自 $1', '開始元：$1'],
+    ['^Where the agent runs, current: (.+)$', '', '智能体运行位置，当前：$T1', '代理執行位置，目前：$T1', '代理運行位置，而家：$T1', 'エージェントの実行場所（現在: $T1）'],
+    ['^More actions for (.+)$', '', '$1 的更多操作', '$1 的更多動作', '$1 嘅更多操作', '$1 のその他の操作'],
+    ['^Error ID:\\s*(.+)$', '', '错误 ID：$1', '錯誤 ID：$1', '錯誤 ID：$1', 'エラー ID：$1'],
+    [
+      '^Individual quota reached\\. Please upgrade your subscription to increase your limits\\. Resets in (.+)\\.$',
+      '',
+      '个人配额已用尽，请升级订阅以提升额度上限。将于 $D1后重置。',
+      '個人配額已用盡，請升級訂閱以提升額度上限。將於 $D1後重設。',
+      '個人配額用晒，請升級訂閱提高額度上限。$D1後會重設。',
+      '個人クォータの上限に達しました。上限を引き上げるにはサブスクリプションをアップグレードしてください。$D1後にリセットされます。',
+    ],
   ];
 
   // Relative timestamp rows in sidebar conversation lists: [pattern, flags, zh-CN, zh-TW, yue, ja]
@@ -2951,6 +3034,8 @@
     ['^just now$', 'i', '刚刚', '剛剛', '啱啱', 'たった今'],
   ];
 
+  const LOCALE_PACK_VERSION = '2.36.0';
+  const LOCALE_PACK_UPDATED_AT = '2026-11-28';
   const BUNDLE_CACHE = {};
   const BUNDLE_COLS = {
     'zh-CN': { dict: 1, rule: 2, sent: 0 },
@@ -2990,6 +3075,8 @@
     }
     BUNDLE_CACHE[key] = {
       lang: key,
+      agyVersion: LOCALE_PACK_VERSION,
+      updatedAt: LOCALE_PACK_UPDATED_AT,
       cjkLatinSpacing: key !== 'ja',
       units: UNITS_TABLE[key],
       dict,
@@ -3001,6 +3088,8 @@
   }
 
   return {
+    LOCALE_PACK_VERSION,
+    LOCALE_PACK_UPDATED_AT,
     UI_TABLE,
     getUiStrings,
     DICT_ROWS,

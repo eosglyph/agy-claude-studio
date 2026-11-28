@@ -50,13 +50,7 @@ function resolveNotifyDataDir(env = process.env, fallbackDir = null) {
   }
   const hookPluginData = String(env?.PLUGIN_DATA || '').trim();
   if (!isUnresolvedVar(hookPluginData)) {
-    return path.resolve(hookPluginData);
-  }
-  const explicitPluginData = String(
-    env?.AGY_CLAUDE_STUDIO_PLUGIN_DATA || env?.AGY_CLAUDE_STYLE_PLUGIN_DATA || ''
-  ).trim();
-  if (!isUnresolvedVar(explicitPluginData)) {
-    return path.resolve(explicitPluginData);
+    return cdp.normalizeCliPluginDataDir(hookPluginData);
   }
   const cdpResolved = cdp.resolvePluginDataDir(env);
   if (cdpResolved) {

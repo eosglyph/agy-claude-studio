@@ -1,4 +1,5 @@
 {
+  "configSchemaVersion": 2,
   "language": "zh-CN",
   "palette": "claude",
   "glassEffect": true,
@@ -28,7 +29,10 @@
   "orchestratorSwitch": true,
   "pluginPageTranslate": true,
   "fileLinkContextMenu": true,
+  "toolbarPluginPin": true,
+  "receivePrerelease": false,
   "i18nIgnoreSelectors": [],
+  "pinnedToolbarPlugins": [],
   "autoRelaunchWithCdp": true,
   "exitOnHostClose": false
 }

@@ -7,10 +7,10 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const i18nCore = require('../i18n-core.js');
-const i18nLocales = require('../i18n-locales.js');
-const i18nSync = require('../i18n-sync.js');
-const sidecarCore = require('../sidecar-core.js');
+const i18nCore = require('../src/i18n-core.js');
+const i18nLocales = require('../src/i18n-locales.js');
+const i18nSync = require('../src/i18n-sync.js');
+const sidecarCore = require('../src/sidecar-core.js');
 
 function createMiniDom() {
   const FILTER_ACCEPT = 1;
@@ -666,10 +666,94 @@ test('multi-word case-insensitive fallback fixes v2.35.2 sentence-case settings,
   }
 });
 
+test('AGY v2.36.0 sweep translates Side Question (/btw), New Tab URL bar, Settings, compact Go durations, and reverts cleanly', () => {
+  const { doc, body, makeEl, NodeFilter, MutationObserver } = createMiniDom();
+  const prevNF = globalThis.NodeFilter;
+  const prevMO = globalThis.MutationObserver;
+  globalThis.NodeFilter = NodeFilter;
+  globalThis.MutationObserver = MutationObserver;
+  try {
+    const emptyBtw = makeEl('p', { text: 'Ask a side question without interrupting the main conversation' });
+    const originBtn = makeEl('button', {
+      attrs: {
+        'data-testid': 'side-question-origin',
+        'aria-label': 'Started from “继续哦”. Show in main conversation',
+        title: 'Started from “继续哦”',
+      },
+    });
+    const startedSpan = makeEl('span', { text: 'Started from' });
+    const startedDuringSpan = makeEl('span', { text: 'Started during' });
+    const duringBtn = makeEl('button', {
+      attrs: {
+        'aria-label': 'Started during “跑测试”. Show in main conversation',
+        title: 'Started during “跑测试”',
+      },
+    });
+    const quoteSpan = makeEl('span', { text: '“继续哦”' });
+    const showSpan = makeEl('span', { text: 'Show' });
+    originBtn.append(startedSpan, quoteSpan, showSpan);
+    duringBtn.append(startedDuringSpan);
+
+    const urlInput = makeEl('input', { attrs: { placeholder: 'Search or enter a URL' } });
+    const btwTitle = makeEl('span', { attrs: { title: 'Side Question: Test Conversation' } });
+    const editBtw = makeEl('span', { attrs: { 'aria-label': 'Edit side question title: Test Conversation' } });
+    const delBtw = makeEl('button', { attrs: { 'aria-label': 'Delete side question: Test Conversation' } });
+    const envBtn = makeEl('button', { attrs: { 'aria-label': 'Where the agent runs, current: This Computer' } });
+    const moreBtn = makeEl('button', { attrs: { 'aria-label': 'More actions for Claude Studio' } });
+    const quotaErr = makeEl('span', {
+      text: 'Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 2h49m26s.',
+    });
+    const errorId = makeEl('span', { text: 'Error ID: a85ce30b-ac9e-4e12-863e-f1b5b26476a2-8896' });
+    const deleteAllBtn = makeEl('button', { text: 'Delete All Data' });
+    const loadingTok = makeEl('div', { text: 'Loading token usage...' });
+    body.append(emptyBtw, originBtn, duringBtn, urlInput, btwTitle, editBtw, delBtw, envBtn, moreBtn, quotaErr, errorId, deleteAllBtn, loadingTok);
+
+    const translator = i18nCore.createDomTranslator(i18nLocales.resolveLocaleBundle);
+    translator.setLanguage('zh-CN', doc);
+    assert.equal(emptyBtw.textContent, '发起旁支提问，不打断主对话');
+    assert.equal(startedSpan.textContent, '发起自');
+    assert.equal(startedDuringSpan.textContent, '发起于');
+    assert.equal(duringBtn.getAttribute('aria-label'), '发起自 “跑测试” · 在主对话中查看');
+    assert.equal(duringBtn.getAttribute('title'), '发起自 “跑测试”');
+    assert.equal(quoteSpan.textContent, '“继续哦”');
+    assert.equal(showSpan.textContent, '显示');
+    assert.equal(originBtn.getAttribute('aria-label'), '发起自 “继续哦” · 在主对话中查看');
+    assert.equal(originBtn.getAttribute('title'), '发起自 “继续哦”');
+    assert.equal(urlInput.getAttribute('placeholder'), '搜索或输入网址');
+    assert.equal(btwTitle.getAttribute('title'), '旁支提问：Test Conversation');
+    assert.equal(editBtw.getAttribute('aria-label'), '编辑旁支提问标题：Test Conversation');
+    assert.equal(delBtw.getAttribute('aria-label'), '删除旁支提问：Test Conversation');
+    assert.equal(envBtn.getAttribute('aria-label'), '智能体运行位置，当前：本机');
+    assert.equal(moreBtn.getAttribute('aria-label'), 'Claude Studio 的更多操作');
+    assert.equal(quotaErr.textContent, '个人配额已用尽，请升级订阅以提升额度上限。将于 2小时49分钟26秒后重置。');
+    assert.equal(errorId.textContent, '错误 ID：a85ce30b-ac9e-4e12-863e-f1b5b26476a2-8896');
+    assert.equal(deleteAllBtn.textContent, '删除所有数据');
+    assert.equal(loadingTok.textContent, '正在加载 Token 用量…');
+
+    translator.setLanguage('ja', doc);
+    assert.equal(emptyBtw.textContent, 'メインの会話を中断せずにサイド質問をする');
+    assert.equal(urlInput.getAttribute('placeholder'), '検索または URL を入力');
+    assert.equal(
+      quotaErr.textContent,
+      '個人クォータの上限に達しました。上限を引き上げるにはサブスクリプションをアップグレードしてください。2時間49分26秒後にリセットされます。'
+    );
+
+    translator.setLanguage('en', doc);
+    assert.equal(emptyBtw.textContent, 'Ask a side question without interrupting the main conversation');
+    assert.equal(startedSpan.textContent, 'Started from');
+    assert.equal(showSpan.textContent, 'Show');
+    assert.equal(urlInput.getAttribute('placeholder'), 'Search or enter a URL');
+    translator.destroy();
+  } finally {
+    globalThis.NodeFilter = prevNF;
+    globalThis.MutationObserver = prevMO;
+  }
+});
+
 test('i18n-sync validates, syncs, checksums, falls back to bundled offline packs, and hot-reloads in i18n-core', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-cs-i18n-sync-'));
   try {
-    // 1. Only zh-CN & zh-TW are bundled offline; yue & ja require on-demand download!
+    // 1. Only zh-CN is bundled offline; zh-TW, yue & ja require on-demand download!
     for (const lang of i18nSync.BUNDLED_PACK_LANGS) {
       const bundled = i18nSync.readLocalePack(lang, dataDir);
       assert.ok(bundled, `bundled pack exists for ${lang}`);
@@ -690,7 +774,7 @@ test('i18n-sync validates, syncs, checksums, falls back to bundled offline packs
       catalogStatus.map((p) => [p.lang, p.bundled, p.installed]),
       [
         ['zh-CN', true, true],
-        ['zh-TW', true, true],
+        ['zh-TW', false, false],
         ['yue', false, false],
         ['ja', false, false],
       ]
@@ -816,5 +900,154 @@ test('i18n-sync validates, syncs, checksums, falls back to bundled offline packs
     }
   } finally {
     fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+
+test('i18n-sync distinguishes active cloud override from remote manifest updates via sourceSha256', async () => {
+  const tmpDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-i18n-update-')));
+  try {
+    const bundledManifest = i18nSync.readBundledManifest();
+    const bundledZhSha = bundledManifest.locales['zh-CN'].sha256;
+
+    // 1. Built-in zh-CN matches current manifest -> no remote update
+    const stSame = i18nSync.getLocalePackStatus('zh-CN', tmpDir, { remoteManifest: bundledManifest });
+    const zhSame = stSame.packs.find((p) => p.lang === 'zh-CN');
+    assert.equal(zhSame.source, 'bundled');
+    assert.equal(zhSame.hasRemoteUpdate, false);
+
+    // 2. Remote manifest publishes a newer zh-CN pack -> hasRemoteUpdate becomes true
+    const newPackObj = {
+      schemaVersion: 1,
+      lang: 'zh-CN',
+      label: '简体中文',
+      bundled: true,
+      agyVersion: '2.36.0',
+      updatedAt: '2026-12-01',
+      cjkLatinSpacing: true,
+      units: { sec: '秒' },
+      dict: { Settings: '设置', Preview: '预览' },
+      rules: [],
+      timeRules: [],
+      sentences: [],
+    };
+    const newPackText = JSON.stringify(newPackObj, null, 2) + '\n';
+    const newPackSha = crypto.createHash('sha256').update(newPackText, 'utf8').digest('hex');
+    const newerManifest = {
+      schemaVersion: 1,
+      agyVersion: '2.36.0',
+      updatedAt: '2026-12-01',
+      locales: {
+        ...bundledManifest.locales,
+        'zh-CN': {
+          ...bundledManifest.locales['zh-CN'],
+          dictCount: 2,
+          sha256: newPackSha,
+        },
+      },
+    };
+
+    const stOutdated = i18nSync.getLocalePackStatus('zh-CN', tmpDir, { remoteManifest: newerManifest });
+    const zhOutdated = stOutdated.packs.find((p) => p.lang === 'zh-CN');
+    assert.equal(zhOutdated.source, 'bundled');
+    assert.equal(zhOutdated.hasRemoteUpdate, true);
+    assert.notEqual(bundledZhSha, newPackSha);
+
+    // 3. After syncing the newer remote pack, source is 'cloud' and hasRemoteUpdate clears to false
+    const mockFetch = async (url) => {
+      if (String(url).endsWith('/manifest.json')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(newerManifest) };
+      }
+      if (String(url).endsWith('/zh-CN.json')) {
+        return { ok: true, status: 200, text: async () => newPackText };
+      }
+      return { ok: false, status: 404, text: async () => '' };
+    };
+    const synced = await i18nSync.syncLocalePack({ lang: 'zh-CN', pluginDataDir: tmpDir, fetchFn: mockFetch });
+    assert.equal(synced.ok, true);
+    assert.equal(synced.sha256, newPackSha);
+
+    const stAfterSync = i18nSync.getLocalePackStatus('zh-CN', tmpDir, { remoteManifest: newerManifest });
+    const zhAfterSync = stAfterSync.packs.find((p) => p.lang === 'zh-CN');
+    assert.equal(zhAfterSync.source, 'cloud');
+    assert.equal(zhAfterSync.hasCloudOverride, true);
+    assert.equal(zhAfterSync.hasRemoteUpdate, false);
+
+    // 4. Stale pre-upgrade cloud cache (older agyVersion) must NOT shadow a newer bundled baseline
+    const staleCloudPath = i18nSync.getCloudPackPath('zh-CN', tmpDir);
+    fs.writeFileSync(
+      staleCloudPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        lang: 'zh-CN',
+        agyVersion: '2.35.2',
+        updatedAt: '2026-11-26',
+        cjkLatinSpacing: true,
+        units: { sec: '秒' },
+        dict: { Settings: '旧云端设置' },
+        rules: [],
+        timeRules: [],
+        sentences: [],
+      }),
+      'utf8'
+    );
+    const loadedFresh = i18nSync.readLocalePack('zh-CN', tmpDir);
+    assert.equal(loadedFresh.source, 'bundled', 'Newer bundled pack must take precedence over stale cloud cache');
+    assert.equal(
+      i18nSync.readCloudLocalePackOverride('zh-CN', tmpDir),
+      null,
+      'Stale cloud override must not shadow newer built-in i18n-locales.js during CDP injection'
+    );
+    const olderRemoteManifest = {
+      schemaVersion: 1,
+      agyVersion: '2.35.2',
+      updatedAt: '2026-11-26',
+      locales: { 'zh-CN': { file: 'zh-CN.json', sha256: 'a'.repeat(64) } },
+    };
+    const stOlderRemote = i18nSync.getLocalePackStatus('zh-CN', tmpDir, { remoteManifest: olderRemoteManifest });
+    assert.equal(
+      stOlderRemote.packs.find((p) => p.lang === 'zh-CN').hasRemoteUpdate,
+      false,
+      'Must not advertise an older remote pack as an update over newer local built-in pack'
+    );
+
+    // 5. Runtime defense-in-depth: i18n-core refuses stale pre-upgrade override from an older in-memory daemon
+    const { doc, body, makeEl, NodeFilter, MutationObserver } = createMiniDom();
+    const prevNF = globalThis.NodeFilter;
+    const prevMO = globalThis.MutationObserver;
+    const prevLocales = globalThis.__agCsLocales;
+    globalThis.NodeFilter = NodeFilter;
+    globalThis.MutationObserver = MutationObserver;
+    globalThis.__agCsLocales = i18nLocales;
+    try {
+      const el = makeEl('p', { text: 'Ask a side question without interrupting the main conversation' });
+      body.append(el);
+      const staleOverride = {
+        lang: 'zh-CN',
+        agyVersion: '2.35.2',
+        updatedAt: '2026-11-26',
+        cjkLatinSpacing: true,
+        units: { s: '秒' },
+        dict: { Settings: '旧设置' },
+        rules: [],
+        timeRules: [],
+        sentences: [],
+      };
+      const tr = i18nCore.createDomTranslator(() => staleOverride);
+      tr.setLanguage('zh-CN', doc);
+      assert.equal(
+        el.textContent,
+        '发起旁支提问，不打断主对话',
+        'i18n-core must prefer newer built-in 2.36.0 bundle over stale 2.35.2 runtime override'
+      );
+      tr.destroy();
+    } finally {
+      globalThis.NodeFilter = prevNF;
+      globalThis.MutationObserver = prevMO;
+      if (prevLocales === undefined) delete globalThis.__agCsLocales;
+      else globalThis.__agCsLocales = prevLocales;
+    }
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });

@@ -55,7 +55,7 @@ final class PluginManifest {
         let manifestPath = (baseDir as NSString).appendingPathComponent("manifest.json")
         let text = try String(contentsOfFile: manifestPath, encoding: .utf8)
         let raw = try MiniJson.parseObject(text)
-        let version = raw["version"]?.stringValue ?? "2.2.3"
+        let version = raw["version"]?.stringValue ?? "2.3.0"
         let styleId = raw["styleId"]?.stringValue ?? "ag-claude-studio-css"
         let settingBinding = raw["settingBinding"]?.stringValue ?? "__agClaudeStudioSetting"
         let removeExpression = raw["removeExpression"]?.stringValue ?? ""
@@ -502,18 +502,24 @@ enum CdpHelper {
         }
     }
 
+    private static func resolveRuntimeAssetPath(baseDir: String, fileName: String) -> String {
+        let srcPath = ((baseDir as NSString).appendingPathComponent("src") as NSString).appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: srcPath) { return srcPath }
+        return (baseDir as NSString).appendingPathComponent(fileName)
+    }
+
     static func readRuntimeBundle(baseDir: String, manifest: PluginManifest) throws -> String {
         var partsContent: [String] = []
         partsContent.reserveCapacity(manifest.parts.count)
         for part in manifest.parts {
-            let p = (baseDir as NSString).appendingPathComponent(part)
+            let p = resolveRuntimeAssetPath(baseDir: baseDir, fileName: part)
             partsContent.append(try String(contentsOfFile: p, encoding: .utf8))
         }
         return partsContent.joined(separator: "\n")
     }
 
     static func readBundleAndCssHashes(baseDir: String, manifest: PluginManifest) throws -> (codeHash: String, cssHash: String) {
-        let cssPath = (baseDir as NSString).appendingPathComponent("style.css")
+        let cssPath = resolveRuntimeAssetPath(baseDir: baseDir, fileName: "style.css")
         let css = try String(contentsOfFile: cssPath, encoding: .utf8)
         let bundle = try readRuntimeBundle(baseDir: baseDir, manifest: manifest)
         return (computeHash(bundle), computeHash(css))
@@ -549,7 +555,7 @@ enum CdpHelper {
 
     static func buildInjectExpression(baseDir: String, manifest: PluginManifest) throws -> String {
         let config = readConfig(baseDir: baseDir, manifest: manifest)
-        let cssPath = (baseDir as NSString).appendingPathComponent("style.css")
+        let cssPath = resolveRuntimeAssetPath(baseDir: baseDir, fileName: "style.css")
         let css = try String(contentsOfFile: cssPath, encoding: .utf8)
         let bundle = try readRuntimeBundle(baseDir: baseDir, manifest: manifest)
         let codeHash = computeHash(bundle)
@@ -831,7 +837,10 @@ enum CdpHelper {
             return .unknown
         }
 
-        let expectedScript = normalizePath((normDir as NSString).appendingPathComponent("inject.js"))
+        let expectedScripts = [
+            normalizePath(((normDir as NSString).appendingPathComponent("src") as NSString).appendingPathComponent("inject.js")),
+            normalizePath((normDir as NSString).appendingPathComponent("inject.js")),
+        ]
         let rawUnquotedRest = rest.hasPrefix("\"") || rest.hasPrefix("'") ? String(rest.dropFirst()) : rest
         var unquotedRest = rawUnquotedRest
         for prefix in ["/private/var", "/private/tmp", "/private/etc"] {
@@ -843,15 +852,17 @@ enum CdpHelper {
                 break
             }
         }
-        if unquotedRest.hasPrefix(expectedScript) {
-            let after = unquotedRest.dropFirst(expectedScript.count)
-            if after.isEmpty || after.first == " " || after.first == "\t" || after.first == "\"" || after.first == "'" {
-                return .owned
+        for expectedScript in expectedScripts {
+            if unquotedRest.hasPrefix(expectedScript) {
+                let after = unquotedRest.dropFirst(expectedScript.count)
+                if after.isEmpty || after.first == " " || after.first == "\t" || after.first == "\"" || after.first == "'" {
+                    return .owned
+                }
             }
         }
         let firstArg = unquotedRest.split(whereSeparator: { $0.isWhitespace || $0 == "\"" || $0 == "'" }).first.map(String.init) ?? ""
         if firstArg.hasPrefix("/") {
-            return normalizePath(firstArg) == expectedScript ? .owned : .foreign
+            return expectedScripts.contains(normalizePath(firstArg)) ? .owned : .foreign
         }
         return (firstArg as NSString).lastPathComponent.lowercased() == "inject.js" ? .unknown : .foreign
     }

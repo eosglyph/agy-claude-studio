@@ -61,7 +61,32 @@
     return normalizeLanguage(lang) !== 'en';
   }
 
-  const DURATION_TOKEN = /(\d+)\s*(months?|mo|weeks?|w|days?|d|hours?|h|minutes?|mins?|m|seconds?|secs?|s|years?|y)\b/g;
+  function parsePackVersion(ver) {
+    const s = String(ver || '').trim();
+    if (!s) return null;
+    const m = s.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/i);
+    if (!m) return null;
+    return [Number(m[1]) || 0, Number(m[2]) || 0, Number(m[3]) || 0];
+  }
+
+  function comparePackFreshness(a, b) {
+    if (!a || !b) return 0;
+    const va = parsePackVersion(a.agyVersion);
+    const vb = parsePackVersion(b.agyVersion);
+    if (va && vb) {
+      for (let i = 0; i < 3; i += 1) {
+        if (va[i] !== vb[i]) return va[i] - vb[i];
+      }
+    }
+    const da = String(a.updatedAt || '').trim();
+    const db = String(b.updatedAt || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(da) && /^\d{4}-\d{2}-\d{2}$/.test(db) && da !== db) {
+      return da > db ? 1 : -1;
+    }
+    return 0;
+  }
+
+  const DURATION_TOKEN = /(\d+)\s*(months?|mo|weeks?|w|days?|d|hours?|h|minutes?|mins?|m|seconds?|secs?|s|years?|y)(?![A-Za-z])/g;
 
   /**
    * Translate an English duration snippet such as "4m 12s" or "6 days, 22 hours" using locale units.
@@ -623,7 +648,18 @@
         return norm;
       }
 
-      const nextBundle = typeof resolveBundle === 'function' ? resolveBundle(norm) : null;
+      let nextBundle = typeof resolveBundle === 'function' ? resolveBundle(norm) : null;
+      if (
+        nextBundle &&
+        typeof globalThis !== 'undefined' &&
+        globalThis.__agCsLocales &&
+        typeof globalThis.__agCsLocales.resolveLocaleBundle === 'function'
+      ) {
+        const builtin = globalThis.__agCsLocales.resolveLocaleBundle(norm);
+        if (builtin && builtin !== nextBundle && comparePackFreshness(builtin, nextBundle) > 0) {
+          nextBundle = builtin;
+        }
+      }
       if (!nextBundle) {
         restoreHtmlLang(targetDoc);
         return norm;
@@ -765,6 +801,7 @@
     intlLocale,
     htmlLangAttr,
     isCjkLanguage,
+    comparePackFreshness,
     formatDuration,
     createDomTranslator,
   };

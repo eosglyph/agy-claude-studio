@@ -1,51 +1,51 @@
 {
   "schemaVersion": 1,
-  "agyVersion": "2.35.2",
-  "updatedAt": "2026-11-26",
+  "agyVersion": "2.36.0",
+  "updatedAt": "2026-11-28",
   "locales": {
     "zh-CN": {
       "file": "zh-CN.json",
       "label": "简体中文",
       "bundled": true,
-      "dictCount": 2058,
-      "ruleCount": 130,
+      "dictCount": 2082,
+      "ruleCount": 139,
       "timeRuleCount": 9,
       "sentenceCount": 4,
-      "bytes": 130840,
-      "sha256": "f415dcaf0a0141caf046038331a375198321c44cfdb15f57b16760bcd7256783"
+      "bytes": 133580,
+      "sha256": "571e36c5d15e8a31e0cc556e6850da9e30780f6e6d9bad81740fd29653d1bf69"
     },
     "zh-TW": {
       "file": "zh-TW.json",
       "label": "繁體中文",
-      "bundled": true,
-      "dictCount": 2058,
-      "ruleCount": 130,
+      "bundled": false,
+      "dictCount": 2082,
+      "ruleCount": 139,
       "timeRuleCount": 9,
       "sentenceCount": 4,
-      "bytes": 132355,
-      "sha256": "1be9fb1d13b60072102d61ef35a58bd17d2428a13276de12ca210eb2cb1040d6"
+      "bytes": 135096,
+      "sha256": "01005dd016b261d8c461bc64e50f9df08bc3f0559eb9073a8257c73744b34808"
     },
     "yue": {
       "file": "yue.json",
       "label": "粵語",
       "bundled": false,
-      "dictCount": 2058,
-      "ruleCount": 130,
+      "dictCount": 2082,
+      "ruleCount": 139,
       "timeRuleCount": 9,
       "sentenceCount": 4,
-      "bytes": 130149,
-      "sha256": "1f337ad9a690517038f8811c196b4e805e08756f1a1518659ef20a39c17c7a5b"
+      "bytes": 132831,
+      "sha256": "fbcf65c1cfd4ae050f668bb422e46d403098285ccedbee1de94c4ab6843c3e1b"
     },
     "ja": {
       "file": "ja.json",
       "label": "日本語",
       "bundled": false,
-      "dictCount": 2058,
-      "ruleCount": 130,
+      "dictCount": 2082,
+      "ruleCount": 139,
       "timeRuleCount": 9,
       "sentenceCount": 4,
-      "bytes": 156583,
-      "sha256": "38c2a3e17d5574406a75e92f1036109308b0e2f8dc0333227da272a28f4a7ca4"
+      "bytes": 159888,
+      "sha256": "0981b7a8cd849988985ebaca154c31062df5e26200195a2dcb0d8d64116764b7"
     }
   }
 }

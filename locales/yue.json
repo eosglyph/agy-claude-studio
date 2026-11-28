@@ -3,8 +3,8 @@
   "lang": "yue",
   "label": "粵語",
   "bundled": false,
-  "agyVersion": "2.35.2",
-  "updatedAt": "2026-11-26",
+  "agyVersion": "2.36.0",
+  "updatedAt": "2026-11-28",
   "cjkLatinSpacing": true,
   "units": {
     "singleMin": "分鐘",
@@ -2096,7 +2096,31 @@
     "Voice volume": "語音音量",
     "Background color picker": "背景色選擇器",
     "Foreground color picker": "前景色選擇器",
-    "Accent color picker": "強調色選擇器"
+    "Accent color picker": "強調色選擇器",
+    "Ask a side question without interrupting the main conversation": "順便問句嘢，唔會打斷主對話",
+    "Ask a side question without interrupting the main conversation.": "順便問句嘢，唔會打斷主對話。",
+    "Started from": "開自",
+    "Started during": "開於",
+    "Show": "顯示",
+    "Hide": "收埋",
+    "Side Question Conversation Log": "旁支提問對話紀錄",
+    "Side Question header": "旁支提問標題欄",
+    "New Side Question": "新旁支提問",
+    "Close New Side Question": "閂咗新旁支提問",
+    "Search or enter a URL": "搜尋或者輸入網址",
+    "Set up": "去設定",
+    "Announcements and tips": "公告同使用貼士",
+    "Switch to RTL text direction": "轉做由右至左文字方向",
+    "Switch to LTR text direction": "轉做由左至右文字方向",
+    "Scrollable table": "可碌表格",
+    "Delete All Data": "刪除全部資料",
+    "Permanently delete your remote conversations, projects, scheduled tasks, connected plugins and settings. Data in the desktop app and your Google account are not affected.": "永久刪除你嘅雲端對話、專案、定時任務、已連接插件同設定。桌面應用本機資料同你嘅 Google 帳戶唔會受影響。",
+    "Loading token usage...": "載入緊 Token 用量…",
+    "Loading workspace customizations...": "載入緊工作區自訂配置…",
+    "Plugin:": "插件：",
+    "Unlock the power of agent swarms.": "釋放代理蜂群協作嘅強大威力。",
+    "Error ID:": "錯誤 ID：",
+    "Individual quota reached. Please upgrade your subscription to increase your limits.": "個人配額用晒，請升級訂閱提高額度上限。"
   },
   "rules": [
     [
@@ -2748,6 +2772,51 @@
       "^read #(\\d+)$",
       "",
       "睇到 #$1"
+    ],
+    [
+      "^Side Question:\\s*(.+)$",
+      "",
+      "旁支提問：$1"
+    ],
+    [
+      "^Edit side question title:\\s*(.+)$",
+      "",
+      "改旁支提問標題：$1"
+    ],
+    [
+      "^Delete side question:\\s*(.+)$",
+      "",
+      "刪走旁支提問：$1"
+    ],
+    [
+      "^Started (?:from|during) (.+?)\\.\\s*Show in main conversation$",
+      "",
+      "開自 $1 · 喺主對話睇返"
+    ],
+    [
+      "^Started (?:from|during) (.+)$",
+      "",
+      "開自 $1"
+    ],
+    [
+      "^Where the agent runs, current: (.+)$",
+      "",
+      "代理運行位置，而家：$T1"
+    ],
+    [
+      "^More actions for (.+)$",
+      "",
+      "$1 嘅更多操作"
+    ],
+    [
+      "^Error ID:\\s*(.+)$",
+      "",
+      "錯誤 ID：$1"
+    ],
+    [
+      "^Individual quota reached\\. Please upgrade your subscription to increase your limits\\. Resets in (.+)\\.$",
+      "",
+      "個人配額用晒，請升級訂閱提高額度上限。$D1後會重設。"
     ]
   ],
   "timeRules": [

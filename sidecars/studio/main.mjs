@@ -1,28 +1,30 @@
 // Aux Pane Sidecar UI server for Claude Studio (agy-claude-studio).
 // Uses sidecar_sdk and cleans up cleanly via host /healthz watchdog when Antigravity exits.
 import { execFile, execFileSync, spawn } from 'node:child_process';
-import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, opendirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const cdp = require('../../cdp.js');
-const lifecycle = require('../../lifecycle.js');
-const notifyCore = require('../../notify-core.js');
-const scriptsCore = require('../../scripts-core.js');
-const periodicSync = require('../../periodic-sync.js');
-const i18nSync = require('../../i18n-sync.js');
-const { updateConfigSetting, injectOnce } = require('../../inject.js');
-const { removeFromAllWindows } = require('../../remove.js');
+const cdp = require('../../src/cdp.js');
+const lifecycle = require('../../src/lifecycle.js');
+const notifyCore = require('../../src/notify-core.js');
+const scriptsCore = require('../../src/scripts-core.js');
+const periodicSync = require('../../src/periodic-sync.js');
+const i18nSync = require('../../src/i18n-sync.js');
+const { updateConfigSetting, injectOnce } = require('../../src/inject.js');
+const { removeFromAllWindows } = require('../../src/remove.js');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT_DIR = resolve(__dirname, '..', '..');
 const HTML_PATH = join(__dirname, 'index.html');
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Referrer-Policy': 'no-referrer' };
 const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/eosglyph/agy-claude-studio/releases/latest';
+const RELEASES_LIST_API_URL = 'https://api.github.com/repos/eosglyph/agy-claude-studio/releases?per_page=10';
 const LATEST_RELEASE_WEB_URL = 'https://github.com/eosglyph/agy-claude-studio/releases/latest';
+const RELEASES_LIST_WEB_URL = 'https://github.com/eosglyph/agy-claude-studio/releases';
 const LATEST_PACKAGE_RAW_URL = 'https://raw.githubusercontent.com/eosglyph/agy-claude-studio/main/package.json';
 
 const LAUNCHER_CACHE_TTL_MS = 30000;
@@ -90,6 +92,43 @@ function detectUsageMonitorInstalled(pluginDirs) {
   return false;
 }
 
+const REMOTE_LOCALE_MANIFEST_TTL_MS = 10 * 60 * 1000;
+const REMOTE_LOCALE_RETRY_MS = 30_000;
+
+function createRemoteLocaleManifestCache(fetchManifest, now = Date.now) {
+  let value = null;
+  let lastSuccessAt = -Infinity;
+  let lastAttemptAt = -Infinity;
+  let inFlight = null;
+
+  function recordSuccess(manifest) {
+    const locales = manifest?.locales;
+    if (!locales || typeof locales !== 'object' || Array.isArray(locales) || Object.keys(locales).length === 0) return;
+    value = manifest;
+    lastSuccessAt = now();
+  }
+
+  function read() {
+    const time = now();
+    const stale = time - lastSuccessAt >= REMOTE_LOCALE_MANIFEST_TTL_MS;
+    if (stale && !inFlight && time - lastAttemptAt >= REMOTE_LOCALE_RETRY_MS) {
+      const previous = value;
+      lastAttemptAt = time;
+      inFlight = Promise.resolve().then(fetchManifest).then((manifest) => {
+        // A manual sync may have supplied newer data while this request was pending.
+        if (value === previous) recordSuccess(manifest);
+      }).catch(() => {}).finally(() => { inFlight = null; });
+    }
+    return { value, stale };
+  }
+  return { read, recordSuccess };
+}
+
+const remoteLocaleManifestCache = createRemoteLocaleManifestCache(() => i18nSync.fetchRemoteLocaleManifest({
+  userAgent: `agy-claude-studio/${cdp.PLUGIN_VERSION}`,
+  timeoutMs: 5000,
+}));
+
 async function getStudioStatus() {
   const config = cdp.readConfig();
   const ports = cdp.readActivePorts();
@@ -120,6 +159,7 @@ async function getStudioStatus() {
   const hostInfo = !activePort ? lifecycle.resolveDesktopHostExecutable() : { found: false };
   const canRelaunch = Boolean(hostInfo.found || process.platform === 'win32' || process.platform === 'darwin');
 
+  const remoteManifest = remoteLocaleManifestCache.read();
   const compatInfo = cdp.readI18nCompatData();
   const updateState = await inspectGitRepoStateAsyncCached(PLUGIN_ROOT_DIR);
   const hasPluginManifest = existsSync(join(PLUGIN_ROOT_DIR, 'plugin.json'));
@@ -150,7 +190,12 @@ async function getStudioStatus() {
       pluginCount: compatInfo.plugins.length,
       selectorCount: compatInfo.selectors.length,
     },
-    i18nPack: i18nSync.getLocalePackStatus(config.language, cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR),
+    i18nPack: {
+      ...i18nSync.getLocalePackStatus(config.language, cdp.PLUGIN_DATA_DIR || cdp.STATE_DIR, {
+        remoteManifest: remoteManifest.value,
+      }),
+      stale: remoteManifest.stale,
+    },
     notify: notifyCore.getNotifyStatusSummary(resolveNotifyDir()),
     update: {
       isGitRepo: updateState.isGitRepo,
@@ -201,6 +246,9 @@ async function applyConfigUpdate(data) {
   const watcherLock = lifecycle.readWatcherLockInfo(cdp.PID_FILE, cdp.LOCK_FILE);
   const watcherAlive = Boolean(watcherLock && watcherLock.alive);
   const watcherPid = watcherAlive ? watcherLock.pid : null;
+  if (applied.includes('receivePrerelease')) {
+    updateCheckCache = { at: 0, channel: '', value: null };
+  }
   if (applied.length > 0 && !watcherAlive) {
     try {
       await injectOnce({ log: () => {} });
@@ -282,21 +330,139 @@ async function showScriptOutputInHostChat(data) {
   return lastResult;
 }
 
-function parseSemverParts(raw) {
-  const clean = String(raw || '').trim().replace(/^v/i, '').split('-')[0];
-  const parts = clean.split('.').map((n) => parseInt(n, 10));
+async function collectSortedCdpCandidates(cdpClient = cdp, preferredConversationId = '') {
+  const reqId = String(preferredConversationId || '').trim();
+  const ports = cdpClient.readActivePorts();
+  const all = [];
+  for (const port of ports) {
+    let pages = [];
+    try {
+      pages = await cdpClient.listPages(port);
+    } catch {
+      continue;
+    }
+    for (const p of pages) {
+      if (!p?.webSocketDebuggerUrl || !cdpClient.isAntigravityPageTarget(p)) continue;
+      const urlMatch = reqId && String(p.url || '').includes(reqId) ? 1 : 0;
+      all.push({ port, page: p, urlMatch });
+    }
+  }
+  all.sort((a, b) => b.urlMatch - a.urlMatch);
+  return all;
+}
+
+async function queryHostSideQuestions(preferredConversationId = '', { cdpClient = cdp } = {}) {
+  const reqId = String(preferredConversationId || '').trim();
+  const candidates = await collectSortedCdpCandidates(cdpClient, reqId);
+  let fallback = { ok: false, conversationId: reqId, items: [] };
+  for (const { page: p } of candidates) {
+    let sess = null;
+    try {
+      sess = await cdpClient.CdpSession.connect(p.webSocketDebuggerUrl);
+      const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.getSideQuestionsState === "function") ? api.getSideQuestionsState(${JSON.stringify(reqId)}) : null; })()`;
+      const res = await sess.evaluate(expr, false);
+      if (res && res.ok && res.owned !== false) {
+        if (!reqId) {
+          if (Array.isArray(res.items) && res.items.length > 0) return res;
+          if (!fallback.ok && res.conversationId) fallback = res;
+        } else if (res.conversationId === reqId) {
+          return res;
+        }
+      }
+    } catch {
+      // try next target
+    } finally {
+      sess?.close();
+    }
+  }
+  return fallback;
+}
+
+function shouldContinueSideQuestionSearch(res) {
+  if (!res || res.ok) return false;
+  const tag = String(res.reason || res.action || res.status || '').trim();
+  return !tag || tag === 'conversation_not_found' || tag === 'not_injected' || tag === 'composer_not_found';
+}
+
+async function openSideQuestionInHost(data = {}, { cdpClient = cdp } = {}) {
+  const hasExplicitIndex = data?.index !== undefined && data?.index !== null && data?.index !== '';
+  const payload = {
+    conversationId: String(data?.conversationId || '').trim(),
+    cascadeId: String(data?.cascadeId || '').trim(),
+    tabId: String(data?.tabId || '').trim(),
+    index: hasExplicitIndex ? data.index : null,
+    forceNew: Boolean(data?.forceNew),
+  };
+  const candidates = await collectSortedCdpCandidates(cdpClient, payload.conversationId);
+  let lastResult = { ok: false, status: 'cdp_unavailable' };
+  for (const { page: p } of candidates) {
+    let sess = null;
+    try {
+      sess = await cdpClient.CdpSession.connect(p.webSocketDebuggerUrl);
+      const expr = `(() => { const api = window.__agClaudeStudio || window.__agClaudeStyle; return (api && typeof api.openSideQuestion === "function") ? api.openSideQuestion(${JSON.stringify(payload)}) : { ok: false, status: "not_injected" }; })()`;
+      const res = await sess.evaluate(expr, false);
+      if (res && res.ok) return res;
+      if (res) {
+        lastResult = res;
+        if (!shouldContinueSideQuestionSearch(res)) return res;
+      }
+    } catch {
+      // try next window
+    } finally {
+      sess?.close();
+    }
+  }
+  return lastResult;
+}
+
+function parseSemver(raw) {
+  const clean = String(raw || '').trim().replace(/^v/i, '').split('+')[0];
+  if (!clean) return null;
+  const dashIdx = clean.indexOf('-');
+  const coreStr = dashIdx >= 0 ? clean.slice(0, dashIdx) : clean;
+  const preStr = dashIdx >= 0 ? clean.slice(dashIdx + 1) : '';
+  const parts = coreStr.split('.').map((n) => parseInt(n, 10));
   if (parts.some((n) => !Number.isFinite(n))) return null;
   while (parts.length < 3) parts.push(0);
-  return parts.slice(0, 3);
+  const prerelease = preStr ? preStr.split('.').filter(Boolean) : [];
+  return { core: parts.slice(0, 3), prerelease };
+}
+
+function isPrereleaseTag(raw) {
+  const parsed = parseSemver(raw);
+  return Boolean(parsed && parsed.prerelease.length > 0);
 }
 
 function compareSemver(a, b) {
-  const pa = parseSemverParts(a);
-  const pb = parseSemverParts(b);
+  const pa = parseSemver(a);
+  const pb = parseSemver(b);
   if (!pa || !pb) return 0;
   for (let i = 0; i < 3; i++) {
-    if (pa[i] > pb[i]) return 1;
-    if (pa[i] < pb[i]) return -1;
+    if (pa.core[i] > pb.core[i]) return 1;
+    if (pa.core[i] < pb.core[i]) return -1;
+  }
+  const aPre = pa.prerelease;
+  const bPre = pb.prerelease;
+  if (aPre.length === 0 && bPre.length === 0) return 0;
+  if (aPre.length === 0) return 1;
+  if (bPre.length === 0) return -1;
+  const len = Math.max(aPre.length, bPre.length);
+  for (let i = 0; i < len; i++) {
+    if (i >= aPre.length) return -1;
+    if (i >= bPre.length) return 1;
+    const ai = aPre[i];
+    const bi = bPre[i];
+    const aNum = /^\d+$/.test(ai);
+    const bNum = /^\d+$/.test(bi);
+    if (aNum && bNum) {
+      const na = parseInt(ai, 10);
+      const nb = parseInt(bi, 10);
+      if (na !== nb) return na > nb ? 1 : -1;
+    } else if (aNum !== bNum) {
+      return aNum ? -1 : 1;
+    } else if (ai !== bi) {
+      return ai > bi ? 1 : -1;
+    }
   }
   return 0;
 }
@@ -305,10 +471,10 @@ function inspectGitRepoState(pluginDir = PLUGIN_ROOT_DIR, execFn = execFileSync)
   const isGitRepo = Boolean(pluginDir && existsSync(join(pluginDir, '.git')));
   if (!isGitRepo) return { isGitRepo: false, gitClean: false, branch: '' };
   try {
-    const statusOut = String(execFn('git', ['status', '--porcelain'], { cwd: pluginDir, encoding: 'utf8', timeout: 5000 })).trim();
+    const statusOut = String(execFn('git', ['status', '--porcelain'], { cwd: pluginDir, env: buildSafeChildEnv(), encoding: 'utf8', timeout: 5000 })).trim();
     let branch = '';
     try {
-      branch = String(execFn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: pluginDir, encoding: 'utf8', timeout: 5000 })).trim();
+      branch = String(execFn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: pluginDir, env: buildSafeChildEnv(), encoding: 'utf8', timeout: 5000 })).trim();
     } catch {}
     return { isGitRepo: true, gitClean: statusOut.length === 0, branch };
   } catch {
@@ -321,7 +487,7 @@ const gitStateAsyncCache = new Map(); // resolvedDir -> { at, value, promise }
 
 function execGitAsync(args, cwd, timeoutMs = 5000) {
   return new Promise((resolvePromise, rejectPromise) => {
-    execFile('git', args, { cwd, encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
+    execFile('git', args, { cwd, env: buildSafeChildEnv(), encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
       if (err) return rejectPromise(err);
       resolvePromise(String(stdout || '').trim());
     });
@@ -360,7 +526,7 @@ async function inspectGitRepoStateAsyncCached(pluginDir = PLUGIN_ROOT_DIR) {
 }
 
 const UPDATE_CHECK_CACHE_TTL_MS = 10 * 60 * 1000;
-let updateCheckCache = { at: 0, value: null };
+let updateCheckCache = { at: 0, channel: '', value: null };
 
 function isValidStudioPluginDir(pluginDir) {
   if (!pluginDir) return false;
@@ -382,7 +548,14 @@ async function checkStudioUpdate({
   execFn = execFileSync,
   timeoutMs = 8000,
   forceRefresh = false,
+  includePrerelease = undefined,
 } = {}) {
+  const wantBeta =
+    typeof includePrerelease === 'boolean'
+      ? includePrerelease
+      : Boolean(cdp.readConfig().receivePrerelease);
+  const channel = wantBeta ? 'beta' : 'stable';
+
   const isDefaultCall =
     pluginDir === PLUGIN_ROOT_DIR &&
     currentVersion === cdp.PLUGIN_VERSION &&
@@ -393,6 +566,7 @@ async function checkStudioUpdate({
     isDefaultCall &&
     !forceRefresh &&
     updateCheckCache.value &&
+    updateCheckCache.channel === channel &&
     Date.now() - updateCheckCache.at < UPDATE_CHECK_CACHE_TTL_MS
   ) {
     return updateCheckCache.value;
@@ -408,7 +582,7 @@ async function checkStudioUpdate({
     ? 'archive'
     : 'manual';
   const canAutoUpdate = updateMode === 'git' || updateMode === 'archive';
-  const extraState = { ...gitState, updateMode, canAutoUpdate };
+  const extraState = { ...gitState, updateMode, canAutoUpdate, channel, receivePrerelease: wantBeta };
 
   if (!fetchFn) {
     return { ok: false, error: 'fetch unavailable', currentVersion, ...extraState, releaseUrl: LATEST_RELEASE_WEB_URL };
@@ -417,7 +591,7 @@ async function checkStudioUpdate({
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const ua = `agy-claude-studio/${currentVersion}`;
 
-  const buildOkResult = ({ latestTag, releaseName, publishedAt, releaseUrl, source }) => {
+  const buildOkResult = ({ latestTag, releaseName, publishedAt, releaseUrl, source, isPrerelease = false }) => {
     const cleanTag = String(latestTag || '').trim();
     const latestVersion = cleanTag.replace(/^v/i, '');
     const hasUpdate = Boolean(latestVersion && compareSemver(latestVersion, currentVersion) > 0);
@@ -428,20 +602,92 @@ async function checkStudioUpdate({
       latestVersion: latestVersion || currentVersion,
       latestTag: cleanTag || `v${currentVersion}`,
       hasUpdate,
+      isPrerelease: Boolean(isPrerelease || isPrereleaseTag(cleanTag)),
       releaseName: String(releaseName || cleanTag || ''),
       publishedAt: String(publishedAt || ''),
       releaseUrl: String(releaseUrl || LATEST_RELEASE_WEB_URL),
       ...extraState,
     };
     if (isDefaultCall) {
-      updateCheckCache = { at: Date.now(), value: result };
+      updateCheckCache = { at: Date.now(), channel, value: result };
     }
     return result;
   };
 
   let primaryErr = '';
   try {
-    // 1. Primary: GitHub Releases API (rich metadata; may hit 403/429 rate limits on shared IPs)
+    if (wantBeta) {
+      // 0a. Beta channel primary: GitHub Releases list API (includes pre-releases, skips drafts)
+      try {
+        const listRes = await fetchFn(RELEASES_LIST_API_URL, {
+          headers: { Accept: 'application/vnd.github+json', 'User-Agent': ua },
+          signal: controller.signal,
+        });
+        if (listRes.ok) {
+          const list = await listRes.json();
+          if (Array.isArray(list)) {
+            let best = null;
+            for (const item of list) {
+              if (!item || item.draft) continue;
+              const tag = String(item.tag_name || '').trim();
+              if (!parseSemver(tag)) continue;
+              if (!best || compareSemver(tag, best.tag_name) > 0) {
+                best = item;
+              }
+            }
+            if (best?.tag_name) {
+              return buildOkResult({
+                latestTag: best.tag_name,
+                releaseName: best.name || best.tag_name,
+                publishedAt: best.published_at || '',
+                releaseUrl: best.html_url || RELEASES_LIST_WEB_URL,
+                source: 'github-releases-api',
+                isPrerelease: Boolean(best.prerelease || isPrereleaseTag(best.tag_name)),
+              });
+            }
+          }
+        } else {
+          primaryErr = `HTTP ${listRes.status}`;
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err;
+        primaryErr = err?.message || 'network error';
+      }
+
+      // 0b. Beta channel fallback: public Releases HTML page (no REST API 60/hr limit)
+      try {
+        const htmlRes = await fetchFn(RELEASES_LIST_WEB_URL, {
+          headers: { 'User-Agent': ua },
+          signal: controller.signal,
+        });
+        if (htmlRes.ok) {
+          const html = await htmlRes.text();
+          const re = /\/eosglyph\/agy-claude-studio\/releases\/tag\/(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/gi;
+          let bestTag = '';
+          let match = null;
+          while ((match = re.exec(html)) !== null) {
+            const candidate = match[1];
+            if (!bestTag || compareSemver(candidate, bestTag) > 0) {
+              bestTag = candidate;
+            }
+          }
+          if (bestTag) {
+            return buildOkResult({
+              latestTag: bestTag,
+              releaseName: bestTag,
+              publishedAt: '',
+              releaseUrl: `https://github.com/eosglyph/agy-claude-studio/releases/tag/${encodeURIComponent(bestTag)}`,
+              source: 'releases-html',
+              isPrerelease: isPrereleaseTag(bestTag),
+            });
+          }
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err;
+      }
+    }
+
+    // 1. Primary (Stable): GitHub Releases latest API (rich metadata; may hit 403/429 rate limits on shared IPs)
     try {
       const res = await fetchFn(LATEST_RELEASE_API_URL, {
         headers: { Accept: 'application/vnd.github+json', 'User-Agent': ua },
@@ -629,20 +875,144 @@ function applyArchiveCopyPlan(files, backupDir) {
   }
 }
 
+function buildSafeChildEnv(baseEnv = process.env) {
+  return Object.fromEntries(Object.entries(baseEnv).filter(([key]) => !/^ANTIGRAVITY_SIDECAR_/i.test(key)));
+}
+
+/**
+ * Run the newly installed src/inject.js in a fresh Node subprocess so
+ * post-upgrade reinjection never uses stale in-memory require() caches.
+ */
+function runSubprocessReinject(
+  pluginDir = PLUGIN_ROOT_DIR,
+  { timeoutMs = 20000, nodeExecPath = process.execPath } = {}
+) {
+  const rootDir = resolve(String(pluginDir || PLUGIN_ROOT_DIR));
+  const injectScript = join(rootDir, 'src', 'inject.js');
+  if (!existsSync(injectScript)) {
+    return Promise.reject(new Error(`Missing inject script: ${injectScript}`));
+  }
+  return new Promise((resolvePromise, rejectPromise) => {
+    execFile(
+      nodeExecPath,
+      [injectScript],
+      {
+        cwd: rootDir,
+        env: buildSafeChildEnv(),
+        timeout: timeoutMs,
+        windowsHide: true,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+      },
+      (err, stdout, stderr) => {
+        const out = String(stdout || '');
+        const errOut = String(stderr || '');
+        if (err) {
+          const detail = [err.message, errOut.trim(), out.trim()].filter(Boolean).join(' | ');
+          const wrapped = new Error(detail || 'Subprocess reinject failed');
+          wrapped.code = err.code;
+          wrapped.signal = err.signal;
+          wrapped.stdout = out;
+          wrapped.stderr = errOut;
+          rejectPromise(wrapped);
+          return;
+        }
+        resolvePromise({
+          ok: true,
+          scriptPath: injectScript,
+          stdout: out,
+          stderr: errOut,
+        });
+      }
+    );
+  });
+}
+
+const RELEASE_TAG = /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+const UPDATE_NOT_APPLIED = Object.freeze({
+  ok: false, filesUpdated: false, reinjectOk: null, reinjectError: '', needsRestart: false,
+});
+
+const NON_BACKEND_EXEMPT_EXACT = new Set([
+  'src/ui-runtime.js',
+  'src/style.css',
+  'src/usage-core.js',
+  'src/effort-core.js',
+  'src/i18n-core.js',
+  'src/ripple-core.js',
+  'src/mascot-core.js',
+  'sidecars/studio/index.html',
+]);
+
+function requiresBackendRestart(file) {
+  const norm = String(file || '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  if (!norm) return false;
+  const lower = norm.toLowerCase();
+  if (NON_BACKEND_EXEMPT_EXACT.has(lower)) return false;
+  if (/^(?:locales|skills|docs|\.github)\//i.test(norm)) return false;
+  if (/^(?:readme|changelog|license)(?:\.[^/]+)?$/i.test(norm)) return false;
+  if (/\.(?:md|txt|css|html|svg|png|jpg|jpeg|webp|ico|woff2?|ttf)$/i.test(lower)) return false;
+  return true;
+}
+
+function isManifestRuntimeChanged(relPath, srcPath, dstPath) {
+  const norm = String(relPath || '').trim().replace(/\\/g, '/').toLowerCase();
+  if (norm !== 'plugin.json' && norm !== 'package.json') return true;
+  try {
+    const nextJson = JSON.parse(readFileSync(srcPath, 'utf8'));
+    const prevJson = JSON.parse(readFileSync(dstPath, 'utf8'));
+    if (!nextJson || typeof nextJson !== 'object' || !prevJson || typeof prevJson !== 'object') return true;
+    if (norm === 'plugin.json') {
+      const stripVersion = (obj) => {
+        const copy = { ...obj };
+        delete copy.version;
+        return JSON.stringify(copy);
+      };
+      return stripVersion(nextJson) !== stripVersion(prevJson);
+    }
+    const runtimeKeys = ['main', 'bin', 'type', 'exports', 'imports', 'scripts', 'dependencies', 'optionalDependencies', 'peerDependencies', 'engines'];
+    for (const k of runtimeKeys) {
+      if (JSON.stringify(nextJson[k] ?? null) !== JSON.stringify(prevJson[k] ?? null)) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+async function activateUpdate(reinjectFn, filesUpdated, backendChanged) {
+  try {
+    const result = await reinjectFn();
+    if (result?.ok === false || (typeof result?.code === 'number' && result.code !== 0)) {
+      throw new Error(result.error || result.stderr || `Reinjection failed (code ${result.code ?? 'unknown'})`);
+    }
+    return {
+      filesUpdated,
+      reinjectOk: true,
+      reinjectError: backendChanged ? 'Restart Antigravity to load the updated plugin backend.' : '',
+      needsRestart: backendChanged,
+    };
+  } catch (err) {
+    return { filesUpdated, reinjectOk: false, reinjectError: err?.message || String(err), needsRestart: true };
+  }
+}
+
 async function performArchiveSelfUpdate({
   pluginDir,
   pluginDataDir,
   targetTag = '',
   fetchFn = typeof fetch === 'function' ? fetch : null,
   execFn = execFileSync,
-  reinjectFn = () => injectOnce({ log: () => {} }),
+  reinjectFn = () => runSubprocessReinject(pluginDir),
   timeoutMs = 30000,
 } = {}) {
   if (!isValidStudioPluginDir(pluginDir)) {
-    return { ok: false, reason: 'not_git_repo', releaseUrl: LATEST_RELEASE_WEB_URL };
+    return { ...UPDATE_NOT_APPLIED, reason: 'not_git_repo', releaseUrl: LATEST_RELEASE_WEB_URL };
   }
   if (!fetchFn) {
-    return { ok: false, reason: 'fetch_unavailable', releaseUrl: LATEST_RELEASE_WEB_URL };
+    return { ...UPDATE_NOT_APPLIED, reason: 'fetch_unavailable', releaseUrl: LATEST_RELEASE_WEB_URL };
   }
 
   let cleanTag = String(targetTag || '').trim();
@@ -650,7 +1020,7 @@ async function performArchiveSelfUpdate({
     const chk = await checkStudioUpdate({ fetchFn, pluginDir, execFn, forceRefresh: true });
     if (!chk.ok || !chk.latestTag) {
       return {
-        ok: false,
+        ...UPDATE_NOT_APPLIED,
         reason: 'update_check_failed',
         error: chk?.error || 'Could not resolve latest release tag',
         releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -658,8 +1028,8 @@ async function performArchiveSelfUpdate({
     }
     cleanTag = chk.latestTag;
   }
-  if (!/^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(cleanTag)) {
-    return { ok: false, reason: 'invalid_tag', error: `Invalid release tag: ${cleanTag}`, releaseUrl: LATEST_RELEASE_WEB_URL };
+  if (!RELEASE_TAG.test(cleanTag)) {
+    return { ...UPDATE_NOT_APPLIED, reason: 'invalid_tag', error: `Invalid release tag: ${cleanTag}`, releaseUrl: LATEST_RELEASE_WEB_URL };
   }
 
   const normalizedTag = cleanTag.startsWith('v') ? cleanTag : `v${cleanTag}`;
@@ -680,7 +1050,7 @@ async function performArchiveSelfUpdate({
       });
       if (!res.ok) {
         return {
-          ok: false,
+          ...UPDATE_NOT_APPLIED,
           reason: 'archive_download_failed',
           error: `HTTP ${res.status}`,
           releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -693,7 +1063,7 @@ async function performArchiveSelfUpdate({
 
     if (!buf || buf.length < 100) {
       return {
-        ok: false,
+        ...UPDATE_NOT_APPLIED,
         reason: 'archive_download_failed',
         error: 'Downloaded archive is empty',
         releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -702,12 +1072,12 @@ async function performArchiveSelfUpdate({
 
     writeFileSync(archivePath, buf);
     mkdirSync(extractDir, { recursive: true });
-    execFn('tar', ['-xzf', archivePath, '-C', extractDir], { encoding: 'utf8', timeout: timeoutMs });
+    execFn('tar', ['-xzf', archivePath, '-C', extractDir], { env: buildSafeChildEnv(), encoding: 'utf8', timeout: timeoutMs });
 
     const sourceRoot = findExtractedStudioRoot(extractDir);
     if (!sourceRoot) {
       return {
-        ok: false,
+        ...UPDATE_NOT_APPLIED,
         reason: 'archive_invalid',
         error: 'Release archive missing valid plugin.json',
         releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -716,7 +1086,18 @@ async function performArchiveSelfUpdate({
 
     const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
     const files = getArchiveCopyPlan(sourceRoot, installRoot, isProtected);
+    const backendChanged = files.some(({ src, dst, exists }) => {
+      const rel = relative(installRoot, dst);
+      if (!requiresBackendRestart(rel)) return false;
+      if (!exists) return true;
+      if (readFileSync(src).equals(readFileSync(dst))) return false;
+      return isManifestRuntimeChanged(rel, src, dst);
+    });
     applyArchiveCopyPlan(files, join(tmpRoot, 'backup'));
+
+    try {
+      lifecycle.cleanupLegacyFlatRootFiles(installRoot);
+    } catch {}
 
     let nextVersion = normalizedTag.replace(/^v/i, '');
     try {
@@ -725,12 +1106,10 @@ async function performArchiveSelfUpdate({
     } catch {}
 
     updateCheckCache = { at: 0, value: null };
-    try {
-      await reinjectFn();
-    } catch {}
 
     return {
       ok: true,
+      ...(await activateUpdate(reinjectFn, true, backendChanged)),
       mode: 'archive',
       updated: true,
       version: nextVersion,
@@ -738,7 +1117,7 @@ async function performArchiveSelfUpdate({
     };
   } catch (err) {
     return {
-      ok: false,
+      ...UPDATE_NOT_APPLIED,
       reason: 'archive_update_failed',
       error: err?.message || String(err),
       releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -757,7 +1136,7 @@ async function performStudioSelfUpdate({
   fetchFn = typeof fetch === 'function' ? fetch : null,
   targetTag = '',
   allowArchive = true,
-  reinjectFn = () => injectOnce({ log: () => {} }),
+  reinjectFn = () => runSubprocessReinject(pluginDir),
 } = {}) {
   const gitState = inspectGitRepoState(pluginDir, execFn);
   if (!gitState.isGitRepo) {
@@ -772,50 +1151,66 @@ async function performStudioSelfUpdate({
       });
     }
     return {
-      ok: false,
+      ...UPDATE_NOT_APPLIED,
       reason: 'not_git_repo',
       releaseUrl: LATEST_RELEASE_WEB_URL,
     };
   }
   if (!gitState.gitClean) {
     return {
-      ok: false,
+      ...UPDATE_NOT_APPLIED,
       reason: 'dirty_worktree',
       branch: gitState.branch,
       releaseUrl: LATEST_RELEASE_WEB_URL,
     };
   }
   try {
-    const options = { cwd: pluginDir, encoding: 'utf8', timeout: 25000 };
-    execFn('git', ['fetch', '--tags', 'origin'], options);
-    const upstream = String(execFn('git', ['rev-parse', '--verify', '@{upstream}^{commit}'], options)).trim();
-    if (!/^[a-f0-9]{40,64}$/.test(upstream)) throw new Error('Invalid upstream commit');
-    const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
-    const changes = String(execFn('git', ['diff', '--name-only', '--no-renames', '-z', 'HEAD', upstream, '--'], options));
-    if (changes.split('\0').some((file) => file && isProtected(resolve(installRoot, file), true))) {
-      return { ok: false, reason: 'protected_data_path', releaseUrl: LATEST_RELEASE_WEB_URL };
+    const options = { cwd: pluginDir, env: buildSafeChildEnv(), encoding: 'utf8', timeout: 25000 };
+    const requested = String(targetTag || '').trim();
+    if (requested && !RELEASE_TAG.test(requested)) {
+      return { ...UPDATE_NOT_APPLIED, reason: 'invalid_tag', error: `Invalid release tag: ${requested}` };
     }
-    const pullOut = String(execFn('git', ['merge', '--ff-only', '--no-overwrite-ignore', upstream], options)).trim();
+    const tag = requested && (requested.startsWith('v') ? requested : `v${requested}`);
+    const ref = tag ? `refs/tags/${tag}` : '@{upstream}';
+    if (tag) execFn('git', ['fetch', 'origin', `${ref}:${ref}`], options);
+    else execFn('git', ['fetch', '--tags', 'origin'], options);
+    const target = String(execFn('git', ['rev-parse', '--verify', `${ref}^{commit}`], options)).trim();
+    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(target)) throw new Error(`Invalid commit for ${ref}`);
+    if (tag) {
+      try {
+        execFn('git', ['merge-base', '--is-ancestor', 'HEAD', target], options);
+      } catch (err) {
+        if (err.status !== 1) throw err;
+        return { ...UPDATE_NOT_APPLIED, reason: 'not_fast_forward', error: `Cannot fast-forward HEAD to ${tag}` };
+      }
+    }
+    const { installRoot, isProtected } = getUpdatePathGuard(pluginDir, pluginDataDir);
+    const diff = execFn('git', ['diff', '--name-only', '--no-renames', '-z', 'HEAD', target, '--'], options);
+    const changes = String(diff).split('\0').filter(Boolean);
+    if (changes.some((file) => isProtected(resolve(installRoot, file), true))) {
+      return { ...UPDATE_NOT_APPLIED, reason: 'protected_data_path', releaseUrl: LATEST_RELEASE_WEB_URL };
+    }
+    const pullOut = String(execFn('git', ['merge', '--ff-only', '--no-overwrite-ignore', target], options)).trim();
+    const updated = !/already up[ -]to[ -]date/i.test(pullOut);
     let nextVersion = cdp.PLUGIN_VERSION;
     try {
       const pkg = JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8'));
       if (pkg?.version) nextVersion = String(pkg.version);
     } catch {}
     updateCheckCache = { at: 0, value: null };
-    try {
-      await reinjectFn();
-    } catch {}
     return {
       ok: true,
+      ...(await activateUpdate(reinjectFn, updated, updated && changes.some(requiresBackendRestart))),
       mode: 'git',
-      updated: !/already up to date/i.test(pullOut),
+      tag,
+      updated,
       output: pullOut,
       version: nextVersion,
       branch: gitState.branch,
     };
   } catch (err) {
     return {
-      ok: false,
+      ...UPDATE_NOT_APPLIED,
       reason: 'git_pull_failed',
       error: err?.message || String(err),
       releaseUrl: LATEST_RELEASE_WEB_URL,
@@ -910,6 +1305,7 @@ async function syncI18nPackApi({
       fetchFn,
       userAgent: `agy-claude-studio/${cdp.PLUGIN_VERSION}`,
     });
+    remoteLocaleManifestCache.recordSuccess(syncRes.remoteManifest);
     try {
       await reinjectFn();
     } catch {}
@@ -1490,7 +1886,146 @@ function normalizeChildSubagent(conv, trajSummary) {
   };
 }
 
-async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null, allowCdpFallback = true } = {}) {
+function isSummaryStatusRunning(status) {
+  if (status === 2) return true;
+  const s = String(status || '').toUpperCase();
+  return s.includes('RUNNING') || s.includes('CANCELLING');
+}
+
+function normalizeSummaryRunState(status) {
+  const s = String(status || '').toUpperCase();
+  if (s.includes('CANCELLING')) return 'RUN_STATE_CANCELLING';
+  if (status === 2 || s.includes('RUNNING')) return 'RUN_STATE_RUNNING';
+  return 'RUN_STATE_IDLE';
+}
+
+function parseTimestampMs(raw) {
+  if (!raw) return 0;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string') {
+    const ms = Date.parse(raw);
+    return Number.isFinite(ms) ? ms : 0;
+  }
+  if (typeof raw === 'object' && raw.seconds != null) {
+    const sec = Number(raw.seconds);
+    return Number.isFinite(sec) ? sec * 1000 : 0;
+  }
+  return 0;
+}
+
+function mergeSideQuestionItems(cdpItems, activeConvoId, summaries) {
+  const byKey = new Map();
+  const list = [];
+  const parentSummary = activeConvoId && summaries && typeof summaries === 'object' ? summaries[activeConvoId] : null;
+  const sqTitles =
+    parentSummary?.annotations?.sideQuestionTitles && typeof parentSummary.annotations.sideQuestionTitles === 'object'
+      ? parentSummary.annotations.sideQuestionTitles
+      : {};
+  const persistedIds = Array.isArray(parentSummary?.annotations?.sideQuestionCascadeIds)
+    ? parentSummary.annotations.sideQuestionCascadeIds
+    : [];
+
+  const upsert = (raw) => {
+    const cascadeId = String(raw?.cascadeId || '').trim();
+    const tabId =
+      String(raw?.tabId || '').trim() ||
+      (cascadeId ? `side_question__${cascadeId}` : 'side_question__draft');
+    const sqSum = cascadeId && summaries ? summaries[cascadeId] : null;
+    const question =
+      String(raw?.question || '').trim() ||
+      (cascadeId ? String(sqTitles[cascadeId] || '').trim() : '') ||
+      String(sqSum?.annotations?.title || sqSum?.summary || '').trim();
+    const key = cascadeId ? `c:${cascadeId}` : `t:${tabId}:${question.slice(0, 48)}`;
+    const isOpenTab = Boolean(raw?.isOpenTab);
+    const isRunning = Boolean(raw?.isRunning) || isSummaryStatusRunning(sqSum?.status);
+    const stepCount = Math.max(Number(raw?.stepCount || 0) || 0, Number(sqSum?.stepCount || 0) || 0);
+    const startTimestamp = Math.max(
+      Number(raw?.startTimestamp || 0) || 0,
+      parseTimestampMs(sqSum?.lastModifiedTime),
+      parseTimestampMs(sqSum?.createdTime)
+    );
+
+    const existing = byKey.get(key);
+    if (existing) {
+      if (!existing.question && question) existing.question = question;
+      if (!existing.tabId && tabId) existing.tabId = tabId;
+      if (isOpenTab) {
+        existing.isOpenTab = true;
+        existing.minimized = false;
+      }
+      if (isRunning) existing.isRunning = true;
+      if (stepCount > existing.stepCount) existing.stepCount = stepCount;
+      if (startTimestamp > existing.startTimestamp) existing.startTimestamp = startTimestamp;
+      if (existing.index === null && Number.isInteger(raw?.index)) existing.index = raw.index;
+      return;
+    }
+
+    const entry = {
+      id: cascadeId || tabId || `sq_${list.length}`,
+      cascadeId,
+      tabId,
+      question,
+      mode: String(raw?.mode || 'btw'),
+      minimized: isOpenTab ? false : raw?.minimized !== false,
+      isOpenTab,
+      isRunning,
+      stepCount,
+      index: Number.isInteger(raw?.index) ? raw.index : null,
+      startTimestamp,
+    };
+    byKey.set(key, entry);
+    list.push(entry);
+  };
+
+  if (Array.isArray(cdpItems)) {
+    for (const item of cdpItems) upsert(item);
+  }
+  for (const sqId of persistedIds) {
+    const cleanId = String(sqId || '').trim();
+    if (!cleanId) continue;
+    upsert({
+      cascadeId: cleanId,
+      tabId: `side_question__${cleanId}`,
+      question: String(sqTitles[cleanId] || '').trim(),
+      minimized: true,
+    });
+  }
+  for (const [sqId, title] of Object.entries(sqTitles)) {
+    const cleanId = String(sqId || '').trim();
+    if (!cleanId) continue;
+    upsert({
+      cascadeId: cleanId,
+      tabId: `side_question__${cleanId}`,
+      question: String(title || '').trim(),
+      minimized: true,
+    });
+  }
+
+  list.sort((a, b) => {
+    if (Boolean(b.isRunning) !== Boolean(a.isRunning)) return b.isRunning ? 1 : -1;
+    if (Boolean(b.isOpenTab) !== Boolean(a.isOpenTab)) return b.isOpenTab ? 1 : -1;
+    return (b.startTimestamp || 0) - (a.startTimestamp || 0);
+  });
+  return list;
+}
+
+async function getLiveTasksApi({
+  env = process.env,
+  fetchFn = typeof fetch === 'function' ? fetch : null,
+  allowCdpFallback = true,
+  conversationId = '',
+  unbound = false,
+} = {}) {
+  const reqConvoId = String(conversationId || '').trim();
+  const isUnbound = Boolean(unbound);
+  const sideQPromise =
+    allowCdpFallback && !isUnbound
+      ? queryHostSideQuestions(reqConvoId).catch(() => ({ ok: false, conversationId: reqConvoId, items: [] }))
+      : Promise.resolve({ ok: false, conversationId: '', items: [] });
+  const sumPromise = callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 2500 }).catch(() => ({
+    ok: false,
+  }));
+
   const listRes = await callConversationService(
     'ListConversations',
     { pageSize: 30, includeArchived: false },
@@ -1498,7 +2033,18 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
   );
   if (!listRes.ok) {
     if (allowCdpFallback) {
-      return getLiveTasksCdpFallback();
+      const [fallback, sideQ, sumRes] = await Promise.all([getLiveTasksCdpFallback(), sideQPromise, sumPromise]);
+      const summaries =
+        sumRes?.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
+          ? sumRes.data.trajectorySummaries
+          : {};
+      const sideQMatchesReq = !isUnbound && (!reqConvoId || !sideQ?.conversationId || sideQ.conversationId === reqConvoId);
+      const activeConvoId = isUnbound ? '' : reqConvoId || sideQ?.conversationId || '';
+      return {
+        ...fallback,
+        sideQuestionConvoId: activeConvoId,
+        sideQuestions: isUnbound ? [] : mergeSideQuestionItems(sideQMatchesReq ? sideQ?.items : [], activeConvoId, summaries),
+      };
     }
     return {
       ok: true,
@@ -1507,6 +2053,8 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
       reason: listRes.reason || 'unavailable',
       running: [],
       recent: [],
+      sideQuestionConvoId: reqConvoId || '',
+      sideQuestions: [],
       checkedAt: new Date().toISOString(),
     };
   }
@@ -1519,6 +2067,9 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
     updateTime: c?.state?.updateTime || c?.metadata?.createTime || null,
     createTime: c?.metadata?.createTime || null,
     pinned: Boolean(c?.annotations?.pinned),
+    isSideQuestion: false,
+    parentConversationId: '',
+    parentTitle: '',
     subagentCount: 0,
     activeSubagentCount: 0,
     subagents: [],
@@ -1530,27 +2081,109 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
   const running = normalized.filter(
     (c) => c.runState === 'RUN_STATE_RUNNING' || c.runState === 'RUN_STATE_CANCELLING'
   );
-  const recent = normalized
-    .filter((c) => c.runState !== 'RUN_STATE_RUNNING' && c.runState !== 'RUN_STATE_CANCELLING')
-    .slice(0, 3);
+  const idleNormalized = normalized.filter(
+    (c) => c.runState !== 'RUN_STATE_RUNNING' && c.runState !== 'RUN_STATE_CANCELLING'
+  );
 
-  const targetsToEnrich = running.length > 0 ? running.slice(0, 5) : recent.slice(0, 1);
-  if (targetsToEnrich.length > 0) {
-    let summaries = {};
-    const sumRes = await callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 2500 });
-    if (sumRes.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object') {
-      summaries = sumRes.data.trajectorySummaries;
+  const [sumRes, sideQ] = await Promise.all([sumPromise, sideQPromise]);
+  const summaries =
+    sumRes?.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
+      ? sumRes.data.trajectorySummaries
+      : {};
+
+  // Ensure the active conversation is prioritized in recent (and recovered from summaries if outside ListConversations pageSize)
+  let recent = idleNormalized.slice(0, 3);
+  if (!isUnbound && reqConvoId && !running.some((c) => c.id === reqConvoId)) {
+    let activeIdle = idleNormalized.find((c) => c.id === reqConvoId) || null;
+    if (!activeIdle) {
+      const reqSum = summaries[reqConvoId];
+      if (reqSum && typeof reqSum === 'object') {
+        const sumItem = {
+          id: reqConvoId,
+          title: String(reqSum?.annotations?.title || reqSum?.summary || 'Untitled Conversation').trim(),
+          runState: normalizeSummaryRunState(reqSum.status),
+          updateTime: reqSum?.lastModifiedTime || reqSum?.createdTime || null,
+          createTime: reqSum?.createdTime || null,
+          pinned: false,
+          isSideQuestion: false,
+          parentConversationId: '',
+          parentTitle: '',
+          subagentCount: 0,
+          activeSubagentCount: 0,
+          subagents: [],
+          stepCount: Number(reqSum?.stepCount || 0),
+          activity: null,
+        };
+        if (isSummaryStatusRunning(reqSum.status)) {
+          running.unshift(sumItem);
+        } else {
+          activeIdle = sumItem;
+        }
+      }
     }
+    if (activeIdle) {
+      recent = [activeIdle, ...idleNormalized.filter((c) => c.id !== reqConvoId)].slice(0, 3);
+    }
+  }
 
+  // Discover any active/running side-question (ephemeral /btw) sessions so they are counted in Live Tasks too
+  const runningIds = new Set(running.map((c) => c.id));
+  const seenRunningSq = new Set();
+  for (const [parentId, parentSum] of Object.entries(summaries)) {
+    const sqIds = Array.isArray(parentSum?.annotations?.sideQuestionCascadeIds)
+      ? parentSum.annotations.sideQuestionCascadeIds
+      : [];
+    const sqTitles =
+      parentSum?.annotations?.sideQuestionTitles && typeof parentSum.annotations.sideQuestionTitles === 'object'
+        ? parentSum.annotations.sideQuestionTitles
+        : {};
+    const allSqIds = new Set([...sqIds, ...Object.keys(sqTitles)]);
+    const parentTitle = String(parentSum?.annotations?.title || parentSum?.summary || '').trim();
+    for (const rawSqId of allSqIds) {
+      const sqId = String(rawSqId || '').trim();
+      if (!sqId || runningIds.has(sqId) || seenRunningSq.has(sqId)) continue;
+      const sqSum = summaries[sqId];
+      if (!sqSum || !isSummaryStatusRunning(sqSum.status)) continue;
+      seenRunningSq.add(sqId);
+      runningIds.add(sqId);
+      running.push({
+        id: sqId,
+        title: String(sqTitles[sqId] || sqSum?.annotations?.title || sqSum?.summary || 'Side Question').trim(),
+        runState: normalizeSummaryRunState(sqSum.status),
+        updateTime: sqSum?.lastModifiedTime || sqSum?.createdTime || null,
+        createTime: sqSum?.createdTime || null,
+        pinned: false,
+        isSideQuestion: true,
+        parentConversationId: parentId,
+        parentTitle,
+        tabId: `side_question__${sqId}`,
+        subagentCount: 0,
+        activeSubagentCount: 0,
+        subagents: [],
+        stepCount: Number(sqSum?.stepCount || 0),
+        activity: null,
+      });
+    }
+  }
+
+  if (!isUnbound && reqConvoId && running.length > 1) {
+    const priorityOf = (c) => (c.id === reqConvoId ? 0 : c.parentConversationId === reqConvoId ? 1 : 2);
+    running.sort((a, b) => priorityOf(a) - priorityOf(b));
+  }
+
+  const targetsToEnrich = running.length > 0 ? running.slice(0, 6) : recent.slice(0, 1);
+  if (targetsToEnrich.length > 0) {
     await Promise.all(
       targetsToEnrich.map(async (item) => {
         const isRunningItem = item.runState === 'RUN_STATE_RUNNING' || item.runState === 'RUN_STATE_CANCELLING';
-        const subPromise = callConversationService(
-          'ListConversations',
-          { pageSize: 30, parentConversationId: item.id, includeArchived: false },
-          { env, fetchFn, timeoutMs: 2500 }
-        );
-        const stepCount = Number(summaries?.[item.id]?.stepCount || 0);
+        const subPromise = item.isSideQuestion
+          ? Promise.resolve({ ok: false })
+          : callConversationService(
+              'ListConversations',
+              { pageSize: 30, parentConversationId: item.id, includeArchived: false },
+              { env, fetchFn, timeoutMs: 2500 }
+            );
+        const stepCount = Number(summaries?.[item.id]?.stepCount || item.stepCount || 0);
         item.stepCount = stepCount;
         const stepPromise =
           isRunningItem && stepCount > 0
@@ -1580,12 +2213,22 @@ async function getLiveTasksApi({ env = process.env, fetchFn = typeof fetch === '
     );
   }
 
+  const sideQMatchesReq = !isUnbound && (!reqConvoId || !sideQ?.conversationId || sideQ.conversationId === reqConvoId);
+  const activeConvoId = isUnbound
+    ? ''
+    : reqConvoId || sideQ?.conversationId || running.find((r) => !r.isSideQuestion)?.id || recent[0]?.id || '';
+  const mergedSideQuestions = isUnbound
+    ? []
+    : mergeSideQuestionItems(sideQMatchesReq ? sideQ?.items : [], activeConvoId, summaries);
+
   return {
     ok: true,
     available: true,
     source: 'conversation_service',
     running,
     recent,
+    sideQuestionConvoId: activeConvoId,
+    sideQuestions: mergedSideQuestions,
     totalCount: normalized.length,
     checkedAt: new Date().toISOString(),
   };
@@ -1616,24 +2259,391 @@ function decodeFileUriToPath(rawUri) {
 }
 
 function readGitBranchFast(workspaceDir, fallbackBranch = '') {
-  if (!workspaceDir || !existsSync(workspaceDir)) return String(fallbackBranch || '').trim();
-  try {
-    let gitDir = join(workspaceDir, '.git');
-    if (!existsSync(gitDir)) return String(fallbackBranch || '').trim();
-    const st = statSync(gitDir);
-    if (st.isFile()) {
-      const ptr = readFileSync(gitDir, 'utf8').trim();
-      const m = ptr.match(/^gitdir:\s*(.+)$/i);
-      if (m) gitDir = resolve(workspaceDir, m[1].trim());
+  return inspectWorkspaceGitMeta(workspaceDir, { branchName: fallbackBranch }).branch;
+}
+
+function normalizeGitRemoteToWebUrl(rawUrl) {
+  const s = String(rawUrl || '').trim();
+  if (!s || /[\x00-\x1f\x7f\s"'`<>]/.test(s)) {
+    return { url: '', host: '', isGitHub: false };
+  }
+  let candidate = '';
+  const scpMatch = s.match(/^(?:git@|[^@:/\s]+@)([a-zA-Z0-9.-]+):([^/\s].*)$/);
+  if (scpMatch) {
+    const host = scpMatch[1].toLowerCase();
+    const repoPath = scpMatch[2].replace(/\.git$/i, '').replace(/^\/+/, '');
+    if (host && repoPath) candidate = `https://${host}/${repoPath}`;
+  } else if (/^ssh:\/\//i.test(s)) {
+    try {
+      const parsed = new URL(s);
+      const host = parsed.hostname.toLowerCase();
+      const repoPath = parsed.pathname.replace(/\.git$/i, '').replace(/^\/+/, '');
+      if (host && repoPath) candidate = `https://${host}/${repoPath}`;
+    } catch {
+      return { url: '', host: '', isGitHub: false };
     }
+  } else if (/^https?:\/\//i.test(s)) {
+    try {
+      const parsed = new URL(s);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return { url: '', host: '', isGitHub: false };
+      }
+      const host = parsed.hostname.toLowerCase();
+      const repoPath = parsed.pathname.replace(/\.git$/i, '').replace(/\/+$/, '');
+      if (!host || !repoPath || repoPath === '/') return { url: '', host: '', isGitHub: false };
+      candidate = `${parsed.protocol}//${parsed.host}${repoPath}`;
+    } catch {
+      return { url: '', host: '', isGitHub: false };
+    }
+  } else {
+    return { url: '', host: '', isGitHub: false };
+  }
+
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return { url: '', host: '', isGitHub: false };
+    const host = u.hostname.toLowerCase();
+    if (!host || !host.includes('.') || host === 'localhost') return { url: '', host: '', isGitHub: false };
+    const cleanUrl = `${u.protocol}//${u.host}${u.pathname}`.replace(/\/+$/, '');
+    return { url: cleanUrl, host, isGitHub: host === 'github.com' };
+  } catch {
+    return { url: '', host: '', isGitHub: false };
+  }
+}
+
+function readGitConfigOriginUrl(gitDir, commonDir) {
+  const candidates = [];
+  if (commonDir) candidates.push(join(commonDir, 'config'));
+  if (gitDir && gitDir !== commonDir) candidates.push(join(gitDir, 'config'));
+  for (const cfgPath of candidates) {
+    try {
+      if (!existsSync(cfgPath)) continue;
+      const content = readFileSync(cfgPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      let inOrigin = false;
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+        if (line.startsWith('[')) {
+          inOrigin = /^\[remote\s+"origin"\]$/i.test(line);
+          continue;
+        }
+        if (inOrigin) {
+          const m = line.match(/^url\s*=\s*(.+)$/i);
+          if (m && m[1]) return m[1].trim();
+        }
+      }
+    } catch {}
+  }
+  return '';
+}
+
+function parseGitHeadBranch(gitDir) {
+  try {
     const headPath = join(gitDir, 'HEAD');
-    if (!existsSync(headPath)) return String(fallbackBranch || '').trim();
+    if (!existsSync(headPath)) return '';
     const head = readFileSync(headPath, 'utf8').trim();
     const refMatch = head.match(/^ref:\s*refs\/heads\/(.+)$/);
     if (refMatch) return refMatch[1].trim();
     if (/^[0-9a-f]{7,40}$/i.test(head)) return head.slice(0, 7);
   } catch {}
-  return String(fallbackBranch || '').trim();
+  return '';
+}
+
+function readGitDirActivityMs(gitDir) {
+  let latest = 0;
+  for (const rel of ['index', 'HEAD', join('logs', 'HEAD')]) {
+    try {
+      const p = join(gitDir, rel);
+      if (!existsSync(p)) continue;
+      const mtime = Number(statSync(p).mtimeMs || 0);
+      if (mtime > latest) latest = mtime;
+    } catch {}
+  }
+  return latest;
+}
+
+function isPathSameOrInside(rootCanonical, candidateCanonical, win = process.platform === 'win32') {
+  if (!rootCanonical || !candidateCanonical) return false;
+  const a = win ? rootCanonical.toLowerCase() : rootCanonical;
+  const b = win ? candidateCanonical.toLowerCase() : candidateCanonical;
+  const rel = relative(a, b);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+function getWorktreeBranchTieRank(branch) {
+  const b = String(branch || '').trim().toLowerCase();
+  if (!b) return -1;
+  if (b === 'main' || b === 'master') return 0;
+  if (b === 'dev' || b === 'develop') return 1;
+  return 2;
+}
+
+const MAX_WORKTREE_SCAN_ENTRIES = 64;
+const MAX_GIT_POINTER_BYTES = 4096;
+const WORKSPACE_GIT_META_CACHE_TTL_MS = 4000;
+const workspaceGitMetaDisplayCache = new Map();
+
+function readSmallTextFile(filePath, maxBytes = MAX_GIT_POINTER_BYTES) {
+  const st = statSync(filePath);
+  if (!st.isFile() || st.size > maxBytes) return '';
+  return readFileSync(filePath, 'utf8').trim();
+}
+
+function discoverContainerWorktrees(workspaceDir) {
+  const found = new Map();
+  let commonDir = '';
+  let rootReal = '';
+  const win = process.platform === 'win32';
+  try {
+    rootReal = realpathSync.native(resolve(workspaceDir));
+  } catch {
+    return { worktrees: [], commonDir: '' };
+  }
+
+  const registerWorktree = (rawWtPath, rawGitDir, rawCommonDir = '') => {
+    if (!rawWtPath || !rawGitDir) return;
+    let wtReal = '';
+    try {
+      wtReal = realpathSync.native(resolve(rawWtPath));
+      if (!statSync(wtReal).isDirectory()) return;
+    } catch {
+      return;
+    }
+    if (!isPathSameOrInside(rootReal, wtReal, win)) return;
+    if (!existsSync(rawGitDir)) return;
+
+    const branch = parseGitHeadBranch(rawGitDir);
+    if (!branch) return;
+
+    let resolvedCommon = rawCommonDir;
+    if (!resolvedCommon && existsSync(join(rawGitDir, 'commondir'))) {
+      try {
+        const relCommon = readSmallTextFile(join(rawGitDir, 'commondir'));
+        if (relCommon) resolvedCommon = resolve(rawGitDir, relCommon);
+      } catch {}
+    }
+    if (!commonDir && resolvedCommon && existsSync(resolvedCommon)) {
+      commonDir = resolvedCommon;
+    }
+
+    const key = win ? wtReal.toLowerCase() : wtReal;
+    const mtimeMs = readGitDirActivityMs(rawGitDir);
+    const relPath = relative(rootReal, wtReal).split(sep).join('/');
+    const prev = found.get(key);
+    if (!prev || mtimeMs > prev.mtimeMs) {
+      found.set(key, {
+        name: basename(wtReal),
+        branch,
+        path: wtReal,
+        relPath,
+        mtimeMs,
+        active: false,
+        inferredRecent: false,
+      });
+    }
+  };
+
+  // Source 1: .repo/.git/worktrees/*
+  const repoGitDir = join(rootReal, '.repo', '.git');
+  const repoWorktreesDir = join(repoGitDir, 'worktrees');
+  if (existsSync(repoWorktreesDir)) {
+    if (!commonDir && existsSync(repoGitDir)) commonDir = repoGitDir;
+    let dir = null;
+    try {
+      dir = opendirSync(repoWorktreesDir);
+      let scanned = 0;
+      let ent = null;
+      while ((ent = dir.readSync()) !== null) {
+        if (++scanned > MAX_WORKTREE_SCAN_ENTRIES) break;
+        if (!ent.isDirectory()) continue;
+        const wtGitDir = join(repoWorktreesDir, ent.name);
+        const gitdirFile = join(wtGitDir, 'gitdir');
+        if (!existsSync(gitdirFile)) continue;
+        try {
+          const ptr = readSmallTextFile(gitdirFile);
+          if (!ptr) continue;
+          const resolvedGitFile = resolve(wtGitDir, ptr);
+          const wtPath = basename(resolvedGitFile).toLowerCase() === '.git' ? dirname(resolvedGitFile) : resolvedGitFile;
+          registerWorktree(wtPath, wtGitDir, repoGitDir);
+        } catch {}
+      }
+    } catch {} finally {
+      try { dir?.closeSync(); } catch {}
+    }
+  }
+
+  // Source 2: worktree/*/.git and worktrees/*/.git
+  for (const containerName of ['worktree', 'worktrees']) {
+    const containerDir = join(rootReal, containerName);
+    if (!existsSync(containerDir)) continue;
+    let dir = null;
+    try {
+      dir = opendirSync(containerDir);
+      let scanned = 0;
+      let ent = null;
+      while ((ent = dir.readSync()) !== null) {
+        if (++scanned > MAX_WORKTREE_SCAN_ENTRIES) break;
+        if (!ent.isDirectory()) continue;
+        const wtPath = join(containerDir, ent.name);
+        const dotGit = join(wtPath, '.git');
+        if (!existsSync(dotGit)) continue;
+        try {
+          const ptr = readSmallTextFile(dotGit);
+          const m = ptr.match(/^gitdir:\s*(.+)$/i);
+          if (!m) continue;
+          const wtGitDir = resolve(wtPath, m[1].trim());
+          if (!/[\\/]worktrees[\\/]/i.test(wtGitDir) && !existsSync(join(wtGitDir, 'commondir'))) continue;
+          registerWorktree(wtPath, wtGitDir);
+        } catch {}
+      }
+    } catch {} finally {
+      try { dir?.closeSync(); } catch {}
+    }
+  }
+
+  const list = Array.from(found.values()).sort((a, b) => {
+    if (b.mtimeMs !== a.mtimeMs) return b.mtimeMs - a.mtimeMs;
+    const rankDiff = getWorktreeBranchTieRank(b.branch) - getWorktreeBranchTieRank(a.branch);
+    if (rankDiff !== 0) return rankDiff;
+    return a.name.localeCompare(b.name);
+  });
+
+  return { worktrees: list, commonDir };
+}
+
+function selectActiveContainerWorktree(worktrees, wsMeta = null) {
+  if (!Array.isArray(worktrees) || worktrees.length === 0) return null;
+  const promote = (hit, inferredRecent) => {
+    hit.active = true;
+    hit.inferredRecent = inferredRecent;
+    const idx = worktrees.indexOf(hit);
+    if (idx > 0) {
+      worktrees.splice(idx, 1);
+      worktrees.unshift(hit);
+    }
+    return hit;
+  };
+  const win = process.platform === 'win32';
+  const explicitCwdRaw = String(wsMeta?.cwd || wsMeta?.worktreePath || '').trim();
+  if (explicitCwdRaw) {
+    try {
+      const cwdReal = realpathSync.native(resolve(explicitCwdRaw));
+      const cwdNorm = win ? cwdReal.toLowerCase() : cwdReal;
+      const matches = worktrees.filter((wt) => {
+        const wtNorm = win ? wt.path.toLowerCase() : wt.path;
+        if (cwdNorm === wtNorm) return true;
+        const prefix = wtNorm.endsWith(sep) ? wtNorm : `${wtNorm}${sep}`;
+        return cwdNorm.startsWith(prefix);
+      });
+      if (matches.length > 0) {
+        matches.sort((a, b) => b.path.length - a.path.length);
+        return promote(matches[0], false);
+      }
+    } catch {}
+  }
+
+  const fallbackBranch = String(wsMeta?.branchName || '').trim();
+  if (fallbackBranch) {
+    const branchMatches = worktrees.filter((wt) => wt.branch === fallbackBranch);
+    if (branchMatches.length === 1) return promote(branchMatches[0], false);
+  }
+
+  return promote(worktrees[0], true);
+}
+
+function inspectWorkspaceGitMeta(workspaceDir, wsMeta = null) {
+  const fallbackBranch = String(wsMeta?.branchName || '').trim();
+  const metaOriginUrl = String(wsMeta?.repository?.gitOriginUrl || '').trim();
+  let branch = fallbackBranch;
+  let isWorktree = false;
+  let inferredRecent = false;
+  let worktreePath = '';
+  let worktreeName = '';
+  let worktrees = [];
+  let rawOriginUrl = metaOriginUrl;
+
+  if (workspaceDir && existsSync(workspaceDir)) {
+    try {
+      let gitDir = join(workspaceDir, '.git');
+      let commonDir = '';
+      if (existsSync(gitDir)) {
+        const st = statSync(gitDir);
+        if (st.isFile()) {
+          const ptr = readSmallTextFile(gitDir);
+          const m = ptr.match(/^gitdir:\s*(.+)$/i);
+          if (m) {
+            gitDir = resolve(workspaceDir, m[1].trim());
+            if (/[\\/]worktrees[\\/]/i.test(gitDir) || existsSync(join(gitDir, 'commondir'))) {
+              isWorktree = true;
+              try {
+                worktreePath = realpathSync.native(resolve(workspaceDir));
+              } catch {
+                worktreePath = resolve(workspaceDir);
+              }
+              worktreeName = basename(worktreePath);
+            }
+          }
+        }
+        if (isWorktree && existsSync(join(gitDir, 'commondir'))) {
+          try {
+            const relCommon = readSmallTextFile(join(gitDir, 'commondir'));
+            if (relCommon) commonDir = resolve(gitDir, relCommon);
+          } catch {}
+        }
+        if (!commonDir) commonDir = gitDir;
+
+        const parsedBranch = parseGitHeadBranch(gitDir);
+        if (parsedBranch) branch = parsedBranch;
+        if (!rawOriginUrl) {
+          rawOriginUrl = readGitConfigOriginUrl(gitDir, commonDir);
+        }
+      } else {
+        const discovered = discoverContainerWorktrees(workspaceDir);
+        if (discovered.worktrees.length > 0) {
+          const activeWt = selectActiveContainerWorktree(discovered.worktrees, wsMeta);
+          branch = activeWt.branch;
+          isWorktree = true;
+          inferredRecent = Boolean(activeWt.inferredRecent);
+          worktreePath = activeWt.path;
+          worktreeName = activeWt.name;
+          worktrees = discovered.worktrees;
+          if (!rawOriginUrl && discovered.commonDir) {
+            rawOriginUrl = readGitConfigOriginUrl(discovered.commonDir, discovered.commonDir);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const normalized = normalizeGitRemoteToWebUrl(rawOriginUrl);
+  return {
+    branch,
+    isWorktree,
+    inferredRecent,
+    worktreePath,
+    worktreeName,
+    worktrees,
+    repoWebUrl: normalized.url,
+    repoHost: normalized.host,
+    isGitHub: normalized.isGitHub,
+  };
+}
+
+function getCachedWorkspaceGitMeta(workspaceDir, wsMeta = null) {
+  const key = `${String(workspaceDir || '')}\0${String(wsMeta?.cwd || wsMeta?.worktreePath || '')}\0${String(wsMeta?.branchName || '')}\0${String(wsMeta?.repository?.gitOriginUrl || '')}`;
+  const now = Date.now();
+  const hit = workspaceGitMetaDisplayCache.get(key);
+  if (hit && now - hit.at < WORKSPACE_GIT_META_CACHE_TTL_MS) {
+    return hit.value;
+  }
+  const value = inspectWorkspaceGitMeta(workspaceDir, wsMeta);
+  workspaceGitMetaDisplayCache.set(key, { at: now, value });
+  if (workspaceGitMetaDisplayCache.size > 64) {
+    const oldest = workspaceGitMetaDisplayCache.keys().next().value;
+    if (oldest !== undefined) workspaceGitMetaDisplayCache.delete(oldest);
+  }
+  return value;
 }
 
 function resolveAppDataDir(customDir) {
@@ -1941,12 +2951,21 @@ async function getConversationInspectorApi({
   fetchFn = typeof fetch === 'function' ? fetch : null,
   appDataDir = resolveAppDataDir(),
   configDir = resolveUserConfigDir(),
+  allowCdpActiveLookup = fetchFn === fetch,
 } = {}) {
   let targetId = String(conversationId || '').trim();
   let summary = null;
   let lsAvailable = false;
 
-  const sumRes = await callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 3000 });
+  const hostActivePromise =
+    !targetId && allowCdpActiveLookup
+      ? queryHostSideQuestions('').catch(() => null)
+      : Promise.resolve(null);
+
+  const [sumRes, hostActive] = await Promise.all([
+    callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 3000 }),
+    hostActivePromise,
+  ]);
   const summaries =
     sumRes.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
       ? sumRes.data.trajectorySummaries
@@ -1954,7 +2973,10 @@ async function getConversationInspectorApi({
 
   if (summaries) {
     lsAvailable = true;
-    if (targetId && summaries[targetId]) {
+    if (!targetId && hostActive?.conversationId && summaries[hostActive.conversationId]) {
+      targetId = hostActive.conversationId;
+      summary = summaries[targetId];
+    } else if (targetId && summaries[targetId]) {
       summary = summaries[targetId];
     } else if (!targetId) {
       // Pick active running conversation first, else most recently modified root conversation
@@ -1982,14 +3004,23 @@ async function getConversationInspectorApi({
   const fullPath = decodeFileUriToPath(ws?.workspaceFolderAbsoluteUri || '');
   const workspaceName = fullPath ? basename(fullPath) : '';
   const parentPath = fullPath ? dirname(fullPath) : '';
-  const branch = readGitBranchFast(fullPath, ws?.branchName || '');
+  const gitMeta = getCachedWorkspaceGitMeta(fullPath, ws);
 
   const environment = {
     host: 'local',
     workspaceName,
     parentPath,
     fullPath,
-    branch,
+    branch: gitMeta.branch,
+    isWorktree: gitMeta.isWorktree,
+    inferredRecent: Boolean(gitMeta.inferredRecent),
+    worktreePath: gitMeta.worktreePath || '',
+    worktreeName: gitMeta.worktreeName || '',
+    worktrees: Array.isArray(gitMeta.worktrees) ? gitMeta.worktrees : [],
+    repoWebUrl: gitMeta.repoWebUrl,
+    repoHost: gitMeta.repoHost,
+    isGitHub: gitMeta.isGitHub,
+    platform: process.platform,
   };
 
   // Context (cached by conversationId + stepCount + lastModifiedTime)
@@ -2130,6 +3161,210 @@ async function openInspectorFileApi(data, { appDataDir = resolveAppDataDir(), sp
       done({ ok: false, error: 'launcher_failed' });
     }
   });
+}
+
+function spawnDetachedSafe(cmd, args, options, spawnFn = spawn) {
+  return new Promise((done) => {
+    let child;
+    let timer;
+    try {
+      child = spawnFn(cmd, args, { detached: true, stdio: 'ignore', shell: false, ...options, env: buildSafeChildEnv(options?.env || process.env) });
+      child.once('error', (err) => {
+        clearTimeout(timer);
+        done({ ok: false, error: err?.code || 'launcher_failed' });
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timer);
+        if (code === 0) done({ ok: true, status: 'launcher_exited' });
+        else if (process.platform === 'win32' && code === 1 && /explorer\.exe$/i.test(cmd)) {
+          done({ ok: true, status: 'request_submitted' });
+        } else {
+          done({ ok: false, error: 'launcher_failed' });
+        }
+      });
+      timer = setTimeout(() => {
+        try {
+          child.unref();
+        } catch {}
+        done({ ok: true, status: 'request_submitted' });
+      }, 650);
+      timer.unref?.();
+    } catch {
+      done({ ok: false, error: 'launcher_failed' });
+    }
+  });
+}
+
+async function collectKnownWorkspaceAllowlist({ env = process.env, fetchFn = typeof fetch === 'function' ? fetch : null } = {}) {
+  const dirs = new Set();
+  const urls = new Set();
+  const scannedRoots = new Set();
+  const addDir = (p, wsMeta = null) => {
+    if (wsMeta?.repository?.gitOriginUrl) {
+      const norm = normalizeGitRemoteToWebUrl(wsMeta.repository.gitOriginUrl);
+      if (norm.url) urls.add(norm.url.toLowerCase());
+    }
+    const clean = decodeFileUriToPath(p);
+    if (!clean) return;
+    try {
+      const real = realpathSync.native(clean);
+      const key = process.platform === 'win32' ? real.toLowerCase() : real;
+      if (scannedRoots.has(key)) return;
+      scannedRoots.add(key);
+      dirs.add(key);
+      const gitMeta = inspectWorkspaceGitMeta(real, wsMeta);
+      if (Array.isArray(gitMeta.worktrees)) {
+        for (const wt of gitMeta.worktrees) {
+          if (!wt?.path) continue;
+          try {
+            const wtReal = realpathSync.native(wt.path);
+            if (isPathSameOrInside(real, wtReal, process.platform === 'win32')) {
+              dirs.add(process.platform === 'win32' ? wtReal.toLowerCase() : wtReal);
+            }
+          } catch {}
+        }
+      }
+      if (gitMeta.repoWebUrl) urls.add(gitMeta.repoWebUrl.toLowerCase());
+    } catch {}
+  };
+  try {
+    const sumRes = await callLanguageServer('GetAllCascadeTrajectories', {}, { env, fetchFn, timeoutMs: 3000 });
+    const summaries =
+      sumRes.ok && sumRes.data?.trajectorySummaries && typeof sumRes.data.trajectorySummaries === 'object'
+        ? sumRes.data.trajectorySummaries
+        : null;
+    if (summaries) {
+      for (const s of Object.values(summaries)) {
+        const wsList = [
+          ...(Array.isArray(s?.workspaces) ? s.workspaces : []),
+          ...(Array.isArray(s?.trajectoryMetadata?.workspaces) ? s.trajectoryMetadata.workspaces : []),
+        ];
+        for (const ws of wsList) {
+          if (ws?.workspaceFolderAbsoluteUri) addDir(ws.workspaceFolderAbsoluteUri, ws);
+        }
+      }
+    }
+  } catch {}
+  return { dirs, urls };
+}
+
+async function performEnvironmentActionApi(
+  data,
+  {
+    env = process.env,
+    fetchFn = typeof fetch === 'function' ? fetch : null,
+    spawnFn = spawn,
+    revealFn = null,
+    allowedDirs = null,
+    allowedUrls = null,
+    platform = process.platform,
+  } = {}
+) {
+  const action = String(data?.action || '').trim().toLowerCase();
+  const win = platform === 'win32';
+  const isLocalPath = (value) =>
+    typeof value === 'string' &&
+    isAbsolute(value) &&
+    !/[\x00-\x1f"\x7f]/.test(value) &&
+    (!win || (/^[a-z]:[\\/]/i.test(value) && !value.slice(2).includes(':')));
+
+  if (action === 'open-repo') {
+    const norm = normalizeGitRemoteToWebUrl(data?.url || '');
+    if (!norm.url) return { ok: false, error: 'invalid_url' };
+    let urlAllow = null;
+    if (Array.isArray(allowedUrls)) {
+      urlAllow = new Set(allowedUrls.map((u) => normalizeGitRemoteToWebUrl(u).url.toLowerCase()).filter(Boolean));
+    } else {
+      const known = await collectKnownWorkspaceAllowlist({ env, fetchFn });
+      urlAllow = known.urls;
+    }
+    if (!urlAllow.has(norm.url.toLowerCase())) {
+      return { ok: false, error: 'url_not_allowed' };
+    }
+    const launcher = win ? 'explorer.exe' : platform === 'darwin' ? '/usr/bin/open' : 'xdg-open';
+    return spawnDetachedSafe(launcher, [norm.url], { windowsHide: false }, spawnFn);
+  }
+
+  if (action !== 'reveal' && action !== 'terminal') {
+    return { ok: false, error: 'invalid_action' };
+  }
+
+  const rawPath = typeof data?.path === 'string' ? data.path.trim() : '';
+  if (!isLocalPath(rawPath)) {
+    return { ok: false, error: 'invalid_path' };
+  }
+
+  let canonical = '';
+  try {
+    canonical = realpathSync.native(resolve(rawPath));
+    if (!isLocalPath(canonical) || !statSync(canonical).isDirectory()) {
+      return { ok: false, error: 'not_a_directory' };
+    }
+  } catch (err) {
+    return { ok: false, error: err?.code === 'ENOENT' ? 'dir_not_found' : 'stat_failed' };
+  }
+
+  let dirAllow = null;
+  if (Array.isArray(allowedDirs)) {
+    dirAllow = new Set();
+    for (const d of allowedDirs) {
+      try {
+        const real = realpathSync.native(resolve(String(d)));
+        dirAllow.add(win ? real.toLowerCase() : real);
+        const gitMeta = inspectWorkspaceGitMeta(real);
+        if (Array.isArray(gitMeta.worktrees)) {
+          for (const wt of gitMeta.worktrees) {
+            if (!wt?.path) continue;
+            try {
+              const wtReal = realpathSync.native(wt.path);
+              if (isPathSameOrInside(real, wtReal, win)) {
+                dirAllow.add(win ? wtReal.toLowerCase() : wtReal);
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+  } else {
+    const known = await collectKnownWorkspaceAllowlist({ env, fetchFn });
+    dirAllow = known.dirs;
+  }
+
+  const canonKey = win ? canonical.toLowerCase() : canonical;
+  if (!dirAllow.has(canonKey)) {
+    return { ok: false, error: 'path_not_allowed' };
+  }
+
+  if (action === 'reveal') {
+    const targetUri = pathToFileURL(canonical).href;
+    if (typeof revealFn === 'function') {
+      return revealFn({ mode: 'reveal', target: targetUri, platform });
+    }
+    if (spawnFn === spawn && typeof cdp.openLocalFileActionAsync === 'function') {
+      const res = await cdp.openLocalFileActionAsync({ mode: 'reveal', target: targetUri, platform });
+      if (res?.ok) return res;
+    }
+    const launcher = win ? 'explorer.exe' : platform === 'darwin' ? '/usr/bin/open' : 'xdg-open';
+    const args = win ? [canonical] : platform === 'darwin' ? ['-R', canonical] : [canonical];
+    return spawnDetachedSafe(launcher, args, { windowsHide: false }, spawnFn);
+  }
+
+  // action === 'terminal'
+  if (win) {
+    const wtRes = await spawnDetachedSafe('wt.exe', ['-d', canonical], { cwd: canonical, windowsHide: false }, spawnFn);
+    if (wtRes.ok) return wtRes;
+    const pwshRes = await spawnDetachedSafe('pwsh.exe', ['-NoExit'], { cwd: canonical, windowsHide: false }, spawnFn);
+    if (pwshRes.ok) return pwshRes;
+    return spawnDetachedSafe('powershell.exe', ['-NoExit'], { cwd: canonical, windowsHide: false }, spawnFn);
+  }
+  if (platform === 'darwin') {
+    return spawnDetachedSafe('/usr/bin/open', ['-a', 'Terminal', canonical], { cwd: canonical }, spawnFn);
+  }
+  for (const termBin of ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']) {
+    const res = await spawnDetachedSafe(termBin, [], { cwd: canonical }, spawnFn);
+    if (res.ok) return res;
+  }
+  return { ok: false, error: 'terminal_not_found' };
 }
 
 const PRIVATE_NOTIFY_FIELDS = {
@@ -2296,11 +3531,18 @@ function registerStudioApis(app, ResponseClass = globalThis.Response) {
   api('/api/notify/read', () => getNotifyConfigApi());
   api('/api/notify', async (data) => saveNotifyConfigApi(data));
   api('/api/notify/test', async (data) => testNotifyApi(data));
-  api('/api/live-tasks', async () => getLiveTasksApi());
+  api('/api/live-tasks', async (data) =>
+    getLiveTasksApi({
+      conversationId: String(data?.conversationId || '').trim(),
+      unbound: Boolean(data?.unbound),
+    })
+  );
+  api('/api/side-question/open', async (data) => openSideQuestionInHost(data));
   api('/api/conversation-inspector', async (data) => {
     return getConversationInspectorApi({ conversationId: String(data?.conversationId || '').trim() });
   });
   api('/api/open-file', async (data) => openInspectorFileApi(data));
+  api('/api/env/action', async (data) => performEnvironmentActionApi(data));
   api('/api/scripts/list', () => getScriptsApi());
   api('/api/scripts', async (data) => upsertScriptApi(data));
   api('/api/scripts/delete', async (data) => deleteScriptApi(data));
@@ -2322,6 +3564,9 @@ async function startStudioSidecar() {
   if (!process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN?.trim()) {
     throw new Error('Missing Antigravity sidecar UI token');
   }
+  try {
+    lifecycle.cleanupLegacyFlatRootFiles(PLUGIN_ROOT_DIR);
+  } catch {}
   const { Response, SidecarApp } = await import('sidecar_sdk');
   const app = new SidecarApp();
   app.page('/', () => new Response(readFileSync(HTML_PATH, 'utf8'), {
@@ -2407,10 +3652,18 @@ if (isSameEntryPath(invokedPath, currentPath)) {
 }
 
 export {
+  buildSafeChildEnv,
+  requiresBackendRestart,
+  queryHostSideQuestions,
+  openSideQuestionInHost,
+  createRemoteLocaleManifestCache,
+  spawnDetachedSafe,
   registerStudioApis,
   detectUsageMonitorInstalled,
   compareSemver,
   checkStudioUpdate,
+  runSubprocessReinject,
+  performArchiveSelfUpdate,
   performStudioSelfUpdate,
   syncI18nCompatWhitelist,
   syncI18nPackApi,
@@ -2428,8 +3681,11 @@ export {
   classifyLiveStepActivity,
   getLiveTasksApi,
   extractContextBreakdownFromGm,
+  normalizeGitRemoteToWebUrl,
+  inspectWorkspaceGitMeta,
   getConversationInspectorApi,
   openInspectorFileApi,
+  performEnvironmentActionApi,
   getStudioStatus,
   applyConfigUpdate,
   resetStudioConfig,
