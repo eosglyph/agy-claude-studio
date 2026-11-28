@@ -76,7 +76,7 @@ namespace AgyClaudeStudio.Installer
 
     internal static class InstallerCore
     {
-        internal const string FallbackVersion = "2.2.3";
+        internal const string FallbackVersion = "2.3.0";
         private const string UninstallRegSubKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeStudio";
         private const string LegacyStyleUninstallRegSubKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\AGYClaudeStyle";
         private const string LauncherLnkName = "Antigravity (Claude Studio).lnk";

@@ -1,6 +1,6 @@
 {
   "name": "agy-claude-studio",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "description": "Claude Studio (agy-claude-studio) — Native Google Antigravity UI aesthetics plugin featuring Claude & Obsidian palettes, standalone glassmorphism, Gemini 4 Periodic Table model selector, Swarm 5-language localization, pixel crab mascot, and seamless antigravity-usage-monitor integration.",
   "private": true,
   "scripts": {

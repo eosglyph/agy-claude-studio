@@ -48,7 +48,7 @@ namespace AgyClaudeStudio
             string manifestPath = Path.Combine(baseDir, "manifest.json");
             Dictionary<string, object> raw = MiniJson.ParseObject(File.ReadAllText(manifestPath, Encoding.UTF8));
             PluginManifest m = new PluginManifest();
-            m.Version = GetString(raw, "version", "2.2.3");
+            m.Version = GetString(raw, "version", "2.3.0");
             m.StyleId = GetString(raw, "styleId", "ag-claude-studio-css");
             m.SettingBinding = GetString(raw, "settingBinding", "__agClaudeStudioSetting");
             m.RemoveExpression = GetString(raw, "removeExpression", "");

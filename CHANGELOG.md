@@ -13,7 +13,7 @@ All notable changes to **Claude Studio (`agy-claude-studio`)** and its upstream 
 
 ### 5 套对称显式浅色与深色配色
 - **跨宿主明暗的 5 项对称配色**：提供 `claude`、`claude-dark`、`obsidian`、`obsidian-dark` 与 `host` 五项选择，5 语种下拉清晰标明「浅色 / 深色 / 跟随宿主」。
-- **端到端主题覆盖**：显式浅色与显式深色不再受 Antigravity 宿主明暗模式制约，完整覆盖界面变量、代码块语法高亮、图表色板、思考强度滑块、毛玻璃浮层与控制室 Sidecar。
+- **端到端主题覆盖**：显式浅色与显式深色不再受 Antigravity 宿主明暗模式制约，完整覆盖界面变量、代码块语法高亮、图表色板、思考强度滑块、毛玻璃浮层与控制室 Sidecar；同步将 Gemini 娘加载动效升级为 12 刻度光环。
 
 ### Claude 风格环境菜单、`/btw` 旁支提问与输入区打磨
 - **Claude 风格环境菜单**：新增环境分支与 Git Worktree 切换菜单，支持 `.repo + worktree/` 容器仓库识别与暗色分支悬浮提示。
