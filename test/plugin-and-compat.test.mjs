@@ -514,6 +514,16 @@ test('MCP lifecycle host exposes zero tools and Studio UI exposes pure palettes,
     'Studio UI splits Chat, Tools, and Settings tabs'
   );
   assert.ok(studioHtml.includes('btn-header-upgrade') && studioHtml.includes('cd-inspector'), 'Studio UI includes header upgrade pill and Claude-style chat inspector');
+  assert.match(
+    studioHtml,
+    /id="btn-check-update">\s*<svg[^>]*><path d="M21 12a9 9 0 1 1-2\.64-6\.36"\/><path d="M21 3v6h-6"\/><\/svg>/,
+    'Check Updates button uses the same refresh icon as Update Pack'
+  );
+  assert.match(
+    studioHtml,
+    /id="btn-self-update"[^>]*>\s*<svg[^>]*><path d="M12 5v14"\/><path d="m19 12-7 7-7-7"\/><\/svg>/,
+    'One-click Update button uses the downward download arrow icon'
+  );
   assert.ok(studioHtml.includes('agCsStudioActiveTab') && studioHtml.includes('agCsStudioCollapseDefaultV2'), 'Studio UI persists active tab and defaults settings cards collapsed on v2');
   assert.ok(studioHtml.includes('notify-section') && studioHtml.includes('overview-notify-card'), 'Studio UI includes mobile push cards on both Overview and Settings');
   assert.ok(studioHtml.includes('/api/notify') && studioHtml.includes('/api/notify/test'), 'Studio UI wires mobile push save and test endpoints');
