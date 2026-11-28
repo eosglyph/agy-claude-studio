@@ -3498,6 +3498,9 @@ test('Environment git metadata detects worktree & normalizes remotes, and perfor
     assert.equal(meta.repoWebUrl, 'https://github.com/eosglyph/agy-claude-studio');
     assert.equal(meta.isGitHub, true);
 
+    const plat = process.platform;
+    const isWin = plat === 'win32';
+    const isMac = plat === 'darwin';
     const spawned = [];
     const fakeSpawn = (cmd, args, opts) => {
       spawned.push({ cmd, args, opts });
@@ -3507,7 +3510,7 @@ test('Environment git metadata detects worktree & normalizes remotes, and perfor
         unref() {},
       };
       setImmediate(() => {
-        if (cmd === 'wt.exe') handlers.get('error')?.({ code: 'ENOENT' });
+        if (cmd === 'wt.exe' || cmd === 'x-terminal-emulator') handlers.get('error')?.({ code: 'ENOENT' });
         else handlers.get('exit')?.(0);
       });
       return child;
@@ -3522,50 +3525,62 @@ test('Environment git metadata detects worktree & normalizes remotes, and perfor
           revealCalls.push(opts);
           return { ok: true, mode: 'reveal' };
         },
-        platform: 'win32',
+        platform: plat,
       }
     );
     assert.equal(revealViaHelper.ok, true);
     assert.equal(revealCalls.length, 1);
     assert.equal(revealCalls[0].mode, 'reveal');
-    assert.ok(revealCalls[0].target.startsWith('file:///'), 'Passes file:/// URI to shared WindowsFileAction reveal helper');
+    assert.ok(revealCalls[0].target.startsWith('file:///'), 'Passes file:/// URI to shared reveal helper');
 
     const revealOk = await performEnvironmentActionApi(
       { action: 'reveal', path: wtDir },
-      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: 'win32' }
+      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: plat }
     );
     assert.equal(revealOk.ok, true);
-    assert.equal(spawned[0].cmd, 'explorer.exe');
-    assert.deepEqual(spawned[0].args, [wtDir]);
+    assert.equal(spawned[0].cmd, isWin ? 'explorer.exe' : isMac ? '/usr/bin/open' : 'xdg-open');
+    assert.deepEqual(spawned[0].args, isMac ? ['-R', wtDir] : [wtDir]);
     assert.equal(spawned[0].opts.shell, false);
     assert.equal(spawned[0].opts.windowsHide, false);
 
     const termOk = await performEnvironmentActionApi(
       { action: 'terminal', path: wtDir },
-      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: 'win32' }
+      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: plat }
     );
     assert.equal(termOk.ok, true);
-    assert.equal(spawned[1].cmd, 'wt.exe');
-    assert.equal(spawned[2].cmd, 'pwsh.exe');
-    assert.equal(spawned[2].opts.cwd, wtDir);
-    assert.equal(spawned[2].opts.shell, false);
+    if (isWin) {
+      assert.equal(spawned[1].cmd, 'wt.exe');
+      assert.equal(spawned[2].cmd, 'pwsh.exe');
+      assert.equal(spawned[2].opts.cwd, wtDir);
+      assert.equal(spawned[2].opts.shell, false);
+    } else if (isMac) {
+      assert.equal(spawned[1].cmd, '/usr/bin/open');
+      assert.deepEqual(spawned[1].args, ['-a', 'Terminal', wtDir]);
+      assert.equal(spawned[1].opts.cwd, wtDir);
+      assert.equal(spawned[1].opts.shell, false);
+    } else {
+      assert.equal(spawned[1].cmd, 'x-terminal-emulator');
+      assert.equal(spawned[2].cmd, 'gnome-terminal');
+      assert.equal(spawned[2].opts.cwd, wtDir);
+      assert.equal(spawned[2].opts.shell, false);
+    }
 
     const repoOk = await performEnvironmentActionApi(
       { action: 'open-repo', url: 'https://github.com/eosglyph/agy-claude-studio' },
-      { allowedUrls: ['https://github.com/eosglyph/agy-claude-studio'], spawnFn: fakeSpawn, platform: 'win32' }
+      { allowedUrls: ['https://github.com/eosglyph/agy-claude-studio'], spawnFn: fakeSpawn, platform: plat }
     );
     assert.equal(repoOk.ok, true);
 
     const blockedDir = await performEnvironmentActionApi(
       { action: 'reveal', path: outsideDir },
-      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: 'win32' }
+      { allowedDirs: [wtDir], spawnFn: fakeSpawn, platform: plat }
     );
     assert.equal(blockedDir.ok, false);
     assert.equal(blockedDir.error, 'path_not_allowed');
 
     const blockedUrl = await performEnvironmentActionApi(
       { action: 'open-repo', url: 'https://evil.example/repo' },
-      { allowedUrls: ['https://github.com/eosglyph/agy-claude-studio'], spawnFn: fakeSpawn, platform: 'win32' }
+      { allowedUrls: ['https://github.com/eosglyph/agy-claude-studio'], spawnFn: fakeSpawn, platform: plat }
     );
     assert.equal(blockedUrl.ok, false);
     assert.equal(blockedUrl.error, 'url_not_allowed');
@@ -4200,21 +4215,21 @@ test('Environment container worktree detection discovers .repo & worktree/* layo
 
     const childWtTerm = await performEnvironmentActionApi(
       { action: 'terminal', path: wtDevDir },
-      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: 'win32' }
+      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: process.platform }
     );
     assert.equal(childWtTerm.ok, true);
     assert.equal(fs.realpathSync.native(spawned[0].opts.cwd), fs.realpathSync.native(wtDevDir));
 
     const blockedNotes = await performEnvironmentActionApi(
       { action: 'reveal', path: notesDir },
-      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: 'win32' }
+      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: process.platform }
     );
     assert.equal(blockedNotes.ok, false);
     assert.equal(blockedNotes.error, 'path_not_allowed');
 
     const blockedOutside = await performEnvironmentActionApi(
       { action: 'reveal', path: outsideWtDir },
-      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: 'win32' }
+      { allowedDirs: [containerRoot], spawnFn: fakeSpawn, platform: process.platform }
     );
     assert.equal(blockedOutside.ok, false);
     assert.equal(blockedOutside.error, 'path_not_allowed');
