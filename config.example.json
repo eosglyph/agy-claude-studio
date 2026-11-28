@@ -31,6 +31,7 @@
   "fileLinkContextMenu": true,
   "receivePrerelease": false,
   "i18nIgnoreSelectors": [],
+  "pinnedToolbarPlugins": [],
   "autoRelaunchWithCdp": true,
   "exitOnHostClose": false
 }
