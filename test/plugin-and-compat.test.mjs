@@ -1072,6 +1072,8 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
 
   const storage = new Map();
   const timers = new Set();
+  const winListeners = new Map();
+  let hostResizeCount = 0;
   const sandbox = {
     document: doc,
     localStorage: {
@@ -1084,6 +1086,23 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     matchMedia: () => ({ matches: false }),
     MutationObserver: class { observe() {} disconnect() {} },
     ResizeObserver: class { observe() {} disconnect() {} },
+    addEventListener: (ev, fn) => {
+      if (!winListeners.has(ev)) winListeners.set(ev, []);
+      winListeners.get(ev).push(fn);
+    },
+    removeEventListener: (ev, fn) => {
+      const list = winListeners.get(ev);
+      if (!list) return;
+      const i = list.indexOf(fn);
+      if (i >= 0) list.splice(i, 1);
+    },
+    dispatchEvent: (ev) => {
+      const type = ev?.type || '';
+      if (type === 'resize') hostResizeCount += 1;
+      for (const fn of [...(winListeners.get(type) || [])]) fn(ev);
+      return true;
+    },
+    Event: class { constructor(type) { this.type = type; } },
     requestAnimationFrame: (fn) => { const id = setTimeout(() => fn(Date.now()), 5); timers.add(id); return id; },
     cancelAnimationFrame: (id) => { timers.delete(id); clearTimeout(id); },
     setTimeout: (fn, ms) => { const id = setTimeout(fn, ms); timers.add(id); return id; },
@@ -1103,7 +1122,14 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
       sandbox
     );
 
-    // 1. Active Browser tab with pinRightPane='studio' -> 3-column dock mounts between chatCol & nativeSplitter
+    // 0. CSS pins dock to the far right (order: 99) while keeping native aux pane as :last-child
+    const cssText = cdp.readCss();
+    assert.match(cssText, /\.ag-cs-pinned-dock\s*\{[^}]*\border:\s*99\s*;/, 'Pinned dock CSS must force far-right flex order');
+    assert.match(cssText, /\[data-testid="aux-pane-split"\]\[data-ag-cs-dock-open="1"\]\s+\.ag-cs-dock-head/, 'Dock header must reserve top-right controls padding in both solo and 3-column modes');
+    assert.match(cssText, /\[data-side-panel-strip\]\s*\{\s*padding-right:\s*max\(8px,\s*calc\(var\(--ag-cs-dock-solo-pr/, 'Middle aux strip must compensate right padding for far-right dock');
+    assert.match(cssText, />\s*:last-child\s*>\s*\[data-split-sized\]/, 'Inner split-sized container must match clamped aux pane max-width');
+
+    // 1. Active Browser tab with pinRightPane='studio' -> DOM stays before nativeSplitter while CSS places dock far right
     const dockEl = split.children[1];
     assert.ok(dockEl && dockEl.classList.contains('ag-cs-pinned-dock'), 'Dock must insert right before native splitter');
     assert.equal(split.children[0], chatCol);
@@ -1111,6 +1137,7 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(split.getAttribute('data-ag-cs-dock-open'), '1');
     assert.equal(split.hasAttribute('data-ag-cs-dock-solo'), false);
     assert.equal(split.style.getPropertyValue('--ag-cs-dock-w'), '310px');
+    assert.equal(split.style.getPropertyValue('--ag-cs-dock-solo-pr'), '76px', 'Must reserve top-right controls padding in 3-column mode too');
     assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
     assert.equal(studioSlot.hasAttribute('data-ag-cs-dock-hidden'), false);
     assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-left'), '443px');
@@ -1118,14 +1145,17 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-width'), '310px');
     assert.equal(overlay.style.getPropertyValue('--ag-cs-dock-slot-height'), '900px');
 
-    // 2. Collapsing dock shrinks to 28px rail, releases docked slot, and marks slot hidden (prevents ghost overlay)
+    // 2. Collapsing dock shrinks to 28px rail, notifies host aux layout to shift cleanly, releases docked slot, and marks slot hidden
+    const resizeBeforeCollapse = hostResizeCount;
     sandbox.window.__agClaudeStudio.setPinnedDockCollapsed(true);
     assert.equal(dockEl.classList.contains('is-collapsed'), true);
     assert.equal(split.style.getPropertyValue('--ag-cs-dock-w'), '28px');
     assert.equal(studioSlot.hasAttribute('data-ag-cs-docked-slot'), false);
     assert.equal(studioSlot.getAttribute('data-ag-cs-dock-hidden'), '1');
+    assert.ok(hostResizeCount > resizeBeforeCollapse, 'Collapsing far-right dock in 3-column mode must notify host aux layout');
 
     // openStudioPane expands collapsed pinned dock instead of reverting to native tab
+    const resizeBeforeExpand = hostResizeCount;
     const expandRes = sandbox.window.__agClaudeStudio.openStudioPane({ forceSwitch: true });
     assert.equal(expandRes.ok, true);
     assert.equal(expandRes.status, 'dock_expanded');
@@ -1133,6 +1163,7 @@ test('persistent Claude Studio dock stays pinned across Studio tab / closed aux 
     assert.equal(studioSlot.getAttribute('data-ag-cs-docked-slot'), '1');
     assert.equal(studioSlot.hasAttribute('data-ag-cs-dock-hidden'), false);
     assert.equal(studioTabBtn.clicks, 0, 'Must not click native Studio tab when pinned dock handles it');
+    assert.ok(hostResizeCount > resizeBeforeExpand, 'Expanding far-right dock in 3-column mode must notify host aux layout');
 
     // 3. Switching active tab to Claude Studio (with no other tabs) stays pinned in solo mode (never reverts to regular sidebar!)
     strip.setAttribute('data-active-tab-id', 'sidecar__agy-claude-studio/studio__/');

@@ -4957,6 +4957,10 @@ html[data-ag-cs-style][data-ag-cs-gemini-loader="on"] .ripple-container > .rippl
   max-width: calc(100% - 340px - var(--ag-cs-dock-w, 310px)) !important;
 }
 
+[data-testid="aux-pane-split"][data-ag-cs-dock-open="1"]:not([data-ag-cs-dock-solo="1"]):not([data-ag-cs-dock-aux-max="1"]):not([data-split-transition="maximizing"]):not([data-split-transition="restoring"]):not(:has(> [data-split-overlaid="true"])) > :last-child > [data-split-sized] {
+  max-width: calc(var(--split-root-size) - 340px - var(--ag-cs-dock-w, 310px)) !important;
+}
+
 [data-testid="aux-pane-split"][data-ag-cs-dock-aux-max="1"] > .ag-cs-pinned-dock,
 [data-testid="aux-pane-split"][data-split-transition="maximizing"] > .ag-cs-pinned-dock,
 [data-testid="aux-pane-split"][data-split-transition="restoring"] > .ag-cs-pinned-dock,
@@ -4980,7 +4984,7 @@ html[data-ag-cs-style][data-ag-cs-gemini-loader="on"] .ripple-container > .rippl
   display: none !important;
 }
 
-[data-testid="aux-pane-split"][data-ag-cs-dock-solo="1"] .ag-cs-dock-head {
+[data-testid="aux-pane-split"][data-ag-cs-dock-open="1"] .ag-cs-dock-head {
   padding-right: var(--ag-cs-dock-solo-pr, 76px);
 }
 
@@ -4988,7 +4992,11 @@ html[data-ag-cs-style] .agy-sheet [data-testid="aux-pane-split"][data-split-root
   padding-right: max(8px, calc(var(--ag-cs-dock-solo-pr, 44px) - 4px - var(--ag-cs-dock-w, 310px))) !important;
 }
 
-[data-testid="aux-pane-split"][data-ag-cs-dock-solo="1"] .ag-cs-pinned-dock.is-collapsed {
+html[data-ag-cs-style] .agy-sheet [data-testid="aux-pane-split"][data-split-root="true"][data-ag-cs-dock-open="1"]:not([data-ag-cs-dock-solo="1"]):not([data-ag-cs-dock-aux-max="1"]):not([data-split-transition="maximizing"]):not([data-split-transition="restoring"]):not(:has(> [data-split-overlaid="true"])) [data-side-panel-strip] {
+  padding-right: max(8px, calc(var(--ag-cs-dock-solo-pr, 80px) - var(--ag-cs-dock-w, 310px))) !important;
+}
+
+[data-testid="aux-pane-split"][data-ag-cs-dock-open="1"] .ag-cs-pinned-dock.is-collapsed {
   padding-top: 48px;
 }
 
@@ -5040,6 +5048,7 @@ html[data-ag-cs-style] .agy-sheet [data-testid="aux-pane-split"][data-split-root
 
 .ag-cs-pinned-dock {
   position: relative;
+  order: 99;
   flex: 0 0 var(--ag-cs-dock-w, 310px);
   width: var(--ag-cs-dock-w, 310px);
   min-width: 240px;

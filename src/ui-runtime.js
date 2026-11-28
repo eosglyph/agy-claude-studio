@@ -7796,6 +7796,7 @@
     dragging: false,
     dragMove: null,
     dragUp: null,
+    dispatchingHostResize: false,
     lastLang: '',
   };
 
@@ -8229,8 +8230,23 @@
     return false;
   }
 
+  function notifyHostAuxReposition() {
+    if (destroyed || pinnedDock.dispatchingHostResize) return;
+    if (typeof window.dispatchEvent !== 'function') return;
+    pinnedDock.dispatchingHostResize = true;
+    try {
+      const ev = typeof Event === 'function' ? new Event('resize') : { type: 'resize' };
+      window.dispatchEvent(ev);
+    } catch {} finally {
+      pinnedDock.dispatchingHostResize = false;
+    }
+  }
+
   function syncPinnedStudioDockPosition(preFound = null) {
     if (destroyed || !pinnedDock.el || !pinnedDock.el.isConnected) return;
+    if (pinnedDock.splitEl?.style) {
+      setStylePropIfChanged(pinnedDock.splitEl.style, '--ag-cs-dock-solo-pr', `${measureSoloHeadRightPadding()}px`);
+    }
     if (pinnedDock.collapsed || pinnedDock.auxMaximized || isAuxPaneMaximized(pinnedDock.splitEl)) {
       releaseDockedStudioSlot({ keepHidden: true });
       hideStudioSlotWhileCollapsed(preFound);
@@ -8301,6 +8317,7 @@
   function trackDockTransition(durationMs = 620) {
     if (destroyed || typeof requestAnimationFrame !== 'function') {
       syncPinnedStudioDockPosition();
+      if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
       return;
     }
     const now = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
@@ -8310,6 +8327,7 @@
       pinnedDock.trackRaf = 0;
       if (destroyed || !pinnedDock.el || !pinnedDock.el.isConnected) return;
       syncPinnedStudioDockPosition();
+      if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
       const t = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
       if (t < pinnedDock.trackUntil) {
         pinnedDock.trackRaf = requestAnimationFrame(tick);
@@ -8428,13 +8446,10 @@
     }
     if (pinnedDock.soloMode) {
       if (!wasSolo) pinnedDock.splitEl.setAttribute('data-ag-cs-dock-solo', '1');
-      setStylePropIfChanged(pinnedDock.splitEl.style, '--ag-cs-dock-solo-pr', `${measureSoloHeadRightPadding()}px`);
-    } else {
-      if (wasSolo) pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-solo');
-      if (pinnedDock.splitEl.style?.getPropertyValue?.('--ag-cs-dock-solo-pr')) {
-        pinnedDock.splitEl.style.removeProperty('--ag-cs-dock-solo-pr');
-      }
+    } else if (wasSolo) {
+      pinnedDock.splitEl.removeAttribute('data-ag-cs-dock-solo');
     }
+    setStylePropIfChanged(pinnedDock.splitEl.style, '--ag-cs-dock-solo-pr', `${measureSoloHeadRightPadding()}px`);
     const widthChanged = setStylePropIfChanged(pinnedDock.splitEl.style, '--ag-cs-dock-w', nextDockW) || prevDockW !== nextDockW;
     const stateChanged =
       Boolean(opts.forceTrack) ||
@@ -8470,9 +8485,14 @@
     if (pinnedDock.collapsed || pinnedDock.auxMaximized) {
       releaseDockedStudioSlot({ keepHidden: true });
       hideStudioSlotWhileCollapsed(opts.preFound || null);
+      if (stateChanged && !pinnedDock.soloMode && !pinnedDock.auxMaximized) {
+        notifyHostAuxReposition();
+        trackDockTransition(240);
+      }
     } else {
       syncPinnedStudioDockPosition(opts.preFound || null);
       if (stateChanged) {
+        if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
         trackDockTransition(240);
       }
     }
@@ -8517,6 +8537,7 @@
           pinnedDock.splitEl?.style?.setProperty?.('--ag-cs-dock-w', `${nextW}px`);
         }
         syncPinnedStudioDockPosition();
+        if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
       };
       pinnedDock.dragUp = () => {
         stopDockDrag();
@@ -8524,6 +8545,7 @@
           localStorage.setItem(DOCK_WIDTH_KEY, String(pinnedDock.width));
         } catch {}
         syncPinnedStudioDockPosition();
+        if (!pinnedDock.soloMode && !pinnedDock.auxMaximized) notifyHostAuxReposition();
       };
       window.addEventListener?.('pointermove', pinnedDock.dragMove, true);
       window.addEventListener?.('pointerup', pinnedDock.dragUp, true);
@@ -10796,7 +10818,7 @@
   }
 
   function onWindowResize() {
-    if (destroyed) return;
+    if (destroyed || pinnedDock.dispatchingHostResize) return;
     if (openFileMenu) closeFileLinkMenu();
     if (openPopover && openPopover.isConnected && openPopoverAnchor && openPopoverAnchor.isConnected) {
       positionPopoverAboveAnchor(openPopover, openPopoverAnchor);
